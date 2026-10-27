@@ -100,6 +100,10 @@ export function inspectProfileImport(
 			return input;
 		}
 		const next = { ...config };
+		// Keep website templates editable; only validation and execution expand them.
+		const sourceActions = record(source.config)?.actions;
+		if (config.type === "website" && sourceActions !== undefined)
+			next.actions = sourceActions;
 		if (typeof config.errorCode === "number") {
 			const diagnosticCode = legacyDiagnosticCode(config.errorCode);
 			if (diagnosticCode)
@@ -139,8 +143,8 @@ export function inspectProfileImport(
 			}
 		}
 		let unsupported = record(source.compatibility)?.unsupported === true;
-		if (Array.isArray(config.actions))
-			next.actions = config.actions.flatMap((action, index) => {
+		if (Array.isArray(next.actions))
+			next.actions = next.actions.flatMap((action, index) => {
 				const a = record(action);
 				if (
 					action === null ||

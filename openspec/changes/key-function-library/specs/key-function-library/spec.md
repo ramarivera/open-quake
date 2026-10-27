@@ -248,6 +248,7 @@ Native actions SHALL preserve clipboard data on failed setup and interruption, c
 
 - **WHEN** a website template includes a supported title placeholder and the key title contains dollar replacement patterns or placeholder-shaped text
 - **THEN** a single substitution pass inserts the title verbatim without evaluating replacement patterns or expanding the inserted title again
+- **AND** profile import retains the editable template while validating an expanded copy, so later activation does not substitute an already-expanded imported URL
 
 #### Scenario: Sequence pickers share selection rules
 

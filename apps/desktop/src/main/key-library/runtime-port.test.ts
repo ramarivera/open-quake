@@ -33,6 +33,7 @@ import type { HardwareSession } from "../../../../../packages/device/src/hardwar
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
+	Profile,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
@@ -1259,6 +1260,24 @@ it("review: production keyboard catalog permits a supported text media follow-up
 });
 
 it.each([
+	[
+		"example.org/{title}",
+		"http://example.org/prefix-{title}",
+		false,
+		"prefix-{title}",
+	],
+	[
+		"example.org/{{title}}",
+		"http://example.org/prefix-{{title}}",
+		false,
+		"prefix-{{title}}",
+	],
+	[
+		"example.org/" + "$" + "{title}",
+		"http://example.org/prefix-" + "$" + "{title}",
+		false,
+		"prefix-" + "$" + "{title}",
+	],
 	["localhost:3000/{title}", "http://localhost:3000/hello world", false],
 	["example.org:8080/{title}", "http://example.org:8080/hello world", false],
 	["javascript:3000/path", "javascript:3000/path", true],
@@ -1313,7 +1332,7 @@ it.each([
 				expect(
 					Option.isSome(key.compatibility) && key.compatibility.value.source,
 				).toEqual(source);
-				expect(key.config.actions?.[0]?.value).toBe(expected);
+				expect(key.config.actions?.[0]?.value).toBe(url);
 				expect(os.openExternal).not.toHaveBeenCalled();
 				yield* service.selectProfile({
 					deviceId: "device",
@@ -1326,9 +1345,25 @@ it.each([
 				expect((yield* port.read).activeByDevice.device?.profileId).toBe(
 					"imported",
 				);
+				const roundtrip = yield* service.importProfile(
+					JSON.stringify(Schema.encodeSync(Profile)(profile)),
+					"roundtrip",
+				);
+				const restored = roundtrip.profiles.find((p) => p.id === "roundtrip");
+				if (!restored) return yield* Effect.die("Missing roundtrip profile");
+				expect(restored.pages[0].keys[0]?.config.actions?.[0]?.value).toBe(url);
+				yield* service.selectProfile({
+					deviceId: "device",
+					profileId: restored.id,
+					pageId: restored.pages[0].id,
+				});
+				yield* runtime.activate("device", "1,1", "press");
+				yield* runtime.activate("device", "1,1", "release");
 			}).pipe(Effect.provide(layer()), Effect.scoped),
 		);
-		expect(os.openExternal.mock.calls).toEqual(unsupported ? [] : [[expected]]);
+		expect(os.openExternal.mock.calls).toEqual(
+			unsupported ? [] : [[expected], [expected]],
+		);
 		expect(os.exec).not.toHaveBeenCalled();
 		expect(os.openPath).not.toHaveBeenCalled();
 		expect(os.clipboard).not.toHaveBeenCalled();
