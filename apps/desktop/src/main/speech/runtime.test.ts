@@ -34,6 +34,7 @@ import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surf
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import type { CaptureDriver } from "./capture";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
+import { pinAgentKnob } from "../agent-http/knob-route";
 import { createProductionVoiceRuntime } from "./runtime";
 
 const request: CaptureRequest = {
@@ -80,12 +81,17 @@ const credentials = Layer.succeed(AiCredentials, {
 const tick = Effect.yieldNow().pipe(Effect.repeatN(10));
 
 describe("production voice consumer", () => {
-	it.effect(
-		"uses actual STT after matching readiness, sends final transcript only after physical recorder/socket finalization, ignores stale release",
-		() =>
+	it.effect.each([false, true])(
+		"uses actual STT after readiness and recorder/socket finalization, ignores stale release, pinned agent route %s",
+		(agentRoute) =>
 			Effect.scoped(
 				Effect.gen(function* () {
 					const events: VoiceSurfaceEvent[] = [];
+					let selectedAgent = "writer";
+					let pins = 0;
+					const captureRequest: CaptureRequest = agentRoute
+						? { ...request, type: "knob", keyCode: "0,1", knob: { profileId: "saved", revision: 2, route: "dkclaw", agentId: "writer", providerId: "", modelId: "retained/unknown" } }
+						: request;
 					const messages = yield* Queue.unbounded<unknown>();
 					const configured = yield* Deferred.make<string>();
 					const listening = yield* Deferred.make<void>();
@@ -97,7 +103,10 @@ describe("production voice consumer", () => {
 						socketClosed = 0,
 						pulls = 0;
 					const capture: CaptureDriver = {
-						permission: Effect.succeed(true),
+						permission: Effect.sync(() => {
+							if (agentRoute) expect(pins).toBe(1);
+							return true;
+						}),
 						open: (id) =>
 							Effect.sync(() => {
 								opened++;
@@ -192,6 +201,10 @@ describe("production voice consumer", () => {
 						const speech = yield* AiSpeechService;
 						const controller = yield* createProductionVoiceRuntime({
 							speech,
+							pinAgentRoute: snapshot => Effect.suspend(() => {
+								pins++;
+								return pinAgentKnob(snapshot, { status: "ready", agentIds: ["writer"] }, { connectionId: "gateway", agentId: selectedAgent }, { generation: 5, status: "connected", connectionId: "gateway" }, () => Effect.succeed({ capabilities: { health: "supported", chat: "supported", listAgents: "supported", sessions: "unsupported", resources: "unsupported", models: "unsupported", toolEvents: "unsupported", usage: "unsupported" }, agents: [{ id: "writer", name: "Writer" }] }), 3);
+							}),
 							capture,
 							profiles: () =>
 								Effect.succeed({ stt: sttProfile, speakAnswers: false }),
@@ -200,23 +213,25 @@ describe("production voice consumer", () => {
 								Effect.gen(function* () {
 									expect(closed).toBe(1);
 									expect(socketClosed).toBe(1);
+									if (agentRoute) expect(input.agentRoute).toEqual({ connectionId: "gateway", agentId: "writer", modelId: "retained/unknown", generation: 3, registryGeneration: 5 });
 									yield* Deferred.succeed(transcript, input.message);
 								}),
 						});
-						yield* controller.runtime.startCapture(request);
+						yield* controller.runtime.startCapture(captureRequest);
 						const task = yield* Deferred.await(configured);
 						expect(opened).toBe(0);
 						yield* Queue.offer(messages, event(task, "task-started"));
 						yield* Deferred.await(listening);
+						selectedAgent = "other-selected-agent";
 						yield* controller.runtime.releaseCapture(
-							request.serial,
-							request.keyCode,
+							captureRequest.serial,
+							captureRequest.keyCode,
 							0,
 						);
 						expect(yield* Deferred.isDone(stop)).toBe(false);
 						yield* controller.runtime.releaseCapture(
-							request.serial,
-							request.keyCode,
+							captureRequest.serial,
+							captureRequest.keyCode,
 							1,
 						);
 						expect(yield* Deferred.await(transcript)).toBe("Turn left");

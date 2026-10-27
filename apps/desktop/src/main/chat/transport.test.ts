@@ -2058,12 +2058,14 @@ it("AI-088/241 dictation selects each key's session and settings through typed R
 
 it("AI-088 mirrors dictation into a visible desktop composer while a non-wake key still submits one direct turn", async () => {
  const f = await fixture({}, "generic", "fixture-model", undefined, { keySettings: () => Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }) });
- const v = voiceFixture(f.host, () => Effect.void);
+ const events: VoiceSurfaceEvent[] = [];
+ const v = voiceFixture(f.host, event => Effect.sync(() => { events.push(event); }));
  try {
    await f.bridge.assistantVisibility?.(true);
    await v.voice.runPromise(v.send({ serial: "QK", keyCode: "1,1", agentId: "", message: "visible dictation" }));
    await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
    expect((await f.bridge.selection?.())?.transcript).toBe("visible dictation");
+   expect(events.filter(e => e._tag === "TurnStarted")).toHaveLength(1);
    await f.bridge.assistantVisibility?.(false);
  } finally { await v.voice.dispose(); await f.close(); }
 });
@@ -2074,7 +2076,8 @@ it("AI-117 MGMT-358 activates all six saved Copilot keys with Chinese prompts an
  const saved = profile.pages.flatMap(p => p.keys).filter(k => k.config.type === "aiChat").map(k => ({ ...k, config: { ...k.config, title: { ...k.config.title, text: `My ${k.keyCode}` } } }));
  expect(saved).toHaveLength(6);
  const f = await fixture({}, "qwen", "qwen3.6-plus", undefined, { keySettings: (_serial, code) => { const k = saved.find(k => k.keyCode === code); return Effect.succeed(k ? assistantSettingsFromActions(k.config.actions ?? []) : undefined); } });
- const v = voiceFixture(f.host, () => Effect.void);
+ const events: VoiceSurfaceEvent[] = [];
+ const v = voiceFixture(f.host, event => Effect.sync(() => { events.push(event); }));
  try {
   for (const key of saved) {
     const settings = assistantSettingsFromActions(key.config.actions ?? []);
@@ -2087,6 +2090,7 @@ it("AI-117 MGMT-358 activates all six saved Copilot keys with Chinese prompts an
     expect(settings.rolePrompt).toMatch(/[\u4e00-\u9fff]/);
     expect(key.config.title.text).toBe(`My ${key.keyCode}`);
   }
+  expect(events.filter(e => e._tag === "TurnStarted")).toHaveLength(6);
  } finally { await v.voice.dispose(); await f.close(); }
 });
 
