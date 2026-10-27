@@ -5,6 +5,7 @@ import { QuakeDevice } from "../../../../../../packages/device/src/device-servic
 import { HardwareControls } from "../../../../../../packages/device/src/hardware/hardware-service.js";
 import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
 import { safeCause } from "../../diagnostics/privacy.js";
+import { exactDeviceTransport } from "./exact-device.js";
 import {
 	automatedScenarios,
 	type ScenarioId,
@@ -73,7 +74,7 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 				result.status = "passed";
 				return Option.some(exit.value);
 			});
-		const source = yield* HidTransport;
+		const source = exactDeviceTransport(yield* HidTransport, options.serial);
 		const keepalives: number[] = [];
 		const observed = Layer.succeed(HidTransport, {
 			...source,

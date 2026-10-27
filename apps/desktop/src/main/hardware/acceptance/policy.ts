@@ -48,15 +48,37 @@ export function allowedAcceptanceWrite(
 }
 
 export function competingOwners(output: string, ownPid: number): number[] {
-	return output.split("\n").flatMap((line) => {
-		const match = line.trim().match(/^(\d+)\s+(.+)$/);
-		if (!match || Number(match[1]) === ownPid) return [];
-		const command = match[2] ?? "";
+	const processes = output.split("\n").flatMap((line) => {
+		const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
+		return match
+			? [
+					{
+						pid: Number(match[1]),
+						parent: Number(match[2]),
+						command: match[3] ?? "",
+					},
+				]
+			: [];
+	});
+	const ancestors = new Set<number>();
+	let parent = processes.find((entry) => entry.pid === ownPid)?.parent;
+	while (parent && !ancestors.has(parent)) {
+		ancestors.add(parent);
+		parent = processes.find((entry) => entry.pid === parent)?.parent;
+	}
+	return processes.flatMap(({ pid, command }) => {
+		if (pid === ownPid) return [];
+		// pnpm and Electron's JS launcher do not own HID. Exclude only our ancestors.
+		if (
+			ancestors.has(pid) &&
+			/(?:^|[\s/])(?:pnpm(?:\.c?js)?|electron\/cli\.js)(?:\s|$)/i.test(command)
+		)
+			return [];
 		return /DK[- ]?Suite(?:\.app|\b)/i.test(command) ||
 			/(?:^|[\s/])open-quake(?:\.app|\s|$)/i.test(command) ||
 			(/electron(?:-vite)?/i.test(command) &&
 				/(?:open-quake|\boq-[\w-]+)/i.test(command))
-			? [Number(match[1])]
+			? [pid]
 			: [];
 	});
 }

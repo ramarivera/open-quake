@@ -7,9 +7,11 @@ import { app, BrowserWindow } from "electron";
 import { canonicalHidSerial } from "../../../../../../packages/device/src/device-contracts.js";
 import { QuakeDevice } from "../../../../../../packages/device/src/device-service.js";
 import { HardwareControls } from "../../../../../../packages/device/src/hardware/hardware-service.js";
+import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
 import { NodeHidLive } from "../../../../../../packages/device/src/node-hid.js";
 import { createDesktopDiagnostics } from "../../diagnostics/index.js";
 import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
+import { exactDeviceTransport } from "./exact-device.js";
 import { ownNativeDevice } from "./native-owner.js";
 import { acceptanceOptions } from "./policy.js";
 
@@ -44,7 +46,16 @@ async function run() {
 			stdout: false,
 		});
 		const runtime = makeDesktopRuntime(
-			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+			QuakeDevice.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.effect(
+						HidTransport,
+						Effect.map(HidTransport, (source) =>
+							exactDeviceTransport(source, options.serial),
+						),
+					).pipe(Layer.provide(NodeHidLive)),
+				),
+			),
 			diagnostics,
 			"voice.device",
 		);

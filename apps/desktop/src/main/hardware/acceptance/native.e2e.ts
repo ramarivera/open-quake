@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { Effect, Layer } from "effect";
@@ -14,6 +14,7 @@ import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
 import { runHardwareAcceptance } from "./consumer.js";
 import { ownNativeDevice } from "./native-owner.js";
 import { acceptanceOptions, allowedAcceptanceWrite } from "./policy.js";
+import { finalizeNativeResult } from "./result.js";
 import { summarize } from "./scenarios.js";
 
 const command = promisify(execFile);
@@ -74,6 +75,9 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				"policy.ts",
 				"scenarios.ts",
 				"native-owner.ts",
+				"result.ts",
+				"exact-device.ts",
+				"lock.ts",
 			])
 				sourceHash.update(await readFile(new URL(name, import.meta.url)));
 			const report = {
@@ -91,32 +95,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				diagnostics: health,
 				scenarios: results,
 			};
-			await writeFile(
-				join(directory, "result.json"),
-				JSON.stringify(report, null, 2),
-				{ mode: 0o600 },
-			);
-			const text = (
-				await Promise.all(
-					(
-						await readdir(join(directory, "diagnostics"))
-					)
-						.filter((name) => name.endsWith(".ndjson"))
-						.map((name) =>
-							readFile(join(directory, "diagnostics", name), "utf8"),
-						),
-				)
-			).join("\n");
-			assert(
-				!text.includes(options.serial),
-				"Raw device serial must not enter diagnostics",
-			);
-			assert(
-				!text.includes('"span_name":"redacted.span"'),
-				"Acceptance spans must be reviewed names",
-			);
-			assert.equal(health.storageFailures, 0);
-			assert.equal(health.dropped, 0);
+			await finalizeNativeResult(directory, options.serial, report);
 			assert.equal(
 				report.failed,
 				0,

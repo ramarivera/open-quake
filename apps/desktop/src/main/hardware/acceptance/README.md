@@ -29,7 +29,11 @@ process ownership and acquires an exclusive host-local lock. It refuses raw
 firmware, keyboard, audio and screen-power commands even in mutation mode.
 Never remove the lock while its process is running. No firmware flashing occurs.
 Use a fresh output directory for every run; an existing result file fails closed
-before hardware is opened, and interrupted runs leave an incomplete result.
+before hardware is opened, and interrupted runs leave an incomplete result. Finalization validates retained diagnostics
+before atomically replacing that result; a result symlink cannot redirect the write.
+The lock coordinates cooperating runs, not hostile processes with the same filesystem access.
+Cleanup preserves a lock whose file identity has changed. Device serial selection is
+rechecked against each connect or reconnect discovery before opening the transport.
 The exact output directory must be inside the host's hardware E2E scratch root.
 
 From `apps/desktop`, set these environment values in your launcher:

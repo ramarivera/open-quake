@@ -1,9 +1,11 @@
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { encodeHardwareCommand } from "@open-quake/protocol";
-import { Cause, Effect, Either, Exit } from "effect";
+import { Cause, Effect, Either, Exit, Layer } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import { makeFakeHardwareTransport } from "../../../../../../packages/device/src/hardware/hardware-fake.js";
+import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
 import { createDesktopDiagnostics } from "../../diagnostics/index.js";
 import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
 import { restoring, runHardwareAcceptance } from "./consumer.js";
@@ -28,7 +30,7 @@ it.each([false, true])(
 	async (mutations) => {
 		const root =
 			process.env.OPEN_QUAKE_TEST_SCRATCH ??
-			"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-hardware-e2e/tests";
+			join(homedir(), "dev/agentic-scratchpads/open-quake/hardware-e2e-tests");
 		await mkdir(root, { recursive: true });
 		const directory = await mkdtemp(join(root, "consumer-"));
 		cleanup.push(() => rm(directory, { recursive: true, force: true }));
@@ -160,11 +162,65 @@ it("fails closed for firmware, keyboard, audio and screen-power writes", () => {
 it("detects actual application owners without treating unrelated Electron applications as device owners", () => {
 	expect(
 		competingOwners(
-			"12 /Applications/DK-Suite.app/Contents/MacOS/DK-Suite\n13 /Applications/1Password.app/Contents/MacOS/1Password\n14 /Applications/open-quake.app/Contents/MacOS/open-quake",
+			"12 1 /Applications/DK-Suite.app/Contents/MacOS/DK-Suite\n13 1 /Applications/1Password.app/Contents/MacOS/1Password\n14 1 /Applications/open-quake.app/Contents/MacOS/open-quake",
 			99,
 		),
 	).toEqual([12, 14]);
 	expect(
-		competingOwners("99 electron /path/oq-hardware-e2e/apps/desktop", 99),
+		competingOwners("99 1 electron /path/oq-hardware-e2e/apps/desktop", 99),
 	).toEqual([]);
+});
+
+it("ignores only the fixture's launcher ancestry and retains independent owners", () => {
+	expect(
+		competingOwners(
+			[
+				"90 1 node /opt/pnpm/bin/pnpm.cjs exec electron /dev/open-quake/out/keyboard-smoke.js",
+				"91 90 node /dev/open-quake/node_modules/electron/cli.js out/keyboard-smoke.js",
+				"99 91 /dev/open-quake/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron out/keyboard-smoke.js",
+				"100 1 node /opt/pnpm/bin/pnpm.cjs exec electron /dev/open-quake/out/main/index.js",
+				"101 1 /Applications/open-quake.app/Contents/MacOS/open-quake",
+			].join("\n"),
+			99,
+		),
+	).toEqual([100, 101]);
+});
+
+it("rejects a replacement serial at connect before opening or writing", async () => {
+	const fake = await Effect.runPromise(
+		makeFakeHardwareTransport({ serial: "approved" }),
+	);
+	let discoveries = 0;
+	const open = vi.fn(fake.transport.open);
+	const source = Layer.succeed(HidTransport, {
+		...fake.transport,
+		discover: () =>
+			fake.transport.discover().pipe(
+				Effect.map((devices) => {
+					discoveries++;
+					return discoveries === 1
+						? devices
+						: devices.map((info) => ({
+								...info,
+								serialNumber: "replacement-private",
+							}));
+				}),
+			),
+		open,
+	});
+	const results = await Effect.runPromise(
+		Effect.scoped(
+			runHardwareAcceptance({
+				serial: "approved",
+				mutations: true,
+				keepAliveIntervalMs: 30,
+				keepAliveObservationMs: 1120,
+			}),
+		).pipe(Effect.provide(source)),
+	);
+	expect(results.find((item) => item.id === "identity")?.status).toBe("passed");
+	expect(results.find((item) => item.id === "connect")?.status).toBe("failed");
+	expect(open).not.toHaveBeenCalled();
+	expect(await Effect.runPromise(fake.writes)).toEqual([]);
+	expect(JSON.stringify(results)).not.toContain("replacement-private");
 });
