@@ -109,7 +109,7 @@ it("AI-283 verifies the isolated copy before the real package handoff and cleans
 
 it("AI-283 rejects an untrusted installer assessment or foreign signer before handoff", async () => {
 	const run = vi.fn(async (_command: string, _args: readonly string[]) => ({
-		stdout: "Developer ID Installer: Existential Audio Inc. (5FCN7X64RK)",
+		stdout: "Developer ID Installer: Existential Audio Inc. (Q5C99V536K)",
 	}));
 	await verifyBlackHolePackage("fake.pkg", run);
 	expect(run.mock.calls.map(([command]) => command)).toEqual([
@@ -215,3 +215,38 @@ it("AI-283 exposes full storage as a retryable result after fresh consent", asyn
 		});
 	expect(confirm).toHaveBeenCalledTimes(2);
 });
+
+it.each(["5FCN7X64RK", "AAAAAAAAAA"])(
+	"AI-283 refuses the same organization under foreign team %s before handoff and frees its slot for retry",
+	async (team) => {
+		const root = await mkdtemp(join(tmpdir(), "audio-signer-"));
+		const selected = join(root, "BlackHole.pkg");
+		const storage = join(root, "handoffs");
+		await writeFile(selected, "synthetic package, never installed");
+		const launch = vi.fn(async () => "");
+		const run = vi.fn(async (_command: string, _args: readonly string[]) => ({
+			stdout: `Developer ID Installer: Existential Audio Inc. (${team})`,
+		}));
+		const owner = {
+			selected,
+			root: storage,
+			open: launch,
+			verify: (path: string) => verifyBlackHolePackage(path, run),
+		};
+		try {
+			await expect(openBlackHoleInstaller(owner)).rejects.toMatchObject({
+				code: "QUAKE.MEETING.INVALID",
+			});
+			expect(launch).not.toHaveBeenCalled();
+			expect(await readdir(storage)).toEqual([]);
+			run.mockResolvedValue({
+				stdout: "Developer ID Installer: Existential Audio Inc. (Q5C99V536K)",
+			});
+			await openBlackHoleInstaller(owner);
+			expect(launch).toHaveBeenCalledOnce();
+			expect(await readdir(storage)).toHaveLength(1);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);

@@ -147,6 +147,8 @@ export async function openBlackHoleInstaller(options: {
 		if (!handedOff) await rm(directory, { recursive: true, force: true });
 	}
 }
+// BlackHole2ch-0.7.1.pkg from existential.audio, pkgutil --check-signature.
+// SHA-256: 57b540f27a3e29c37e310e01bee0fdfab76733087e47f997ef9dccf851400dcf.
 export async function verifyBlackHolePackage(
 	path: string,
 	run: (
@@ -164,7 +166,7 @@ export async function verifyBlackHolePackage(
 		path,
 	]);
 	if (
-		!/Developer ID Installer: Existential Audio(?: Inc\.?)? \([A-Z0-9]{10}\)/.test(
+		!/Developer ID Installer: Existential Audio(?: Inc\.?)? \(Q5C99V536K\)/.test(
 			stdout,
 		)
 	)

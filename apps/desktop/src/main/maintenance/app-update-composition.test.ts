@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { registerMaintenance } from "./index";
+import { AppUpdates } from "../../../../../packages/edge/src/maintenance/update-service";
+import { prepareMaintenance, registerMaintenance } from "./index";
 
 const native = vi.hoisted(() => ({
 	app: { getVersion: () => "1.0.0" },
@@ -139,3 +140,53 @@ it("MAIN-114 manual packages expose the owned releases page and distribution not
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it.each(["rejected promise", "missing browser handler"] as const)(
+	"MAIN-114 keeps manual update checks and refreshed views after a %s",
+	async (failure) => {
+		const root = await mkdtemp(join(tmpdir(), "manual-update-launch-"));
+		const prepared = prepareMaintenance({
+			root,
+			mock: false,
+			fixture: { roots: [], descriptors: [], bundledDirectories: [] },
+			renderer: "https://app.invalid",
+			management: () => undefined,
+			hardware: () => undefined,
+			stopWriters: async () => {},
+		});
+		const owner = prepared.standalone();
+		try {
+			await owner.ready;
+			const updates = await prepared.runtime.runPromise(AppUpdates);
+			const check = vi.spyOn(updates, "check");
+			const snapshot = vi.spyOn(updates, "snapshot");
+			const cause = new Error("xdg-open unavailable");
+			if (failure === "rejected promise")
+				native.shell.openExternal.mockRejectedValueOnce(cause);
+			else
+				native.shell.openExternal.mockImplementationOnce(() => {
+					throw cause;
+				});
+			const reply = await owner.request({ action: "check-update" });
+			expect(reply).toMatchObject({
+				ok: true,
+				view: { appVersion: "1.0.0", update: { state: "disabled" } },
+				message: expect.stringContaining("GitHub Releases"),
+			});
+			expect(reply).not.toHaveProperty("code");
+			expect(native.shell.openExternal).toHaveBeenCalledExactlyOnceWith(
+				"https://github.com/ramarivera/open-quake/releases",
+			);
+			expect(check).toHaveBeenCalledOnce();
+			// The initial state check and the returned view both sample the owner.
+			expect(snapshot).toHaveBeenCalledTimes(2);
+			expect(await owner.request({ action: "check-update" })).toMatchObject({
+				ok: true,
+			});
+			expect(check).toHaveBeenCalledTimes(2);
+		} finally {
+			await owner.dispose();
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);

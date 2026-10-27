@@ -1,10 +1,15 @@
 import { createHash } from "node:crypto";
+import * as filesystem from "node:fs/promises";
 import {
 	chmod,
 	mkdtemp,
+	readdir,
 	readFile,
+	rename,
 	rm,
 	stat,
+	symlink,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,7 +21,16 @@ import {
 	AppUpdates,
 } from "../../../../../packages/edge/src/maintenance/update-service";
 import { ownedAppUpdater } from "./app-updater";
-import { githubAppImageConfiguration, RELEASES_PAGE } from "./github-releases";
+import {
+	githubAppImageConfiguration,
+	RELEASES_PAGE,
+	replaceAppImage,
+} from "./github-releases";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+	const original = await importOriginal<typeof import("node:fs/promises")>();
+	return { ...original, lstat: vi.fn(original.lstat) };
+});
 
 const {
 	downloadName,
@@ -256,6 +270,87 @@ it.each([
 			if (destination.includes(":8443"))
 				expect(f.transport).toHaveBeenCalledTimes(2);
 		} finally {
+			await rm(f.root, { recursive: true, force: true });
+		}
+	},
+);
+
+// Drive the production installer with synthetic bytes. Never execute an AppImage.
+it.each(["symlink", "non-executable"] as const)(
+	"MAIN-114 rejects a %s installed image without replacing its contents",
+	async (guard) => {
+		const f = await fixture();
+		const target = join(f.root, "original.AppImage");
+		const read = vi.fn(async (buffer: Uint8Array, offset: number) => {
+			buffer.set(f.bytes.subarray(offset));
+			return Math.max(0, f.bytes.length - offset);
+		});
+		try {
+			if (guard === "symlink") {
+				await rename(f.image, target);
+				await symlink(target, f.image);
+			} else await chmod(f.image, 0o644);
+			await expect(replaceAppImage(f.image, { read })).rejects.toMatchObject({
+				code: "QUAKE.APP.UPDATE_FAILED",
+			});
+			expect(await readFile(f.image, "utf8")).toBe("old synthetic image");
+			if (guard === "symlink")
+				expect(await readFile(target, "utf8")).toBe("old synthetic image");
+			expect(read).not.toHaveBeenCalled();
+			expect(
+				(await readdir(f.root)).filter((name) =>
+					name.startsWith(".open-quake-update-"),
+				),
+			).toEqual([]);
+		} finally {
+			await rm(f.root, { recursive: true, force: true });
+		}
+	},
+);
+it.each(["inode", "device", "mtime", "size"] as const)(
+	"MAIN-114 rejects a destination %s race during actual AppImage replacement",
+	async (guard) => {
+		const f = await fixture();
+		const original = "old synthetic image";
+		const expected =
+			guard === "size" ? `${original} changed by another writer` : original;
+		const before = await stat(f.image);
+		const read = vi.fn(async (buffer: Uint8Array, offset: number) => {
+			if (offset) return 0;
+			if (guard === "inode") {
+				const replacement = join(f.root, "replacement.AppImage");
+				await writeFile(replacement, original, { mode: 0o755 });
+				await utimes(replacement, before.atime, before.mtime);
+				await rename(replacement, f.image);
+			} else if (guard === "mtime") {
+				await utimes(f.image, before.atime, new Date(before.mtimeMs + 10000));
+			} else if (guard === "size") {
+				await writeFile(f.image, expected);
+				await utimes(f.image, before.atime, before.mtime);
+			} else {
+				// Cross-device moves cannot be staged on one fixture volume. Change
+				// only the device identity reported by the final filesystem sample.
+				const current = await filesystem.lstat(f.image);
+				vi.spyOn(filesystem, "lstat").mockResolvedValueOnce(
+					Object.assign(current, { dev: current.dev + 1 }),
+				);
+			}
+			buffer.set(f.bytes);
+			return f.bytes.length;
+		});
+		try {
+			await expect(replaceAppImage(f.image, { read })).rejects.toMatchObject({
+				code: "QUAKE.APP.UPDATE_FAILED",
+			});
+			expect(read).toHaveBeenCalledTimes(2);
+			expect(await readFile(f.image, "utf8")).toBe(expected);
+			expect(
+				(await readdir(f.root)).filter((name) =>
+					name.startsWith(".open-quake-update-"),
+				),
+			).toEqual([]);
+		} finally {
+			vi.restoreAllMocks();
 			await rm(f.root, { recursive: true, force: true });
 		}
 	},

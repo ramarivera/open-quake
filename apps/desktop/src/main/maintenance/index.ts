@@ -699,9 +699,11 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 								case "check-update":
 									if ((yield* update.snapshot()).state === "disabled") {
 										if (!mock)
-											yield* io(() => shell.openExternal(RELEASES_PAGE));
+											yield* Effect.tryPromise(() =>
+												shell.openExternal(RELEASES_PAGE),
+											).pipe(Effect.ignore);
 										message =
-											"GitHub Releases: Linux deb packages need manual installation. Windows builds are unsigned. macOS signing and notarization are pending distributor credentials.";
+											"GitHub Releases: Linux deb packages need manual installation. Windows builds are unsigned. macOS releases require signing and notarization.";
 									}
 									yield* update.check();
 									break;

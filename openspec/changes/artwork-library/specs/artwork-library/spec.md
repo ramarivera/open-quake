@@ -240,5 +240,6 @@ MGMT-413 SHALL use existing configuration replacement/backup merge, emoji downlo
 - **THEN** its obligation stays open with that missing owner or decision recorded
 
 #### Scenario: Existing helper consumers
+
 - **WHEN** a key field is deleted and saved, a generated image fails download, or a backup is exported
 - **THEN** the owning consumer preserves deletion, avoids partial image writes, or emits a safe timestamped filename respectively

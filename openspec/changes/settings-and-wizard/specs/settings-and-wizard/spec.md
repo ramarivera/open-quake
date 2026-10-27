@@ -673,3 +673,13 @@ MAIN-114 and SETTINGS-006/049/050 SHALL use only ramarivera/open-quake GitHub Re
 #### Scenario: GitHub asset redirects retain mandatory verification
 - **WHEN** GitHub redirects the pinned repository asset to an allowlisted HTTPS host
 - **THEN** download and install still require the SHA-256 and size from the pinned repository API metadata, altered bytes never replace the AppImage, and nonstandard HTTPS ports are rejected before transport
+
+#### Scenario: Installed AppImage changes during replacement
+
+- **WHEN** the installed image is a symlink, is not executable, or its inode, device, modification time or size changes while verified bytes are copied
+- **THEN** replacement fails before rename, preserves the current installed contents and removes the temporary update file
+
+#### Scenario: No browser handler for manual releases
+
+- **WHEN** launching the releases page fails in a package with automatic updates disabled
+- **THEN** the maintenance request still checks update state and returns a refreshed view with the manual distribution notice, without a restore error

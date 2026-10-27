@@ -620,3 +620,8 @@ AI-283 setup SHALL expose installation only on macOS. Main SHALL authenticate th
 #### Scenario: Localized setup consent and outcomes
 - **WHEN** the saved app language is English or German
 - **THEN** mounted setup help, consent, refresh, cancel, busy, failure, full storage and handoff status use bundled copy in that language, and native confirmation and package selection read the current saved language at action time
+
+#### Scenario: Exact BlackHole signing team
+
+- **WHEN** an assessed package claims the Existential Audio organization with a different Team ID
+- **THEN** the native handoff rejects it, releases its failed-attempt slot and allows retry with the verified Developer ID Installer team Q5C99V536K
