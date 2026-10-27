@@ -258,8 +258,18 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 						}),
 					);
 				}).pipe(Effect.provide(sharedLighting(() => [session])));
-				const protocol = yield* session.qmk([{ _tag: "protocol" }]);
-				const version = (protocol[0]?.[0] ?? 0) * 256 + (protocol[0]?.[1] ?? 0);
+				const protocol = yield* Effect.exit(
+					session.qmk([{ _tag: "protocol" }]),
+				);
+				if (Exit.isFailure(protocol))
+					record({
+						id: "v3-speed-restoration-and-readonly-state",
+						status: "failed",
+						cause: safeCause(protocol.cause),
+					});
+				const version = Exit.isSuccess(protocol)
+					? (protocol.value[0]?.[0] ?? 0) * 256 + (protocol.value[0]?.[1] ?? 0)
+					: 0;
 				if (
 					version === 12 &&
 					initial.firmware?.deviceName === 3 &&
