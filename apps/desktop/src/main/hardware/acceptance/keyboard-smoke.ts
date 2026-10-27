@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { Effect, Layer } from "effect";
+import { Cause, Effect, Layer } from "effect";
 import { app, BrowserWindow } from "electron";
 import { canonicalHidSerial } from "../../../../../../packages/device/src/device-contracts.js";
 import { QuakeDevice } from "../../../../../../packages/device/src/device-service.js";
@@ -11,11 +11,14 @@ import { HardwareControls } from "../../../../../../packages/device/src/hardware
 import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
 import { NodeHidLive } from "../../../../../../packages/device/src/node-hid.js";
 import { createDesktopDiagnostics } from "../../diagnostics/index.js";
+import { safeCause } from "../../diagnostics/privacy.js";
 import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
 import { exactDeviceTransport } from "./exact-device.js";
 import { confirmKeyboardReadiness } from "./keyboard-readiness.js";
 import { ownNativeDevice } from "./native-owner.js";
 import { acceptanceOptions } from "./policy.js";
+
+let stage = "configuration";
 
 async function run() {
 	const options = acceptanceOptions(process.env);
@@ -23,6 +26,7 @@ async function run() {
 		process.stdin.isTTY,
 		"Keyboard acceptance requires an interactive terminal",
 	);
+	stage = "readiness";
 	const terminal = createInterface({
 		input: process.stdin,
 		output: process.stdout,
@@ -34,6 +38,7 @@ async function run() {
 	} finally {
 		terminal.close();
 	}
+	stage = "ownership";
 	const owner = await ownNativeDevice(options.directory);
 	try {
 		await writeFile(
@@ -46,6 +51,7 @@ async function run() {
 			mode: 0o700,
 		});
 		app.setPath("userData", join(options.directory, "keyboard-user-data"));
+		stage = "window";
 		await app.whenReady();
 		const window = new BrowserWindow({
 			width: 680,
@@ -78,6 +84,7 @@ async function run() {
 			await runtime.runPromise(
 				Effect.scoped(
 					Effect.gen(function* () {
+						stage = "device";
 						const device = yield* QuakeDevice;
 						const devices = yield* device.discover();
 						const chosen = devices.filter(
@@ -96,6 +103,7 @@ async function run() {
 							session: "keyboard-acceptance",
 						});
 						yield* Effect.promise(async () => {
+							stage = "focus";
 							window.show();
 							window.focus();
 							await window.webContents.executeJavaScript(
@@ -106,7 +114,9 @@ async function run() {
 								"Test target must own focus before hardware emits a key",
 							);
 						});
+						stage = "keyboard";
 						yield* session.pressChord("a");
+						stage = "readback";
 						for (let attempt = 0; attempt < 20; attempt++) {
 							const received: unknown = yield* Effect.promise(() =>
 								window.webContents.executeJavaScript(
@@ -130,34 +140,53 @@ async function run() {
 					}),
 				).pipe(Effect.timeout("15 seconds")),
 			);
-			await writeFile(
-				join(options.directory, "keyboard-result.json"),
-				JSON.stringify({
-					id: "keyboard",
-					mode: "native",
-					status: "passed",
-					typed: true,
-					released: true,
-				}),
-				{ mode: 0o600 },
-			);
-			console.info(
-				"QUAKE keyboard E2E PASS: native key and release reached the owned target",
-			);
 		} finally {
-			window.destroy();
-			await runtime.dispose();
-			await diagnostics.close();
+			try {
+				await runtime.dispose();
+				const health = await diagnostics.close();
+				assert.equal(health.storageFailures, 0);
+				assert.equal(health.dropped, 0);
+			} finally {
+				window.destroy();
+			}
 		}
 	} finally {
 		await owner.close();
 	}
+	await writeFile(
+		join(options.directory, "keyboard-result.json"),
+		JSON.stringify({
+			id: "keyboard",
+			mode: "native",
+			status: "passed",
+			typed: true,
+			released: true,
+		}),
+		{ mode: 0o600 },
+	);
+	console.info(
+		"QUAKE keyboard E2E PASS: native key and release reached the owned target",
+	);
 }
 
+// Electron's default-app lifecycle must not exit before async cleanup finishes.
+let finished = false;
+app.on("window-all-closed", () => {});
+app.on("before-quit", (event) => {
+	if (!finished) event.preventDefault();
+});
+
 run().then(
-	() => app.quit(),
 	() => {
-		console.error("QUAKE keyboard E2E failed; inspect retained diagnostics");
+		finished = true;
+		app.quit();
+	},
+	(cause: unknown) => {
+		finished = true;
+		console.error(
+			"QUAKE keyboard E2E failed",
+			JSON.stringify({ stage, cause: safeCause(Cause.die(cause)) }),
+		);
 		app.exit(1);
 	},
 );

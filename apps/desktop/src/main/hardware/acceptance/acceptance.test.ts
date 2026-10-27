@@ -316,3 +316,21 @@ it.each([false, true])(
 	},
 	10_000,
 );
+
+it("ignores Chromium helpers only within this fixture's process tree", () => {
+	expect(
+		competingOwners(
+			[
+				"99 1 /dev/open-quake/Electron.app/Contents/MacOS/Electron keyboard-smoke.js",
+				"100 99 /dev/open-quake/Electron.app/Contents/Frameworks/Electron Helper --type=gpu-process",
+				"101 99 /dev/open-quake/Electron.app/Contents/Frameworks/Electron Helper --type=utility",
+				"102 101 /dev/open-quake/Electron.app/Contents/Frameworks/Electron Helper --type=renderer",
+				"103 99 /dev/open-quake/Electron.app/Contents/MacOS/Electron another-main.js",
+				"200 1 /dev/open-quake/Electron.app/Contents/MacOS/Electron main.js",
+				"201 200 /dev/open-quake/Electron.app/Contents/Frameworks/Electron Helper --type=gpu-process",
+				"300 1 /Applications/DK-Suite.app/Contents/MacOS/DK-Suite",
+			].join("\n"),
+			99,
+		),
+	).toEqual([103, 200, 201, 300]);
+});

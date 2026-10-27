@@ -66,8 +66,25 @@ export function competingOwners(output: string, ownPid: number): number[] {
 		ancestors.add(parent);
 		parent = processes.find((entry) => entry.pid === parent)?.parent;
 	}
+	const parents = new Map(processes.map(({ pid, parent }) => [pid, parent]));
+	const isDescendant = (pid: number): boolean => {
+		const seen = new Set<number>();
+		let parent = parents.get(pid);
+		while (parent && !seen.has(parent)) {
+			if (parent === ownPid) return true;
+			seen.add(parent);
+			parent = parents.get(parent);
+		}
+		return false;
+	};
 	return processes.flatMap(({ pid, command }) => {
 		if (pid === ownPid) return [];
+		// Electron creates these helpers before app readiness; they aren't HID owners.
+		if (
+			isDescendant(pid) &&
+			/--type=(?:gpu-process|utility|renderer|zygote)(?:\s|$)/.test(command)
+		)
+			return [];
 		// pnpm and Electron's JS launcher do not own HID. Exclude only our ancestors.
 		if (
 			ancestors.has(pid) &&

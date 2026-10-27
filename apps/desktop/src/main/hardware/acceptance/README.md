@@ -70,6 +70,9 @@ It generates a new challenge for every invocation and accepts it for 30 seconds.
 Inherited environment readiness flags cannot authorize a run.
 It opens a dedicated window, checks that window owns focus, types one letter
 through the actual hardware keyboard path, checks its key release, then closes.
+Its own Chromium helper processes are excluded from competing HID owners; independent
+Electron applications remain blocked. Electron stays alive for runtime, diagnostics and
+owner cleanup, and only then finalizes the passed result.
 No physical cursor movement or shortcuts occur. Do not run it
 for unattended or background-only tests. Its separate `keyboard-result.json`
 is supplemental evidence; the control-suite percentage does not silently count
