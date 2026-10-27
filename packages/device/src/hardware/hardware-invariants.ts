@@ -17,6 +17,18 @@ export const luminancePercent = (value: number): number =>
 export const buzzerTones: Readonly<
 	Record<ToneName, readonly (readonly [number, number])[]>
 > = {
+	firework: [[80, 50]],
+	success: [
+		[80, 50],
+		[0, 1000],
+		[80, 50],
+		[0, 1000],
+		[80, 50],
+		[0, 1000],
+		[80, 50],
+		[0, 1000],
+		[80, 50],
+	],
 	start: [
 		[80, 100],
 		[0, 10],

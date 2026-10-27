@@ -4,6 +4,8 @@ import { formatCountdown } from "../../../../../../packages/device/src/actions/k
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { hardwareKeyState } from "../hardware/key-state";
+import { useHardwareSnapshot } from "../hardware/useHardwareSnapshot";
 import { useAppLocale } from "../i18n";
 import { useKeyRuntime } from "../keys/useKeyRuntime";
 import { WallpaperCanvas } from "../wallpaper/WallpaperCanvas";
@@ -140,8 +142,12 @@ function StripGrid({
 	runtime,
 	clockSelection,
 	currentPage,
+	hardware,
 }: {
 	currentPage?: number | undefined;
+	hardware?:
+		| import("../../../shared/hardware-contracts").HardwareSnapshot
+		| undefined;
 	clockSelection?:
 		| {
 				readonly profileId: string;
@@ -222,13 +228,26 @@ function StripGrid({
 								voice,
 								currentPage,
 								interactive,
+								hardware,
 								keyTarget: clockSelection,
 								clockTarget: clockSelection
 									? { ...clockSelection, keyCode: tile.keyCode }
 									: undefined,
 							}}
 						/>
-						<KeyState state={runtime(tile.keyCode)} />
+						<KeyState
+							state={
+								tile.type === "luminance" &&
+								hardwareKeyState(tile.type, hardware)?.progress !== undefined &&
+								clockSelection
+									? {
+											...clockSelection,
+											keyCode: tile.keyCode,
+											progress: hardwareKeyState(tile.type, hardware)?.progress,
+										}
+									: runtime(tile.keyCode)
+							}
+						/>
 						{tileOverlay?.(tile)}
 					</div>
 				);
@@ -361,6 +380,7 @@ export function StripScreen({
 		};
 	}, [interactive]);
 
+	const hardware = useHardwareSnapshot(serial);
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);
@@ -381,12 +401,13 @@ export function StripScreen({
 						state?.revision === undefined || state.revision === profile.revision
 							? state
 							: undefined;
+					const hardwareState = hardwareKeyState(key.config.type, hardware);
 					const translated =
 						titles === "provided" ? key : localizedKey(key, locale);
 					const selected =
-						(key.config.type === "hotkeySwitch" ||
-							key.config.type === "mute") &&
-						validState?.alternate === 1
+						(key.config.type === "hotkeySwitch" || key.config.type === "mute"
+							? validState?.alternate
+							: hardwareState?.alternate) === 1
 							? {
 									...translated,
 									config: {
@@ -412,7 +433,7 @@ export function StripScreen({
 			},
 			rows,
 		);
-	}, [profiles, serial, locale, runtimeStates, titles, rows]);
+	}, [profiles, serial, locale, runtimeStates, titles, rows, hardware]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
 		onLayout?.(vivid || pendingProfile ? undefined : layout);
@@ -472,6 +493,7 @@ export function StripScreen({
 			) : null}
 			{!vivid && layout ? (
 				<StripGrid
+					hardware={hardware}
 					layout={layout}
 					currentPage={
 						selection

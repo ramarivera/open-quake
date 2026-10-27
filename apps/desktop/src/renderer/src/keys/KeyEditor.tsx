@@ -28,6 +28,7 @@ import { occupiedCells } from "../../../../../../packages/device/src/profiles/pr
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { ClockSnapshot } from "../../../shared/clock-contracts";
 import { selectStripPage } from "../../../shared/strip-selection";
+import { GameModeSettings } from "../hardware/GameModeSettings";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout } from "../strip/geometry";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
@@ -894,6 +895,12 @@ export function KeyEditor({
 							</button>
 						</Row>
 
+						{key.config.type === "gameMode" && (
+							<GameModeSettings
+								value={key}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{isMonitorKey(key) && (
 							<MonitorKeySettings
 								key={selection?.target.token}
@@ -941,6 +948,7 @@ export function KeyEditor({
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
 									key.config.type !== "clawbot" &&
+									key.config.type !== "gameMode" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)

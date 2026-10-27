@@ -53,6 +53,10 @@ import {
 	desktopKeyRuntimePort,
 } from "./runtime-port";
 
+vi.mock("../hardware/host-keyboard", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../hardware/host-keyboard")>()),
+	hostKeyboardAvailable: () => false,
+}));
 const files = vi.hoisted(() => ({
 	stat: vi.fn(),
 	access: vi.fn(),
@@ -1375,3 +1379,234 @@ it.each([
 		expect(os.worker).not.toHaveBeenCalled();
 	},
 );
+
+it.each(["buzzer", "mic", "gameMode", "luminance"] as const)(
+	"saved %s activates through ProfileService and desktop KeyRuntime",
+	async (type) => {
+		const { createActionDraft } = await import(
+			"../../../../../packages/device/src/actions/action-registry.js"
+		);
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const key = Schema.decodeUnknownSync(Schema.encodedSchema(ProfileKey))({
+			...empty,
+			childrenName: type,
+			config: { ...empty.config, ...createActionDraft(type), display: true },
+		});
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const fake = yield* makeFakeHardwareTransport({ serial: "device" });
+					const device = yield* QuakeDevice.pipe(
+						Effect.provide(
+							QuakeDevice.DefaultWithoutDependencies.pipe(
+								Layer.provide(fake.layer),
+							),
+						),
+					);
+					const connection = yield* device.connect();
+					const controls = yield* HardwareControls.pipe(
+						Effect.provide(HardwareControls.Default),
+					);
+					const session = yield* controls.create(connection, {
+						serial: "device",
+						session: "saved",
+					});
+					yield* session.refresh();
+					yield* Effect.gen(function* () {
+						const runtime = yield* KeyRuntime;
+						yield* runtime.activate("device", "1,1", "press");
+						yield* runtime.activate("device", "1,1", "release");
+						const state = yield* session.snapshot();
+						if (type === "buzzer")
+							expect(state.preferences.buzzerEnabled).toBe(false);
+						if (type === "mic") expect(state.mic).toBe(false);
+						if (type === "luminance") expect(state.luminance).toBe(229);
+						if (type === "gameMode") expect(state.inputMode).toBe("host");
+					}).pipe(
+						Effect.provide(
+							layer(true, undefined, undefined, key, undefined, () => session),
+						),
+					);
+				}),
+			),
+		);
+	},
+);
+it("hardware sequence validates all leaves before effects and cancels later steps", async () => {
+	const { createActionDraft } = await import(
+		"../../../../../packages/device/src/actions/action-registry.js"
+	);
+	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const key = {
+		...empty,
+		childrenName: "multiActions",
+		config: {
+			...empty.config,
+			type: "multiActions",
+			display: true,
+			subActions: [
+				{ config: { ...createActionDraft("buzzer"), gap: 60000 } },
+				{ config: { ...createActionDraft("mic"), gap: 0 } },
+			],
+		},
+	};
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHardwareTransport({ serial: "device" });
+				const device = yield* QuakeDevice.pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
+				);
+				const controls = yield* HardwareControls.pipe(
+					Effect.provide(HardwareControls.Default),
+				);
+				const session = yield* controls.create(yield* device.connect(), {
+					serial: "device",
+					session: "seq",
+				});
+				yield* session.refresh();
+				const advanced = yield* Deferred.make<void>();
+				yield* Effect.gen(function* () {
+					const runtime = yield* KeyRuntime;
+					yield* runtime.activate("device", "1,1", "press");
+					yield* Deferred.await(advanced).pipe(Effect.timeout("2 seconds"));
+					yield* runtime.activate("device", "1,1", "cancel");
+					expect((yield* session.snapshot()).preferences.buzzerEnabled).toBe(
+						false,
+					);
+					expect((yield* session.snapshot()).mic).toBe(true);
+				}).pipe(
+					Effect.provide(
+						layer(
+							true,
+							(state) =>
+								state.progress === 50
+									? Deferred.succeed(advanced, undefined).pipe(Effect.asVoid)
+									: Effect.void,
+							undefined,
+							key,
+							undefined,
+							() => session,
+						),
+					),
+				);
+			}),
+		),
+	);
+});
+
+it("MAIN-096 returning to device mode works after host input permission is lost", async () => {
+	const { createActionDraft } = await import(
+		"../../../../../packages/device/src/actions/action-registry.js"
+	);
+	const { HardwareKeyConfig } = await import(
+		"../../../../../packages/device/src/hardware/hardware-actions.js"
+	);
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHardwareTransport({ serial: "device" });
+				const device = yield* QuakeDevice.pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
+				);
+				const controls = yield* HardwareControls.pipe(
+					Effect.provide(HardwareControls.Default),
+				);
+				const session = yield* controls.create(yield* device.connect(), {
+					serial: "device",
+					session: "mode",
+				});
+				const config = Schema.decodeUnknownSync(HardwareKeyConfig)(
+					createActionDraft("gameMode"),
+				);
+				yield* Effect.gen(function* () {
+					const port = yield* KeyRuntimePort;
+					expect(
+						(yield* port.execute(config, "device").pipe(Effect.either))._tag,
+					).toBe("Left");
+					expect((yield* session.snapshot()).inputMode).toBe("device");
+					yield* session.setInputMode("host");
+					yield* port.execute(config, "device");
+					expect((yield* session.snapshot()).inputMode).toBe("device");
+				}).pipe(
+					Effect.provide(
+						layer(
+							false,
+							undefined,
+							undefined,
+							undefined,
+							undefined,
+							() => session,
+						),
+					),
+				);
+			}),
+		),
+	);
+});
+
+it("MGMT-205 HA sequence dispatches the full validated key and aborts its actual owned consumer", async () => {
+	const { createActionDraft } = await import(
+		"../../../../../packages/device/src/actions/action-registry.js"
+	);
+	const { keyHaConfig } = await import("../integrations/profiles");
+	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const key = {
+		...empty,
+		childrenName: "multiActions",
+		config: {
+			...empty.config,
+			type: "multiActions",
+			display: true,
+			subActions: [
+				{ config: { ...createActionDraft("homeAssistant"), gap: 0 } },
+				{
+					config: {
+						type: "text",
+						actions: [{ type: "text", value: "must not run" }],
+						gap: 0,
+					},
+				},
+			],
+		},
+	};
+	let signal: AbortSignal | undefined;
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				const entered = yield* Deferred.make<void>();
+				const owned = async (saved: ProfileKey, abort: AbortSignal) => {
+					expect(keyHaConfig(saved)).toMatchObject({
+						entity_id: "light.example",
+						service: "toggle",
+						service_data: {},
+						custom_display_settings: { fontSize: 20 },
+					});
+					signal = abort;
+					Effect.runSync(Deferred.succeed(entered, undefined));
+					return new Promise<boolean>((resolve) =>
+						abort.addEventListener("abort", () => resolve(false), {
+							once: true,
+						}),
+					);
+				};
+				yield* Effect.gen(function* () {
+					const runtime = yield* KeyRuntime;
+					yield* runtime.activate("device", "1,1", "press");
+					yield* Deferred.await(entered).pipe(Effect.timeout("2 seconds"));
+					yield* runtime.activate("device", "1,1", "cancel");
+					expect(signal?.aborted).toBe(true);
+				}).pipe(Effect.provide(layer(false, undefined, undefined, key, owned)));
+			}),
+		),
+	);
+	expect(os.clipboard).not.toHaveBeenCalled();
+});

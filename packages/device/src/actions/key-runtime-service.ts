@@ -29,6 +29,7 @@ import {
 } from "./action-contracts.js";
 import {
 	type ActionError,
+	HostActionFailed,
 	InvalidKeyAction,
 	KeyFunctionUnavailable,
 } from "./action-errors.js";
@@ -77,6 +78,7 @@ export class KeyRuntimePort extends Context.Tag(
 		readonly read: Effect.Effect<ProfileEnvelope, ActionError>;
 		readonly execute: (
 			config: ActionConfig,
+			deviceId?: string,
 		) => Effect.Effect<void, ActionError>;
 		/** Side-effect-free validation supplied by the soundboard owner. */
 		readonly validateSequenceAudio?: (
@@ -343,6 +345,19 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			> {
 				const control = JSON.stringify([deviceId, keyCode]);
 				if (kind === "up" || kind === "cancel") {
+					if (kind === "cancel") {
+						for (const [identity, entry] of running) {
+							const parts: unknown = JSON.parse(identity);
+							if (
+								Array.isArray(parts) &&
+								parts[0] === deviceId &&
+								parts[3] === keyCode
+							) {
+								running.delete(identity);
+								yield* Fiber.interrupt(entry.fiber);
+							}
+						}
+					}
 					const contact = contacts.get(control);
 					if (!contact) return;
 					if (contact.release) {
@@ -527,10 +542,13 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							new InvalidKeyAction("config.actions", decoded.left),
 						);
 					const state = alternates.get(identity) ?? 0;
-					yield* port.execute({
-						type: "hotkey",
-						actions: [decoded.right.actions[state]],
-					});
+					yield* port.execute(
+						{
+							type: "hotkey",
+							actions: [decoded.right.actions[state]],
+						},
+						deviceId,
+					);
 					alternates.set(identity, state === 0 ? 1 : 0);
 					yield* feedback({ ...base, alternate: state === 0 ? 1 : 0 });
 					return;
@@ -756,7 +774,31 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									const action = validateAction(config.type, config);
 									if (action._tag === "Left")
 										return yield* Effect.fail(action.left);
-									yield* port.execute(action.right);
+									if (action.right.type === "homeAssistant") {
+										if (!port.executeOwned)
+											return yield* new HostActionFailed(
+												"home-assistant-unavailable",
+											);
+										const synthetic = {
+											...key,
+											config: {
+												...key.config,
+												type: action.right.type,
+												actions: action.right.actions,
+											},
+										};
+										if (
+											!(yield* port.executeOwned(synthetic, {
+												deviceId,
+												profileId: profile.id,
+												pageId: page.id,
+												revision: profile.revision,
+											}))
+										)
+											return yield* new HostActionFailed(
+												"home-assistant-unavailable",
+											);
+									} else yield* port.execute(action.right, deviceId);
 								}
 								yield* feedback({
 									...base,
@@ -855,7 +897,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					input,
 				);
 				if (action._tag === "Left") return yield* Effect.fail(action.left);
-				yield* port.execute(action.right);
+				yield* port.execute(action.right, deviceId);
 			});
 			const displayEvent = Effect.fn("KeyRuntime.displayEvent")(function* (
 				input: unknown,

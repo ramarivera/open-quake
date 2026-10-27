@@ -189,9 +189,10 @@ it("review: sequence library and mounted editor agree on every selectable defaul
 		expect(options.find((option) => option.value === "cmd")?.disabled).toBe(
 			false,
 		);
-		expect(options.find((option) => option.value === "buzzer")?.disabled).toBe(
-			true,
-		);
+		for (const type of ["buzzer", "mic"])
+			expect(options.find((option) => option.value === type)?.disabled).toBe(
+				false,
+			);
 	} finally {
 		await view.close();
 	}
@@ -363,7 +364,7 @@ it("MGMT-127 reads the recovered pluginAction manifest through legacy import and
 	expect(library[0]?.entries[0]?.disabled).toBe(true);
 });
 
-it("MGMT-107/127/210 offers confirmed command steps and keeps unavailable operations disabled", async () => {
+it("MGMT-107/127/210 offers confirmed command and supported hardware sequence steps", async () => {
 	const f = await fixture(true);
 	vi.useFakeTimers();
 	expect(f.host.querySelector('[data-library-type="multiActions"]')).toBeNull();
@@ -385,9 +386,32 @@ it("MGMT-107/127/210 offers confirmed command steps and keeps unavailable operat
 		'[data-library-type="mic"]',
 		HTMLButtonElement,
 	);
-	expect(microphone.disabled).toBe(true);
+	expect(microphone.disabled).toBe(false);
 	await click(microphone);
-	expect(f.choose).toHaveBeenCalledTimes(1);
+	expect(f.choose).toHaveBeenCalledTimes(2);
+	expect(f.choose.mock.calls[1]?.[1].key.config).toMatchObject({
+		type: "mic",
+		actions: [
+			{ type: "toggle", value: 0 },
+			{ type: "toggle", value: 1 },
+		],
+	});
+	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
+	const buzzer = query(
+		f.host,
+		'[data-library-type="buzzer"]',
+		HTMLButtonElement,
+	);
+	expect(buzzer.disabled).toBe(false);
+	await click(buzzer);
+	expect(f.choose).toHaveBeenCalledTimes(3);
+	expect(f.choose.mock.calls[2]?.[1].key.config).toMatchObject({
+		type: "buzzer",
+		actions: [
+			{ type: "toggle", value: 0 },
+			{ type: "toggle", value: 1 },
+		],
+	});
 	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
 	expect(f.host.querySelector('[data-library-type="website"]')).not.toBeNull();
 });

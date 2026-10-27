@@ -1,4 +1,10 @@
 import { Schema } from "effect";
+import {
+	BuzzerKeyConfig,
+	GameModeKeyConfig,
+	LuminanceKeyConfig,
+	MicKeyConfig,
+} from "../hardware/hardware-actions.js";
 import * as C from "./action-contracts.js";
 import { OBS_IDS, obsDraft, obsKeyConfig } from "./obs-contracts.js";
 
@@ -47,7 +53,7 @@ const define = <A, Encoded, const I extends string>(
 		alternateState: options.alternateState ?? false,
 		editPolicy: {
 			title: true,
-			grid: true,
+			grid: !["buzzer", "mic", "homeAssistant"].includes(id),
 			icon: true,
 			allowDelete: true,
 			allowDrag: true,
@@ -165,6 +171,73 @@ export const ACTION_REGISTRY = [
 		defaults: { actions: [] },
 	}),
 
+	define("homeAssistant", C.HomeAssistantKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "integrations.homeAssistant",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{
+					type: "configData",
+					value: JSON.stringify({
+						entity_id: "light.example",
+						service: "toggle",
+						service_data: {},
+						custom_display_type: "default",
+						custom_display_settings: { fontSize: 20 },
+						custom_display_detail: [],
+					}),
+				},
+			],
+		},
+	}),
+	define("buzzer", BuzzerKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		alternateState: true,
+		defaults: {
+			icon: "0-58",
+			alterIcon: "0-101",
+			actions: [
+				{ type: "toggle", value: 0 },
+				{ type: "toggle", value: 1 },
+			],
+		},
+	}),
+	define("mic", MicKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		alternateState: true,
+		defaults: {
+			icon: "0-59",
+			alterIcon: "0-100",
+			actions: [
+				{ type: "toggle", value: 0 },
+				{ type: "toggle", value: 1 },
+			],
+		},
+	}),
+	define("luminance", LuminanceKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		supportKnob: true,
+		defaults: {
+			icon: "0-57",
+			actions: [
+				{ type: "level", value: 1 },
+				{ type: "level", value: 0 },
+			],
+		},
+	}),
+	define("gameMode", GameModeKeyConfig, {
+		submenu: "deviceControl",
+		requiredAdapter: "hardware.mode",
+		binding: "delegate",
+		defaults: { icon: "0-118", size: [4, 2], actions: [] },
+	}),
 	define("audioBot", C.AudioBotConfig, {
 		submenu: "decoKeeAI",
 		requiredAdapter: "speech.runtime",

@@ -181,22 +181,28 @@ export function SequenceEditor({
 									{sequenceFunctionOptions}
 								</select>
 							</label>
-							<label>
-								{config.type === "delay" ? "Milliseconds" : "Value"}
-								<input
-									type={config.type === "delay" ? "number" : "text"}
-									value={config.actions[0]?.value ?? ""}
-									onChange={(e) =>
-										onChange(
-											value.map((step, i) =>
-												i === index
-													? changeSequenceValue(step, e.target.value)
-													: step,
-											),
-										)
-									}
-								/>
-							</label>
+							{!["buzzer", "mic"].includes(config.type) && (
+								<label>
+									{config.type === "delay"
+										? "Milliseconds"
+										: config.type === "homeAssistant"
+											? "Home Assistant configuration (JSON)"
+											: "Value"}
+									<input
+										type={config.type === "delay" ? "number" : "text"}
+										value={config.actions[0]?.value ?? ""}
+										onChange={(e) =>
+											onChange(
+												value.map((step, i) =>
+													i === index
+														? changeSequenceValue(step, e.target.value)
+														: step,
+												),
+											)
+										}
+									/>
+								</label>
+							)}
 							<label>
 								Interval for executing next operation
 								<input

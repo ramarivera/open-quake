@@ -37,3 +37,69 @@
 .hardware-notices {
 	margin-top: 16px;
 }
+
+.hardware-game-tile {
+	width: 100%;
+	height: 100%;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	border: 0;
+	background: transparent;
+	color: #fff;
+	animation: hardware-appear 0.2s ease;
+	cursor: pointer;
+}
+.hardware-game-tile svg {
+	width: 55%;
+	height: 65%;
+}
+.hardware-game-tile[data-gaming="true"] {
+	color: #4caf50;
+}
+.hardware-game-tile[data-gaming="true"] svg {
+	animation:
+		hardware-game-enter 0.6s ease,
+		hardware-game-pulse 2s 0.6s ease-in-out infinite;
+}
+.hardware-game-tile[data-failed="true"] {
+	color: #ff7777;
+}
+.hardware-game-artwork {
+	max-width: 95%;
+	max-height: 95%;
+	object-fit: contain;
+}
+@keyframes hardware-appear {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes hardware-game-enter {
+	from {
+		transform: scale(0.8);
+		opacity: 0;
+	}
+	to {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+@keyframes hardware-game-pulse {
+	50% {
+		opacity: 0.9;
+		transform: scale(1.05);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.hardware-game-tile,
+	.hardware-game-tile[data-gaming="true"] svg {
+		animation: none;
+	}
+}
