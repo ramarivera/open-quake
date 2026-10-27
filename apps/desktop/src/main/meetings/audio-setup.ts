@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { mkdir, mkdtemp, open, rm } from "node:fs/promises";
+import { mkdir, open, readdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { Effect } from "effect";
@@ -16,7 +16,7 @@ export interface AudioSetupPort {
 	readonly active?: () => boolean;
 	readonly confirm: () => Promise<boolean>;
 	readonly select: () => Promise<string | undefined>;
-	readonly openInstaller: (path: string) => Promise<void>;
+	readonly openInstaller: (path: string) => Promise<undefined | "storage-full">;
 }
 /** User action only. The native port owns package validation and installer handoff. */
 export function audioSetup(port: AudioSetupPort) {
@@ -46,7 +46,8 @@ export function audioSetup(port: AudioSetupPort) {
 							return reply("cancelled");
 						const path = await port.select();
 						if (!path || port.active?.() === false) return reply("cancelled");
-						await port.openInstaller(path);
+						if ((await port.openInstaller(path)) === "storage-full")
+							return reply("storage-full");
 						return reply("opened");
 					},
 					catch: (cause) => new MeetingUnavailable(cause),
@@ -66,17 +67,46 @@ export function audioSetup(port: AudioSetupPort) {
 }
 const execute = promisify(execFile);
 /** Copy a bounded, regular pkg into app-owned storage before signature checks.
- * Keep the copy after handoff: Installer may still be reading it after openPath returns. */
+ * Two exclusive slots bound retention across retries, concurrent calls and restarts.
+ * Never delete handed-off or crash-interrupted copies: openPath does not signal completion.
+ * Legacy random directories count against admission; only the user may remove them
+ * after closing Installer. Failed attempts release their own slot immediately. */
 export async function openBlackHoleInstaller(options: {
 	readonly selected: string;
 	readonly root: string;
 	readonly verify?: (path: string) => Promise<void>;
 	readonly open: (path: string) => Promise<string>;
-}): Promise<void> {
+}): Promise<undefined | "storage-full"> {
 	if (!/^BlackHole[^/]*\.pkg$/i.test(basename(options.selected)))
 		throw meetingError("Invalid");
 	await mkdir(options.root, { recursive: true });
-	const directory = await mkdtemp(join(options.root, "blackhole-"));
+	const entries = (await readdir(options.root)).filter((name) =>
+		name.startsWith("blackhole-"),
+	);
+	if (entries.length >= 2) return "storage-full";
+	const legacy = entries.filter(
+		(name) => !/^blackhole-slot-[01]$/.test(name),
+	).length;
+	let directory: string | undefined;
+	for (let slot = 0; slot < Math.max(0, 2 - legacy); slot++) {
+		const candidate = join(options.root, `blackhole-slot-${slot}`);
+		try {
+			await mkdir(candidate, { mode: 0o700 });
+			directory = candidate;
+			break;
+		} catch (cause) {
+			if (
+				!(
+					typeof cause === "object" &&
+					cause !== null &&
+					"code" in cause &&
+					cause.code === "EEXIST"
+				)
+			)
+				throw cause;
+		}
+	}
+	if (!directory) return "storage-full";
 	let handedOff = false;
 	try {
 		const input = await open(

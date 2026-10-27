@@ -117,6 +117,7 @@ it.each([
 			"https://github.com/foreign/app/releases/download/v1.1.0/app.AppImage",
 	},
 	{ digest: `sha256:${"0".repeat(64)}` },
+	{ size: 2 },
 ])(
 	"MAIN-114 rejects missing/untrusted/corrupt asset %j before replacement",
 	async (overrides) => {
@@ -164,3 +165,64 @@ it("MAIN-114 refuses foreign redirects and preserves the installed image", async
 		await rm(f.root, { recursive: true, force: true });
 	}
 });
+
+it.each([
+	[
+		"https://github.com/foreign/repository/releases/download/v1/same.AppImage",
+		false,
+	],
+	[
+		"https://release-assets.githubusercontent.com/github-production-release-asset/123/blob?signature=test",
+		false,
+	],
+	[
+		"https://objects.githubusercontent.com/github-production-release-asset/123/blob?signature=test",
+		false,
+	],
+	[
+		"https://github.com/foreign/repository/releases/download/v1/untrusted.AppImage",
+		true,
+	],
+	["https://release-assets.githubusercontent.com/foreign/blob", true],
+	["https://release-assets.githubusercontent.com:8443/asset", false],
+])(
+	"MAIN-114 validates pinned digest and size after redirect to %s",
+	async (destination, malicious) => {
+		const f = await fixture();
+		const body = malicious ? Buffer.alloc(f.bytes.length, 120) : f.bytes;
+		f.transport.mockImplementation(async (input) => {
+			const url = String(input);
+			if (url.startsWith("https://api.github.com/"))
+				return Response.json(f.release);
+			if (url === f.release.assets[0]?.browser_download_url)
+				return new Response(null, {
+					status: 302,
+					headers: { location: destination },
+				});
+			return new Response(body);
+		});
+		try {
+			const allowed = !malicious && !destination.includes(":8443");
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const updates = yield* AppUpdates;
+					yield* updates.check();
+					const result = yield* Effect.either(updates.download());
+					expect(result._tag).toBe(allowed ? "Right" : "Left");
+					if (allowed) yield* updates.install();
+					else expect((yield* updates.snapshot()).state).not.toBe("ready");
+				}).pipe(Effect.provide(f.layer), Effect.scoped),
+			);
+			expect(await readFile(f.image)).toEqual(
+				allowed ? f.bytes : Buffer.from("old synthetic image"),
+			);
+			expect(f.restart).toHaveBeenCalledTimes(allowed ? 1 : 0);
+			for (const [, init] of f.transport.mock.calls)
+				expect(init?.credentials).toBe("omit");
+			if (destination.includes(":8443"))
+				expect(f.transport).toHaveBeenCalledTimes(2);
+		} finally {
+			await rm(f.root, { recursive: true, force: true });
+		}
+	},
+);

@@ -96,6 +96,7 @@ export function githubAppImageConfiguration(options: {
 					url.protocol !== "https:" ||
 					url.username ||
 					url.password ||
+					url.port ||
 					url.hash ||
 					![
 						"github.com",

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import strings from "./audio-setup-strings.json";
 
 export const AUDIO_SETUP_CHANNEL = "meetings:audio-setup";
 export const AudioSetupRequest = Schema.Struct({
@@ -13,8 +14,11 @@ export const AudioSetupReply = Schema.Struct({
 		"cancelled",
 		"opened",
 		"failed",
+		"storage-full",
 	),
 });
 export type AudioSetupReply = typeof AudioSetupReply.Type;
-export const BLACKHOLE_WARNING =
-	"This installs the BlackHole virtual audio driver on macOS. macOS Installer will request an administrator password. To capture system audio while hearing it, you must choose a Multi-Output Device containing your speakers and BlackHole in Audio MIDI Setup. Changing the system output affects audio routing and may change volume controls. open-quake won't change routing for you. Only continue with a BlackHole package downloaded from existential.audio.";
+/** Shared native and renderer copy; unsupported product locales use English. */
+export function audioSetupText(locale: string) {
+	return locale === "de" ? strings.de : strings.en;
+}

@@ -1,9 +1,12 @@
 import {
+	mkdir,
 	mkdtemp,
 	readdir,
 	readFile,
 	rm,
+	stat,
 	symlink,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,7 +24,7 @@ it("AI-283 requires fresh consent, handles cancellation/failure/retry and never 
 	const select = vi.fn(
 		async (): Promise<string | undefined> => "BlackHole.pkg",
 	);
-	const openInstaller = vi.fn(async () => {});
+	const openInstaller = vi.fn(async () => undefined);
 	const port = {
 		platform: "darwin",
 		mock: false,
@@ -121,4 +124,94 @@ it("AI-283 rejects an untrusted installer assessment or foreign signer before ha
 	await expect(verifyBlackHolePackage("fake.pkg", run)).rejects.toMatchObject({
 		code: "QUAKE.MEETING.INVALID",
 	});
+});
+
+// Every handoff and verifier is fake; these tests exercise real filesystem retention.
+it("AI-283 bounds retained copies across cancellation, retries, concurrency and restart without deleting an active package", async () => {
+	const root = await mkdtemp(join(tmpdir(), "audio-retention-"));
+	const selected = join(root, "BlackHole.pkg");
+	const storage = join(root, "handoffs");
+	await writeFile(selected, "synthetic package");
+	const paths: string[] = [];
+	const options = {
+		selected,
+		root: storage,
+		verify: async () => {},
+		open: async (path: string) => {
+			paths.push(path);
+			return "";
+		},
+	};
+	try {
+		// Native cancellation is a failed handoff and frees only its own slot.
+		await expect(
+			openBlackHoleInstaller({ ...options, open: async () => "cancelled" }),
+		).rejects.toBeDefined();
+		expect(await readdir(storage)).toEqual([]);
+		await openBlackHoleInstaller(options);
+		const retained = paths[0];
+		if (!retained) throw new Error("Missing retained package");
+		// Age alone cannot prove Installer is inactive. Preserve old copies too.
+		await utimes(retained, new Date(0), new Date(0));
+		await Promise.all([
+			openBlackHoleInstaller(options),
+			openBlackHoleInstaller(options),
+		]);
+		expect(paths).toHaveLength(2);
+		expect(new Set(paths).size).toBe(2);
+		expect(await readdir(storage)).toHaveLength(2);
+		// A fresh call has no in-memory state, just like the next application startup.
+		expect(await openBlackHoleInstaller({ ...options })).toBe("storage-full");
+		expect(paths).toHaveLength(2);
+		for (const path of paths)
+			expect(await readFile(path, "utf8")).toBe("synthetic package");
+		expect((await stat(retained)).mtimeMs).toBe(0);
+		// Simulate the user's cleanup after closing Installer, then retry.
+		await rm(join(storage, "blackhole-slot-0"), { recursive: true });
+		await openBlackHoleInstaller(options);
+		expect(paths).toHaveLength(3);
+		expect(await readdir(storage)).toHaveLength(2);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+it("AI-283 counts legacy and crash-interrupted copies against the persistent admission bound", async () => {
+	const root = await mkdtemp(join(tmpdir(), "audio-retention-legacy-"));
+	const selected = join(root, "BlackHole.pkg");
+	const storage = join(root, "handoffs");
+	await mkdir(join(storage, "blackhole-old"), { recursive: true });
+	await writeFile(
+		join(storage, "blackhole-old", "BlackHole.pkg"),
+		"legacy active copy",
+	);
+	await mkdir(join(storage, "blackhole-slot-1"));
+	await writeFile(selected, "synthetic package");
+	const open = vi.fn(async () => "");
+	try {
+		expect(
+			await openBlackHoleInstaller({ selected, root: storage, open }),
+		).toBe("storage-full");
+		expect(open).not.toHaveBeenCalled();
+		expect(await readdir(storage)).toHaveLength(2);
+		expect(
+			await readFile(join(storage, "blackhole-old", "BlackHole.pkg"), "utf8"),
+		).toBe("legacy active copy");
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+it("AI-283 exposes full storage as a retryable result after fresh consent", async () => {
+	const confirm = vi.fn(async () => true);
+	const owner = audioSetup({
+		platform: "darwin",
+		mock: false,
+		confirm,
+		select: async () => "BlackHole.pkg",
+		openInstaller: async () => "storage-full",
+	});
+	for (let attempt = 0; attempt < 2; attempt++)
+		expect(await Effect.runPromise(owner.install())).toMatchObject({
+			state: "storage-full",
+		});
+	expect(confirm).toHaveBeenCalledTimes(2);
 });

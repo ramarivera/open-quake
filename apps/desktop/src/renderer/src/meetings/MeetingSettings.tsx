@@ -1,13 +1,11 @@
 import { Either, Schema } from "effect";
 import { useId, useRef, useState } from "react";
-import {
-	AudioSetupReply,
-	BLACKHOLE_WARNING,
-} from "../../../shared/audio-setup";
+import { AudioSetupReply } from "../../../shared/audio-setup";
 import {
 	defaultMeetingConfig,
 	MeetingConfig,
 } from "../../../shared/meeting-bridge";
+import { useAppTranslations } from "../i18n";
 import { TranslationLanguageSelect } from "../settings/TranslationLanguageSelect";
 import { SharedMicrophonePicker } from "../speech/SpeechSettings";
 import { meetingRequest } from "./useMeetings";
@@ -167,6 +165,7 @@ export function MeetingSettings({
 }
 
 function SystemAudioSetup(): React.JSX.Element {
+	const t = useAppTranslations("audioSetup");
 	const [status, setStatus] = useState("");
 	const [open, setOpen] = useState(false);
 	const [installable, setInstallable] = useState(false);
@@ -184,15 +183,14 @@ function SystemAudioSetup(): React.JSX.Element {
 			);
 			if (action === "install")
 				setStatus(
-					result.state === "opened"
-						? "macOS Installer opened. Complete or cancel there, then refresh inputs. Installation and routing aren't confirmed."
-						: result.state === "cancelled"
-							? "Installation cancelled."
-							: "Installation couldn't start. Choose an official signed BlackHole package and retry.",
+					result.state === "opened" || result.state === "cancelled"
+						? result.state
+						: result.state === "storage-full"
+							? "storageFull"
+							: "failed",
 				);
 		} catch {
-			if (action === "install")
-				setStatus("Installation couldn't start. Try again.");
+			if (action === "install") setStatus("unavailable");
 		}
 	};
 	const version = useRef(0);
@@ -206,14 +204,11 @@ function SystemAudioSetup(): React.JSX.Element {
 						(d) =>
 							d.kind === "audioinput" && /BlackHole|Monitor/i.test(d.label),
 					)
-						? "System audio input available"
-						: "No BlackHole or Monitor input found",
+						? "available"
+						: "missing",
 				);
 		} catch {
-			if (request === version.current)
-				setStatus(
-					"System audio inputs couldn't be checked. Refresh to try again.",
-				);
+			if (request === version.current) setStatus("checkFailed");
 		}
 	};
 	return (
@@ -227,24 +222,16 @@ function SystemAudioSetup(): React.JSX.Element {
 					void setup("status");
 				}}
 			>
-				System audio setup
+				{t("title")}
 			</button>
 			{open ? (
-				<section
-					className="meeting-audio-setup"
-					aria-label="System audio setup"
-				>
-					<p>
-						Windows uses desktop loopback. macOS and Linux require an installed
-						BlackHole or Monitor input. On macOS, create a Multi-Output Device
-						in Audio MIDI Setup, select your output and BlackHole, and route
-						system sound to it. Grant microphone access. Audio routing remains
-						your choice.
-					</p>
-					<p role="status">{status}</p>
+				<section className="meeting-audio-setup" aria-label={t("title")}>
+					<p>{t("routing")}</p>
+					<p role="status">{status ? t(status) : ""}</p>
 					{installable ? (
 						<>
-							<p>{BLACKHOLE_WARNING}</p>
+							<p>{t("warning")}</p>
+							<p>{t("retention")}</p>
 							<label className="meeting-checkbox">
 								<input
 									type="checkbox"
@@ -252,7 +239,7 @@ function SystemAudioSetup(): React.JSX.Element {
 									disabled={busy}
 									onChange={(event) => setConsent(event.target.checked)}
 								/>
-								I understand and want to choose a BlackHole installer.
+								{t("consent")}
 							</label>
 							<button
 								type="button"
@@ -266,7 +253,7 @@ function SystemAudioSetup(): React.JSX.Element {
 									});
 								}}
 							>
-								{busy ? "Opening installer…" : "Install BlackHole…"}
+								{busy ? t("opening") : t("install")}
 							</button>
 						</>
 					) : null}
@@ -277,7 +264,7 @@ function SystemAudioSetup(): React.JSX.Element {
 							void refresh();
 						}}
 					>
-						Refresh inputs
+						{t("refresh")}
 					</button>
 					<button
 						type="button"
@@ -288,7 +275,7 @@ function SystemAudioSetup(): React.JSX.Element {
 							setOpen(false);
 						}}
 					>
-						Cancel
+						{t("cancel")}
 					</button>
 				</section>
 			) : null}

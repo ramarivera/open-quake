@@ -44,7 +44,7 @@ import {
 import {
 	AUDIO_SETUP_CHANNEL,
 	AudioSetupRequest,
-	BLACKHOLE_WARNING,
+	audioSetupText,
 } from "../../shared/audio-setup";
 import {
 	CAPTURE_CHUNK,
@@ -108,6 +108,7 @@ export function prepareMeetings(
 		microphone?: () => Effect.Effect<
 			import("../../shared/speech").MicrophoneIdentity | undefined
 		>;
+		locale?: () => string;
 		userData: string;
 		hardware: () => HardwareSession | undefined;
 		mock: boolean;
@@ -453,22 +454,28 @@ export function prepareMeetings(
 				active: () => !disposed,
 				platform: process.platform,
 				mock: options.mock,
-				confirm: async () =>
-					(
-						await dialog.showMessageBox({
-							type: "warning",
-							message: "Install BlackHole audio driver?",
-							detail: BLACKHOLE_WARNING,
-							buttons: ["Cancel", "Choose BlackHole package"],
-							defaultId: 0,
-							cancelId: 0,
-						})
-					).response === 1,
+				confirm: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
+					return (
+						(
+							await dialog.showMessageBox({
+								type: "warning",
+								message: text.nativeConfirm,
+								detail: `${text.warning}\n\n${text.retention}`,
+								buttons: [text.cancel, text.nativeChoose],
+								defaultId: 0,
+								cancelId: 0,
+							})
+						).response === 1
+					);
+				},
 				select: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
 					const result = await dialog.showOpenDialog({
-						title: "Choose a BlackHole installer from existential.audio",
+						title: text.nativeTitle,
+						buttonLabel: text.nativeChoose,
 						properties: ["openFile"],
-						filters: [{ name: "BlackHole installer", extensions: ["pkg"] }],
+						filters: [{ name: text.nativeFilter, extensions: ["pkg"] }],
 					});
 					return result.canceled ? undefined : result.filePaths[0];
 				},

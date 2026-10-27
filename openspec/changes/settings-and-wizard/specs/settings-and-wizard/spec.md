@@ -665,3 +665,7 @@ MAIN-114 and SETTINGS-006/049/050 SHALL use only ramarivera/open-quake GitHub Re
 #### Scenario: Other distribution formats
 - **WHEN** a deb, Windows, macOS or development build opens update settings
 - **THEN** it exposes the owned releases page and explains manual installation and signing status
+
+#### Scenario: GitHub asset redirects retain mandatory verification
+- **WHEN** GitHub redirects the pinned repository asset to an allowlisted HTTPS host
+- **THEN** download and install still require the SHA-256 and size from the pinned repository API metadata, altered bytes never replace the AppImage, and nonstandard HTTPS ports are rejected before transport

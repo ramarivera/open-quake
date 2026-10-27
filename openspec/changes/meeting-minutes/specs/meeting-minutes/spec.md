@@ -611,3 +611,12 @@ AI-283 setup SHALL expose installation only on macOS. Main SHALL authenticate th
 #### Scenario: Cancellation and failed setup
 - **WHEN** consent or package selection is cancelled, signature validation fails, or the Installer handoff fails
 - **THEN** setup reports the outcome, permits retry, and never changes audio routing or claims successful capture
+
+#### Scenario: Bounded installer handoff storage
+- **WHEN** handoffs are retried, concurrent, or resumed after application restart
+- **THEN** at most two app-owned copies of at most 512 MiB each are admitted, failed attempts free their own slot, and handed-off or interrupted copies remain untouched until the user removes them after closing Installer
+- **AND** legacy copies count against admission; existing excess copies are preserved rather than automatically deleted
+
+#### Scenario: Localized setup consent and outcomes
+- **WHEN** the saved app language is English or German
+- **THEN** mounted setup help, consent, refresh, cancel, busy, failure, full storage and handoff status use bundled copy in that language, and native confirmation and package selection read the current saved language at action time
