@@ -1,6 +1,7 @@
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import {
+	Cause,
 	Deferred,
 	Effect,
 	Fiber,
@@ -200,16 +201,20 @@ function layer(
 	).pipe(Layer.provideMerge(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
 }
-it.each([
-	new ActionPermissionDenied(new Error("private declined command")),
-	new ActionApplicationMissing(new Error("private application path")),
-	new ActionSnapshotFailed(new Error("private snapshot path")),
-	new InvalidKeyAction("config.actions", new Error("private payload")),
-	new KeyFunctionUnavailable("owning-runtime"),
-	new HostActionFailed(new Error("private host failure")),
-])(
-	"review: owned actions retain $code across the production promise boundary",
-	async (cause) => {
+it.each(
+	[
+		new ActionPermissionDenied(new Error("private declined command")),
+		new ActionApplicationMissing(new Error("private application path")),
+		new ActionSnapshotFailed(new Error("private snapshot path")),
+		new InvalidKeyAction("config.actions", new Error("private payload")),
+		new KeyFunctionUnavailable("owning-runtime"),
+		new HostActionFailed(new Error("private host failure")),
+	].flatMap((cause) =>
+		[false, true].map((throughRuntime) => ({ cause, throughRuntime })),
+	),
+)(
+	"review: owned actions retain $cause.code across the production promise boundary, Effect runtime=$throughRuntime",
+	async ({ cause, throughRuntime }) => {
 		const key = createEmptyProfileKey("1,1");
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {
@@ -227,6 +232,7 @@ it.each([
 			}).pipe(
 				Effect.provide(
 					layer(false, undefined, undefined, undefined, async () => {
+						if (throughRuntime) return Effect.runPromise(Effect.fail(cause));
 						throw cause;
 					}),
 				),
@@ -236,7 +242,7 @@ it.each([
 		expect(result._tag).toBe("Left");
 		if (result._tag !== "Left")
 			throw new Error("Expected owned action failure");
-		expect(result.left).toBe(cause);
+		expect(Cause.originalError(result.left)).toBe(cause);
 		expect(result.left.originalCause).toBe(cause.originalCause);
 		expect(JSON.stringify(result.left)).not.toContain("private");
 	},

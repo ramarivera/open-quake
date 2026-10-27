@@ -204,3 +204,18 @@ The application SHALL bound hardware lifecycle waits and release exclusive hando
 - **WHEN** a caller interrupts long-tone startup while it waits for another sequence or an in-flight buzzer write
 - **THEN** that request's worker stops before cancellation settles and cannot sound after the sequence releases; any accepted write drains and receives trailing silence
 - **AND** cancellation does not stop a replacement worker installed by a later request
+
+
+### Requirement: Retained hardware failure diagnostics
+
+Hardware IPC and power-lock transitions SHALL record stable named operation spans and privacy-safe Effect failure events before converting failures to response values or recovering them. The shared local diagnostics writer SHALL retain catalog identity and bounded original-cause identity together with trace, span, request and parent span identifiers. It SHALL exclude device serials, paths, preferences and arbitrary error messages.
+
+#### Scenario: IPC write fails before response recovery
+- **WHEN** an authorized hardware, QMK or lighting request encounters a HID write failure
+- **THEN** the existing failure response remains unchanged and local diagnostics retain the failed operation and its catalog/source cause chain before recovery
+- **AND** a lighting request crossing the shared runtime remains in the originating IPC trace and request
+
+#### Scenario: Deferred preference save fails after configuration returns
+- **WHEN** an accepted configuration schedules a preference save that later fails
+- **THEN** the deferred save has a named failed span and safe failure event linked to its scheduling operation, even though that operation has already succeeded
+- **AND** expected worker cancellation records an interrupted span without an error event

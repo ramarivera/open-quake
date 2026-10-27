@@ -9,8 +9,14 @@ export function makeDesktopRuntime<R, E>(
 	diagnostics?: DesktopDiagnostics,
 	operation: DiagnosticOperation = "app.background",
 ): ManagedRuntime.ManagedRuntime<R, E> {
+	// Install diagnostics for service acquisition, then wrap the final tracer
+	// after the application layer has had a chance to supply its own tracer.
 	const runtime = ManagedRuntime.make(
-		diagnostics ? layer.pipe(Layer.provideMerge(diagnostics.layer)) : layer,
+		diagnostics
+			? Layer.fresh(diagnostics.layer).pipe(
+					Layer.provideMerge(layer.pipe(Layer.provideMerge(diagnostics.layer))),
+				)
+			: layer,
 	);
 	if (!diagnostics) return runtime;
 	const runPromise: typeof runtime.runPromise = (effect, options) =>

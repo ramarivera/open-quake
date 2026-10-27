@@ -1,5 +1,5 @@
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 import {
 	HardwareRequest,
 	type HardwareResponse,
@@ -67,6 +67,12 @@ export function qmkRequest(
 		}
 		return { _tag: "failure" as const, code: "QUAKE.HARDWARE.STALE_SESSION" };
 	}).pipe(
+		Effect.tapErrorCause((cause) =>
+			Cause.isInterruptedOnly(cause)
+				? Effect.void
+				: Effect.logError("hardware.qmk.failed", cause),
+		),
+		Effect.withSpan("DesktopHardware.qmk"),
 		Effect.catchAll((error) =>
 			Effect.succeed({ _tag: "failure" as const, code: error.code }),
 		),

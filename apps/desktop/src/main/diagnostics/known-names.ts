@@ -50,7 +50,7 @@ ConversationService.cancel ConversationService.cancelOwner ConversationService.c
 ConversationService.history ConversationService.shutdown ConversationService.stream
 CredentialVault.remove CredentialVault.resolve CredentialVault.revoked CredentialVault.store
 DataReset.run DesktopBackup.export DesktopDeviceBus.recover DesktopDeviceBus.start
-DesktopKeys.insertText DesktopKeys.launchApplication DesktopKeys.pressChord DesktopMaintenance.view
+DesktopKeys.executeOwned DesktopKeys.insertText DesktopKeys.launchApplication DesktopKeys.pressChord DesktopMaintenance.view
 DeviceLifecycle.lock DeviceLifecycle.onStatus DeviceLifecycle.redetect DeviceLifecycle.topology
 DeviceLifecycle.wake DisplayPrompts.check DisplayPrompts.make DisplayPrompts.repair DisplayPrompts.prepareWindows
 EmojiDesktop.addGif EmojiDesktop.controller EmojiDesktop.request EmojiDesktop.snapshot
@@ -59,6 +59,8 @@ FakeHidTransport.close FakeHidTransport.discover FakeHidTransport.open FakeHidTr
 FirmwareUpdates.cancel FirmwareUpdates.close FirmwareUpdates.recover FirmwareUpdates.snapshot
 FirmwareUpdates.start FirmwareUpdates.shutdown FirmwareUpdates.write ForegroundApp.probe GridVoice.input GridVoice.knob
 GridVoice.reset GridVoice.sendText HardwareControls.configure HardwareControls.create
+DesktopHardware.dispatch DesktopHardware.qmk DesktopHardware.ipc DesktopHardware.lighting DesktopHardware.lock
+HardwareControls.releaseKeyboard HardwareControls.exchange HardwareControls.saveDeferred HardwareControls.preview HardwareControls.longToneWorker HardwareControls.silence HardwareControls.playSequence HardwareControls.setLongTone HardwareControls.saveSoon HardwareControls.rememberLive HardwareControls.qmk
 HardwareControls.enterDfu HardwareControls.flush HardwareControls.holdChord HardwareControls.playTone
 HardwareControls.pressChord HardwareControls.readVersion HardwareControls.refresh
 HardwareControls.send HardwareControls.setInputMode HardwareControls.setLocked
@@ -73,6 +75,7 @@ IconRepository.add IconRepository.addLocal IconRepository.read IconRepository.wr
 ImageDecoder.decode Integrations.dispatch Integrations.request KeyEditing.commit KeyEditing.discard
 KeyEditing.locate KeyEditing.preview KeyEditing.read KeyEditing.remove KeyEditing.revert
 KeyEditing.save KeyRuntime.activate KeyRuntime.feedback KeyRuntime.navigate KeyRuntime.refresh
+KeyRuntime.timer KeyRuntime.ownedAction KeyRuntime.prepareActivation KeyRuntime.completeActivation KeyRuntime.sequence KeyRuntime.displayEvent KeyRuntime.panelMessage
 KeyRuntime.reset KeyRuntime.preparePlayerControl KnobModel.configure KnobModel.dispatch KnobModel.snapshot KnobModel.synchronize
 KnobService.dispatch KnobService.execute KnobService.handle KnobService.readSnapshot
 LightingDevice.checkBinding LightingDevice.exchange LightingDevice.open LightingDevice.read
@@ -108,7 +111,7 @@ ProfileService.selectProfile ProfileService.subscribeCommittedProfiles
 ProfileService.subscribeDispatchProfiles ProfileSwitching.connect ProfileSwitching.connectedSerials
 ProfileSwitching.deliver ProfileSwitching.disconnect ProfileSwitching.probe
 ProfileSwitching.redeliverSelected ProfileSwitching.request ProfileSwitching.selectNow ProfileSwitching.sessionOwnership
-QuakeConnection.disconnect QuakeConnection.recoverReads QuakeConnection.sendHardware
+QuakeConnection.exchangeRaw QuakeConnection.disconnect QuakeConnection.recoverReads QuakeConnection.sendHardware
 QuakeConnection.subscribe QuakeDevice.connect QuakeDevice.disconnect QuakeDevice.discover
 RuntimeHttpTransport.execute RuntimeHttpTransport.readJson ShortcutService.generate
 ShortcutService.list ShortcutService.remove ShortcutService.save ShortcutService.sync
@@ -190,6 +193,18 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"hardware.request.failed",
+	"hardware.lock.failed",
+	"hardware.qmk.failed",
+	"hardware.exchange.failed",
+	"hardware.silence.failed",
+	"hardware.longTone.failed",
+	"hardware.preferences.failed",
+	"hardware.preview.failed",
+	"key.sequence.failed",
+	"key.timer.failed",
+	"hardware.keyboardRelease.failed",
+	"key.input.failed",
 	"Voice admission state unavailable",
 	"touch.health",
 	"touch.state",

@@ -330,3 +330,18 @@ The ConfigLibrary snapshot SHALL use the same 8 MiB UTF-8 byte limit for reads, 
 #### Scenario: Default migration exceeds capacity
 - **WHEN** appending missing default groups would exceed the same limit
 - **THEN** reading SHALL reject the migration without replacing the existing file
+
+
+### Requirement: Retained key dispatch failure diagnostics
+
+Physical and IPC key dispatch SHALL retain named preparation, deferred execution and completion spans through the shared local diagnostics writer. Failures SHALL emit privacy-safe Effect events before display feedback or response recovery. Diagnostics SHALL preserve catalog and source cause identities and trace, request and parent span correlation without serials, profile/page identifiers, key content or arbitrary error messages.
+
+#### Scenario: Deferred sequence fails after physical input returns
+- **WHEN** a sequence host action fails after the initiating press has returned
+- **THEN** the sequence records a failed operation and safe catalog cause before existing display recovery
+- **AND** reset cancellation records an interrupted sequence rather than an error event
+
+#### Scenario: Owned action crosses an Effect runtime promise
+- **WHEN** an owned action rejects with an Effect runtime failure containing an action catalog leaf
+- **THEN** the key adapter preserves that original catalog leaf and its private original cause rather than replacing it with a generic host failure
+- **AND** delayed activation completion remains a child of its preparation span after preparation has ended

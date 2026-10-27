@@ -1,5 +1,5 @@
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Either, Schema } from "effect";
+import { Cause, Effect, Either, Schema } from "effect";
 import {
 	HardwareRequest,
 	type HardwareResponse,
@@ -68,6 +68,12 @@ export function hardwareRequest(
 			mock,
 		} as const;
 	}).pipe(
+		Effect.tapErrorCause((cause) =>
+			Cause.isInterruptedOnly(cause)
+				? Effect.void
+				: Effect.logError("hardware.request.failed", cause),
+		),
+		Effect.withSpan("DesktopHardware.dispatch"),
 		Effect.catchTags({
 			HardwareUnavailable: (error) =>
 				Effect.succeed({ _tag: "failure" as const, code: error.code }),

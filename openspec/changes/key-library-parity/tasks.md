@@ -109,3 +109,9 @@ Lane verification: exact root turbo command passes 4131 tests with four existing
 - [x] 13.6 Disable directional hotkey presets in sequences while preserving ordinary grid placement. Comment 4381332371. Bead open-quake-lih.10.19.
 
 - [x] AI-334 permit meeting viewer selection and save alternate spans through Keys UI. Bead open-quake-zh8.15, parent open-quake-i3j. Mounted Keys UI saves 3x1; hidden mock Electron exercises the real preview/save owner and pane controls.
+
+
+## Pre-hardware diagnostics candidate, open-quake-fmx.1
+
+- [x] Name deferred sequence, owned-action, preparation and completion spans; record failures before feedback recovery and retain interruption without an error event.
+- [x] Preserve original action catalog leaves across Effect runtime promise rejection and test direct/runtime-wrapped failures. Parent benchmark selection, integration and physical acceptance remain pending under `openspec/changes/pre-hardware-observability/` in the parent planning worktree.

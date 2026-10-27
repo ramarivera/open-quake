@@ -175,13 +175,12 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 			pumping = undefined;
 		}
 	};
-	const emit = (record: object): void => {
+	const write = (line: string): void => {
 		try {
 			if (closed) {
 				dropped++;
 				return;
 			}
-			const line = `${JSON.stringify(record)}\n`;
 			const size = Buffer.byteLength(line);
 			if (size > maxFileBytes || queuedBytes + size > maxQueueBytes) {
 				dropped++;
@@ -190,6 +189,14 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 			queue.push({ line, day: day(now()) });
 			queuedBytes += size;
 			if (!pumping) pumping = pump();
+		} catch (cause) {
+			dropped++;
+			failed(cause);
+		}
+	};
+	const emit = (record: object): void => {
+		try {
+			write(`${JSON.stringify(record)}\n`);
 		} catch (cause) {
 			dropped++;
 			failed(cause);
@@ -218,5 +225,5 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 		})();
 		return closing;
 	};
-	return { emit, flush, close, status };
+	return { emit, write, flush, close, status };
 }
