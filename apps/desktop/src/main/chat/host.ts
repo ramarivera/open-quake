@@ -536,6 +536,19 @@ export function prepareDirectChat(options: DirectChatOptions) {
 						else visibleConsumers.delete(owner);
 					}),
 				selection: () => Effect.sync(() => selection),
+				navigate: Effect.fn("DesktopChat.navigate")(function* (
+					sessionId: SessionId,
+					generation: number | null,
+				) {
+					if ((selection?.generation ?? null) !== generation)
+						return yield* new ChatInvalid();
+					if (selection?.sessionId === sessionId) return selection;
+					const settings = sessionSettings.get(sessionId);
+					selection = settings
+						? { sessionId, settings, generation: ++selectionGeneration }
+						: null;
+					return selection;
+				}),
 				selectAssistant: (
 					sessionId: SessionId,
 					settings: AssistantSettings,

@@ -107,3 +107,41 @@ Bead open-quake-lih.15.16 remains in progress for parent diff/reply review.
 Implementation beads .15.13/.15.14/.15.15 stay open. No review threads were
 posted to, resolved or retriggered by this lane. Hardware, real microphone,
 playback, real HA, live providers and Linux remain unverified.
+
+
+## PR128 final review fixes
+
+- [x] Share canonical selection/submission routes and prove select, typed turn, dictation and reselection preserve one history while direct model revisions stay isolated. Bead open-quake-lih.15.17.
+- [x] Synchronize New chat and history navigation with the host persona destination, retain session-local settings on reopening, and reject stale or foreign navigation. Use an additive desktop RPC only because close cancels a session and cannot select a destination. Prove mounted UI/controller/encoded bridge/host behavior, then run focused tests, typecheck, lint and build and push once. Parent owns review replies and gates. Bead open-quake-lih.15.17.
+
+
+PR128 fix2 shares the five-field session route for key selection and submission.
+The loopback regression drives key select, typed turn, dictation and reselection
+through one session and verifies outbound prior user messages. Existing direct
+profile A/A/B coverage still proves same-model reuse and changed-model isolation.
+
+Desktop navigation uses the additive `assistant.navigate` RPC with the observed
+selection generation. Both source and destination retain window-owner checks;
+stale navigation cannot replace a newer key selection. New chat and ordinary
+history clear the device destination; reopening a cached key session restores
+its local settings without rewriting the global persona. Key-origin selection
+consumption skips desktop navigation, and renderer epochs discard late reads.
+
+Mounted New chat and history buttons drive the actual controller, encoded
+preload bridge and host. Persona reads, Update and later fake-provider requests
+use the opened destination. Coverage also proves same-session local edits,
+reopened-key continuity, stale draft rejection and foreign-window refusal.
+Three behavioral regressions fail against a790d481. Final focused coverage
+passes 125 tests in eight files; six package typecheck tasks, Biome with zero
+errors plus 16 existing warnings and two infos, desktop build and both bundle
+modes pass. Strict OpenSpec 1.15.0 repeats 9 pass / 38 fail under the inherited
+requirement-length baseline open-quake-lih.23.2; this round's requirement isn't
+flagged. Hidden, muted native persona smoke also passes with four EN/DE captures;
+the Update captures were visually inspected. Those screenshots show the
+persona controls, while mounted UI regressions prove navigation. Full root
+tests weren't rerun. Initial fixture errors, corrected in the
+final tests, and the interrupted overbroad test invocation remain in scratch.
+
+Bead open-quake-lih.15.17 stays in progress for parent acceptance. This lane
+doesn't reply, resolve, retrigger review, watch or merge. Real device input,
+microphone, audio playback, providers and Linux remain unverified.

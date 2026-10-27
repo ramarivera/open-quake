@@ -91,3 +91,35 @@ it("AI-088 doesn't install or acknowledge dictation after the user switches sess
 		f.controller.dispose();
 	}
 });
+
+it("PR128 final discards a selection read started before desktop navigation", async () => {
+	const f = fixture();
+	let release: () => void = () => {};
+	const pending = new Promise<typeof f.selection>((resolve) => {
+		release = () => resolve(f.selection);
+	});
+	const selection = vi.fn(() => pending);
+	const bridge = { ...f.bridge, selection };
+	const controller = createChatController(bridge);
+	function Consumer() {
+		const [text, setText] = useState("");
+		useAssistantSelection(bridge, controller, false, setText);
+		return <output>{text}</output>;
+	}
+	const app = await mount(<Consumer />);
+	try {
+		await vi.waitFor(() => expect(selection).toHaveBeenCalled());
+		const ordinary = Schema.decodeUnknownSync(SessionId)(crypto.randomUUID());
+		await controller.select(ordinary);
+		release();
+		await settle(() => expect(selection).toHaveBeenCalledTimes(2));
+		expect(controller.getSnapshot().sessionId).toBe(ordinary);
+		expect(app.host.textContent).toBe("");
+		expect(f.acknowledge).not.toHaveBeenCalled();
+	} finally {
+		release();
+		await app.close();
+		controller.dispose();
+		f.controller.dispose();
+	}
+});

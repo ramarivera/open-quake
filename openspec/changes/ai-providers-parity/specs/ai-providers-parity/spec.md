@@ -349,3 +349,15 @@ Explicit persona model rows SHALL resolve from the editor's default catalog. An 
 #### Scenario: Explicit persona under main model override
 - **WHEN** the persona selects a default-catalog row absent from main's override
 - **THEN** ordinary desktop inference uses that explicit row, and an unset persona row still follows main's default
+
+
+### Requirement: Desktop conversation navigation retains the intended persona destination
+The desktop MUST use the same session route for assistant key selection and dictation. Desktop New chat and history navigation MUST direct persona reads and Update to the opened conversation, retain session-local persona settings when reopening a key conversation, and reject stale navigation and foreign session ownership without changing a newer key selection.
+
+#### Scenario: Typed and dictated turns continue the selected key conversation
+- **WHEN** a wake-window key opens a conversation, the user sends a typed turn, dictates with the same key and reselects that key
+- **THEN** the same session and prior turn history remain selected, while a changed direct model profile still creates a separate session
+
+#### Scenario: Desktop navigation moves the persona destination
+- **WHEN** the user creates a new chat or opens saved history after a key selected another session
+- **THEN** persona reads and Update use the opened destination, ordinary chats use the global persona, reopening a key session retains its local persona, and stale requests cannot replace a newer key selection

@@ -17,6 +17,7 @@ export function useAssistantSelection(
 		let timer: ReturnType<typeof setTimeout>;
 		const read = async () => {
 			try {
+				const navigationEpoch = controller.navigationEpoch();
 				const selection = await bridge.selection?.();
 				if (!alive || !selection) return;
 				// Retry a failed acknowledgement without installing the same dictation twice.
@@ -28,10 +29,15 @@ export function useAssistantSelection(
 				if (
 					selection.generation < seen.current ||
 					state.pending ||
-					state.clearing
+					state.clearing ||
+					state.navigating
 				)
 					return;
-				await controller.select(selection.sessionId);
+				await controller.select(
+					selection.sessionId,
+					selection.generation,
+					navigationEpoch,
+				);
 				if (!alive) return;
 				const latest = await bridge.selection?.();
 				const current = controller.getSnapshot();
@@ -40,7 +46,8 @@ export function useAssistantSelection(
 					latest?.generation !== selection.generation ||
 					current.sessionId !== selection.sessionId ||
 					current.pending ||
-					current.clearing
+					current.clearing ||
+					current.navigating
 				)
 					return;
 				seen.current = selection.generation;

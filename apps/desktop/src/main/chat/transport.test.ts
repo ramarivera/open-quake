@@ -2410,6 +2410,81 @@ it("AI-230/241 Update reads and changes only the selected key session for subseq
 	}
 });
 
+it("PR128 final key selection, typed turn, dictation and reselection share session history", async () => {
+	const settings = {
+		...defaultAssistantSettings(),
+		useAgent: false,
+		enableWakeTalkWindow: true,
+		chatHistoryCount: 4,
+	};
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () => Effect.succeed(settings),
+	});
+	const v = voiceFixture(f.host, () => Effect.void);
+	try {
+		const select = () =>
+			v.voice.runPromise(
+				Effect.flatMap(GridVoiceRuntime, (r) =>
+					r.select("QK", "1,1", "aiChat", Option.none()),
+				),
+			);
+		await select();
+		const first = await f.bridge.selection?.();
+		if (!first) throw new Error("missing selection");
+		const typed = turnId();
+		await f.bridge.submit({
+			sessionId: first.sessionId,
+			turnId: typed,
+			text: "typed first",
+		});
+		await vi.waitFor(async () =>
+			expect(
+				Option.isSome(
+					(await f.bridge.snapshot(first.sessionId, typed)).terminal,
+				),
+			).toBe(true),
+		);
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,1",
+				agentId: "",
+				message: "dictated next",
+			}),
+		);
+		const dictated = await f.bridge.selection?.();
+		expect(dictated?.sessionId).toBe(first.sessionId);
+		expect(dictated?.transcript).toBe("dictated next");
+		const next = turnId();
+		await f.bridge.submit({
+			sessionId: first.sessionId,
+			turnId: next,
+			text: dictated?.transcript ?? "",
+		});
+		await vi.waitFor(async () =>
+			expect(
+				Option.isSome(
+					(await f.bridge.snapshot(first.sessionId, next)).terminal,
+				),
+			).toBe(true),
+		);
+		await select();
+		expect((await f.bridge.selection?.())?.sessionId).toBe(first.sessionId);
+		expect(
+			(await f.bridge.history(first.sessionId)).turns.map((t) => t.input),
+		).toEqual(["typed first", "dictated next"]);
+		expect(
+			f.endpoint.calls[1]?.body.messages
+				.filter((m) => m.role === "user")
+				.map((m) => m.content),
+		).toEqual(["typed first", "dictated next"]);
+		expect(await f.bridge.list()).toHaveLength(1);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
 it("PR128 direct model revisions separate history while unchanged pins reuse their key session", async () => {
 	const f = await fixture();
 	const events: VoiceSurfaceEvent[] = [];

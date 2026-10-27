@@ -12,6 +12,22 @@ import {
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { DirectChat } from "./host";
+
+const sessionRoute = (
+	serial: string,
+	keyCode: string,
+	agentId?: string,
+	knobProfileId?: string,
+	directProfileId?: string,
+) =>
+	JSON.stringify([
+		serial,
+		keyCode,
+		agentId || "main",
+		knobProfileId,
+		directProfileId,
+	]);
+
 /** Direct Copilot route. The outer HTTP decorator exclusively owns external-agent selection. */
 export const createDirectChatVoice = (
 	host: DirectChat,
@@ -82,15 +98,15 @@ export const createDirectChatVoice = (
 								new VoiceKnobRejected("RouteIncomplete"),
 							);
 						yield* stop(request.serial);
-						const route = JSON.stringify([
+						const route = sessionRoute(
 							request.serial,
 							request.keyCode,
-							request.agentId || "main",
+							request.agentId,
 							request.knob?.profileId,
 							request.knob?.route === "direct"
 								? request.directModel?.profile.id
 								: undefined,
-						]);
+						);
 						let sessionId = sessions.get(route)?.sessionId;
 						if (!sessionId) {
 							sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
@@ -314,14 +330,13 @@ export const createDirectChatVoice = (
 													Effect.flatMap((settings) =>
 														settings?.enableWakeTalkWindow
 															? Effect.gen(function* () {
-																	const route = JSON.stringify([
+																	const route = sessionRoute(
 																		serial,
 																		keyCode,
 																		agentId._tag === "Some"
 																			? agentId.value
-																			: "main",
-																		undefined,
-																	]);
+																			: undefined,
+																	);
 																	let session = sessions.get(route);
 																	if (!session) {
 																		session = {

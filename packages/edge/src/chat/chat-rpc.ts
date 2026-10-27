@@ -67,6 +67,11 @@ export const ChatRpcs = RpcGroup.make(
 		success: Schema.NullOr(AssistantSelection),
 		error: ChatRpcFailure,
 	}),
+	Rpc.make("assistant.navigate", {
+		payload: { sessionId: SessionId, generation: Schema.NullOr(Schema.Int) },
+		success: Schema.NullOr(AssistantSelection),
+		error: ChatRpcFailure,
+	}),
 	Rpc.make("assistant.ack", {
 		payload: { generation: Schema.Int },
 		error: ChatRpcFailure,

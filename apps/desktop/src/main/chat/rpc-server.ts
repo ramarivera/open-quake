@@ -97,6 +97,17 @@ export const makeDesktopChatConnection = (
 				host.assistantVisibility(owner, visible),
 			"assistant.selection": () =>
 				selectedForOwner.pipe(Effect.mapError(rpcFailure)),
+			"assistant.navigate": ({ sessionId, generation }) =>
+				Effect.gen(function* () {
+					// Check both destinations before changing the host selection. A different
+					// window must not release an owned key or restore its private settings.
+					yield* selectedForOwner;
+					const current = owners.get(sessionId);
+					if (current && current !== owner) return yield* new ChatInvalid();
+					const selected = yield* host.navigate(sessionId, generation);
+					owners.set(sessionId, owner);
+					return selected;
+				}).pipe(Effect.mapError(rpcFailure)),
 			"assistant.ack": ({ generation }) =>
 				selectedForOwner.pipe(
 					Effect.flatMap((selected) =>

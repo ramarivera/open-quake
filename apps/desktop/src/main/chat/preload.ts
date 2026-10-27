@@ -123,6 +123,8 @@ export function createDirectChatBridge(
 		assistantVisibility: (visible) =>
 			run((client) => client.assistant.visibility({ visible })),
 		selection: () => run((client) => client.assistant.selection(undefined)),
+		navigate: (sessionId, generation) =>
+			run((client) => client.assistant.navigate({ sessionId, generation })),
 		acknowledgeSelection: (generation) =>
 			run((client) => client.assistant.ack({ generation })),
 		files: (input) => run((client) => client.provider.files(input)),

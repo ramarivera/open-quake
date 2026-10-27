@@ -79,7 +79,7 @@ export function DirectChatPanel({
 	const modelName = model.row
 		? `${model.row.provider} / ${model.row.model}`
 		: t.directNotSet;
-	const busy = state.pending || state.clearing;
+	const busy = state.pending || state.clearing || state.navigating;
 	const [text, setText] = useState("");
 	useAssistantSelection(bridge, controller, hidden, setText);
 	const [title, setTitle] = useState("");

@@ -28,6 +28,10 @@ export interface DirectChatBridge {
 	};
 	readonly assistantVisibility?: (visible: boolean) => Promise<void>;
 	readonly selection?: () => Promise<AssistantSelection | null>;
+	readonly navigate?: (
+		sessionId: SessionId,
+		generation: number | null,
+	) => Promise<AssistantSelection | null>;
 	readonly acknowledgeSelection?: (generation: number) => Promise<void>;
 	readonly files?: (input: PublicFileRequest) => Promise<FileResult>;
 	readonly providers?: () => Promise<ProviderListing>;
