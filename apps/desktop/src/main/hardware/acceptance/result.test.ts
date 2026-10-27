@@ -10,6 +10,7 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
+import { confirmKeyboardReadiness } from "./keyboard-readiness.js";
 import { acquireAcceptanceLock } from "./lock.js";
 import { finalizeNativeResult } from "./result.js";
 
@@ -129,4 +130,46 @@ it("rejects concurrent lock acquisition and preserves a replacement owner on clo
 	}
 	const next = await acquireAcceptanceLock(path);
 	await next.close();
+});
+
+it("gives the existing lock PID and safe manual recovery instructions", async () => {
+	const directory = await fixture();
+	const path = join(directory, "owner.lock");
+	await writeFile(path, "12345");
+	await expect(acquireAcceptanceLock(path)).rejects.toThrow("PID 12345");
+	await expect(acquireAcceptanceLock(path)).rejects.toThrow(
+		"Confirm that process is dead before removing",
+	);
+	await writeFile(path, "private-untrusted-lock-contents");
+	const failure = await acquireAcceptanceLock(path).catch(
+		(cause: unknown) => cause,
+	);
+	expect(String(failure)).toContain("PID unknown");
+	expect(String(failure)).not.toContain("private-untrusted-lock-contents");
+	expect(await readFile(path, "utf8")).toBe("private-untrusted-lock-contents");
+});
+
+it("requires a fresh keyboard challenge for each invocation and rejects replay", async () => {
+	let previous = "";
+	await confirmKeyboardReadiness(async (prompt) => {
+		const match = prompt.match(/Type "(QUAKE [^"]+)"/);
+		if (!match?.[1]) throw new Error("Missing keyboard challenge");
+		previous = match[1];
+		return previous;
+	});
+	await expect(confirmKeyboardReadiness(async () => previous)).rejects.toThrow(
+		"new supervised acknowledgement",
+	);
+	await expect(confirmKeyboardReadiness(async () => "1")).rejects.toThrow(
+		"new supervised acknowledgement",
+	);
+});
+
+it("propagates an existing lock read failure without deleting the lock", async () => {
+	const directory = await fixture();
+	const path = join(directory, "owner.lock");
+	await mkdir(path);
+	await expect(acquireAcceptanceLock(path)).rejects.toMatchObject({
+		code: "EISDIR",
+	});
 });

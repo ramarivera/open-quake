@@ -47,7 +47,7 @@ From `apps/desktop`, set these environment values in your launcher:
 
 Then run `pnpm test:hardware`.
 The run lasts roughly 20 seconds, with a 90-second test ceiling. Results include
-the base revision and a SHA256 of the actual suite source, so uncommitted suite
+the base revision, dirty working-tree status and a SHA256 of the actual suite source, so uncommitted suite
 execution is distinguishable from a committed version. `result.json` lists every
 scenario; `diagnostics/` retains safe operation spans and causes. Neither report
 prints the serial, native path or arbitrary exception messages. Trace identity
@@ -63,10 +63,12 @@ providers or OS input. Those phases need their own bounded readiness sequence.
 
 `keyboard-smoke.ts` builds with `keyboard-smoke.config.ts` and is not run by
 ordinary tests. It requires the same native opt-in and ownership lock plus
-`OPEN_QUAKE_HW_E2E_KEYBOARD_READY=1` after a fresh local readiness acknowledgement.
+an interactive terminal confirmation after a fresh local readiness acknowledgement.
+It generates a new challenge for every invocation and accepts it for 30 seconds.
+Inherited environment readiness flags cannot authorize a run.
 It opens a dedicated window, checks that window owns focus, types one letter
 through the actual hardware keyboard path, checks its key release, then closes.
-No physical cursor movement or shortcuts occur. Do not set that readiness flag
-for unattended or background-only runs. Its separate `keyboard-result.json`
+No physical cursor movement or shortcuts occur. Do not run it
+for unattended or background-only tests. Its separate `keyboard-result.json`
 is supplemental evidence; the control-suite percentage does not silently count
 an unexecuted supervised test as passed.

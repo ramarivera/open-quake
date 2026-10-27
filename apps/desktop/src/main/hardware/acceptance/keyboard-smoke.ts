@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { Effect, Layer } from "effect";
 import { app, BrowserWindow } from "electron";
 import { canonicalHidSerial } from "../../../../../../packages/device/src/device-contracts.js";
@@ -12,16 +13,27 @@ import { NodeHidLive } from "../../../../../../packages/device/src/node-hid.js";
 import { createDesktopDiagnostics } from "../../diagnostics/index.js";
 import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
 import { exactDeviceTransport } from "./exact-device.js";
+import { confirmKeyboardReadiness } from "./keyboard-readiness.js";
 import { ownNativeDevice } from "./native-owner.js";
 import { acceptanceOptions } from "./policy.js";
 
 async function run() {
 	const options = acceptanceOptions(process.env);
-	assert.equal(
-		process.env.OPEN_QUAKE_HW_E2E_KEYBOARD_READY,
-		"1",
-		"Requires a fresh supervised hands-off acknowledgement",
+	assert(
+		process.stdin.isTTY,
+		"Keyboard acceptance requires an interactive terminal",
 	);
+	const terminal = createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+	try {
+		await confirmKeyboardReadiness((prompt) =>
+			terminal.question(prompt, { signal: AbortSignal.timeout(30_000) }),
+		);
+	} finally {
+		terminal.close();
+	}
 	const owner = await ownNativeDevice(options.directory);
 	try {
 		await writeFile(

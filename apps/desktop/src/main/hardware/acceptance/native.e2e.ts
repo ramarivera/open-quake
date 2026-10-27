@@ -68,6 +68,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 			await runtime.dispose();
 			const health = await diagnostics.close();
 			const { stdout: revision } = await command("git", ["rev-parse", "HEAD"]);
+			const { stdout: dirty } = await command("git", ["status", "--porcelain"]);
 			const sourceHash = createHash("sha256");
 			for (const name of [
 				"native.e2e.ts",
@@ -88,6 +89,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 						? "failed"
 						: "completed",
 				revision: revision.trim(),
+				dirty: dirty.trim().length > 0,
 				platform: process.platform,
 				architecture: process.arch,
 				suiteSha256: sourceHash.digest("hex"),

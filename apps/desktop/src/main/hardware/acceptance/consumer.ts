@@ -205,9 +205,10 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 										)[feature],
 							),
 						),
-					).pipe(Effect.forkScoped);
+					).pipe(Effect.interruptible, Effect.forkScoped);
 					yield* connection.sendHardware({ _tag: "Query", feature });
 					const event = yield* Fiber.join(waiter).pipe(
+						Effect.interruptible,
 						Effect.timeout("4 seconds"),
 					);
 					assert(
