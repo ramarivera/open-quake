@@ -1,5 +1,21 @@
 ## ADDED Requirements
 
+### Requirement: Verified Apple release signing
+
+Tagged macOS releases SHALL use team TRGDCMBX3J's Developer ID Application identity, hardened runtime and Apple notarization. Signing secrets SHALL be confined to trusted macOS tag packaging, and absent requirements SHALL block publication. PR and ordinary local builds SHALL remain usable without signing credentials. Windows/Linux signing SHALL remain unchanged.
+
+#### Scenario: Missing release credentials
+- **WHEN** macOS packaging runs for a version tag without complete signing/notarization credentials
+- **THEN** it SHALL fail clearly before creating unsigned release assets and the complete-release publication SHALL remain blocked
+
+#### Scenario: Inspect both Apple downloads
+- **WHEN** a signed build smoke-tests its DMG and ZIP
+- **THEN** it SHALL verify the app in each format for expected Developer ID authority/team, strict recursive signatures, hardened runtime, secure timestamp, a valid staple and Gatekeeper acceptance before collecting downloads
+
+#### Scenario: Local opt-in and PR isolation
+- **WHEN** a developer explicitly enables Apple signing locally with an existing signing identity and notarization profile or Apple ID credentials
+- **THEN** packaging SHALL sign/notarize without publishing, and pull-request builds SHALL reject signing opt-in without receiving release secrets
+
 ### Requirement: Five-target desktop downloads
 The system SHALL produce macOS arm64 DMG/ZIP, Windows arm64 and x64 EXE, and Linux arm64 and x64 AppImage/DEB packages with correct version metadata and packaged native bindings.
 

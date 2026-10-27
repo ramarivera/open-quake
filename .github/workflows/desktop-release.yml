@@ -110,7 +110,38 @@ jobs:
           sudo apt-get install -y libudev-dev libusb-1.0-0-dev libfuse2 libgtk-3-0t64 libnss3 libasound2t64 xvfb
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @open-quake/desktop build
-      - run: pnpm --filter @open-quake/desktop package --${{ matrix.platform }} --${{ matrix.arch }}
+      - name: Package without distribution signing
+        if: "!(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac')"
+        run: pnpm --filter @open-quake/desktop package --${{ matrix.platform }} --${{ matrix.arch }}
+      # Secrets exist only for the trusted tag macOS packaging process. PR code
+      # and every Windows/Linux step keep the existing unsigned path.
+      - name: Sign and notarize macOS release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac'
+        env:
+          OPEN_QUAKE_APPLE_SIGNING: "1"
+          APPLE_TEAM_ID: TRGDCMBX3J
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APP_BUILDER_TMP_DIR: ${{ runner.temp }}/open-quake-apple-signing
+        run: |
+          umask 077
+          mkdir -p "$APP_BUILDER_TMP_DIR"
+          # electron-builder owns P12 import, temporary keychain and notarytool.
+          pnpm --filter @open-quake/desktop package --mac --arm64
+      - name: Clean temporary Apple signing material
+        if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac'
+        run: |
+          signing_temp="$RUNNER_TEMP/open-quake-apple-signing"
+          # Builder normally disposes the keychain itself. Also cover failed
+          # imports and interrupted builds before removing certificate files.
+          if [[ -d "$signing_temp" ]]; then
+            for keychain in "$signing_temp"/*.keychain "$signing_temp"/*.keychain-db; do
+              if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
+            done
+            rm -rf -- "$signing_temp"
+          fi
       - name: Smoke packaged Electron, native bindings, preload and renderer
         working-directory: apps/desktop
         run: |

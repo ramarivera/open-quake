@@ -10,6 +10,7 @@ There are no published releases or installer builds. Development commands do not
 - Build and smoke-check installers on pull requests and version tags using GitHub Actions, then publish complete releases with checksums after all targets pass.
 - Document unsigned installation, Linux device access and current platform limitations.
 - Keep private SDK packages private. The CLI is currently a placeholder, not an npm-installable application.
+- Require Developer ID signing and Apple notarization for tagged macOS releases, with release-only credentials and verification of both distributed formats. PR/local packaging remains ad-hoc by default; Windows/Linux signing policy is unchanged. Approved by Ramiro on 2026-10-27 under open-quake-i3j.4.
 
 ## Impact
 

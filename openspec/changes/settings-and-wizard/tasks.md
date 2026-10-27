@@ -248,3 +248,10 @@ PR #118 permission review 4381119069 and 4381129730: denied requests, rejected S
 PR #118 diagnostic review 4381129985: the live region renders the timed notice, not the persistent ready status. The mounted regression reproduces all-pass text remaining at 2600ms before the fix, then verifies expiry at exactly 2600ms with both passing channel rows retained. Background status remains silent and clears obsolete retry errors.
 
 The merged media smoke retains the shell's locale-safe selector and checks both passing connection rows after readiness. It waits out the explicit retry notice before asserting the empty live region. The native smoke passes all groups with 26 captures and process exit zero; mock devices and muted windows avoid host permission, microphone and audio changes.
+
+## Apple release signing follow-up
+
+- [x] Connect the existing Developer ID identity to guarded release signing and notarization. Implementation and actual-artifact acceptance are owned by desktop-release-pipeline/tasks.md section 4, open-quake-i3j.4.
+
+The Developer ID certificate is installed on macmini. Unattended private-key access, notarization credentials, hosted runner provisioning and actual signed releases remain unverified. Signing notices remain unchanged until artifact acceptance. Windows and Linux signing are unchanged.
+
