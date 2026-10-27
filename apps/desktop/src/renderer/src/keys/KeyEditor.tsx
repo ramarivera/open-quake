@@ -544,6 +544,26 @@ export function KeyEditor({
 		},
 	};
 	const key = selection?.key;
+	const savedSwitchProfile =
+		key?.config.type === "switchProfile"
+			? String(
+					key.config.actions.find((action) => action.type === "profile")
+						?.value ?? "-1",
+				)
+			: undefined;
+	const switchProfiles = envelope.profiles.filter(
+		(profile) =>
+			!(Option.getOrUndefined(envelope.manager)?.hidden ?? []).includes(
+				profile.id,
+			),
+	);
+	const unavailableSwitchProfile =
+		savedSwitchProfile !== undefined &&
+		savedSwitchProfile !== "-1" &&
+		!switchProfiles.some((profile) => profile.id === savedSwitchProfile);
+	const savedSwitchTarget = envelope.profiles.find(
+		(profile) => profile.id === savedSwitchProfile,
+	);
 	const selectedTile = stripLayout(
 		previewProfile,
 		previewProfile.pages.find((p) => p.id === page.id) ?? page,
@@ -934,10 +954,7 @@ export function KeyEditor({
 							<Row label="Profile">
 								<select
 									aria-label="Switch profile"
-									value={String(
-										key.config.actions.find((a) => a.type === "profile")
-											?.value ?? "-1",
-									)}
+									value={savedSwitchProfile}
 									onChange={(event) => {
 										void update({
 											...key,
@@ -952,18 +969,16 @@ export function KeyEditor({
 									}}
 								>
 									<option value="-1">{keyText("nextProfile", locale)}</option>
-									{envelope?.profiles
-										.filter(
-											(p) =>
-												!(
-													Option.getOrUndefined(envelope.manager)?.hidden ?? []
-												).includes(p.id),
-										)
-										.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.name}
-											</option>
-										))}
+									{unavailableSwitchProfile && (
+										<option value={savedSwitchProfile} disabled>
+											{savedSwitchTarget?.name ?? savedSwitchProfile}
+										</option>
+									)}
+									{switchProfiles.map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.name}
+										</option>
+									))}
 								</select>
 							</Row>
 						)}
@@ -973,6 +988,7 @@ export function KeyEditor({
 								<Row label={keyText("pageNumber", locale)}>
 									<select
 										aria-label="Switch profile page"
+										disabled={unavailableSwitchProfile}
 										value={String(
 											key.config.actions.find(
 												(action) => action.type === "page",

@@ -1970,3 +1970,102 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"review: saved Next and Previous are inverse in stored profile order",
+	() => {
+		const config = {
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		};
+		const f = fixture(config);
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		const make = (id: string, name: string, direction: string) => ({
+			...raw.profiles[0],
+			id,
+			name,
+			pages: [
+				{
+					id: "one",
+					keys: raw.profiles[0].pages[0].keys.map((key) => ({
+						...key,
+						config: {
+							...key.config,
+							actions: [
+								{ type: "profile", value: direction },
+								{ type: "page", value: 1 },
+							],
+						},
+					})),
+				},
+			],
+		});
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				profiles: [
+					make("p", "30", "-1"),
+					make("q", "20", "-2"),
+					make("r", "10", "-1"),
+				],
+			}),
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.profileId).toBe("q");
+			yield* press;
+			expect(f.selection()?.profileId).toBe("p");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: saved Previous includes empty visible profiles and skips hidden ones",
+	() => {
+		const f = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-2" },
+				{ type: "page", value: 1 },
+			],
+		});
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				manager: {
+					...Schema.encodeSync(ProfileEnvelope)(f.read()).manager,
+					revision: 0,
+					installed: true,
+					userHasSetDefault: false,
+					approvedCommands: [],
+					hidden: ["hidden"],
+					links: [],
+				},
+				profiles: [
+					raw.profiles[0],
+					{
+						id: "empty",
+						name: "Empty",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+					{
+						id: "hidden",
+						name: "Hidden",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+					raw.profiles[1],
+				],
+				activeByDevice: { device: { profileId: "q", pageId: "one" } },
+			}),
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.profileId).toBe("empty");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

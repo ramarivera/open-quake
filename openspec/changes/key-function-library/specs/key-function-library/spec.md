@@ -187,7 +187,7 @@ MAIN-075, MAIN-081, MGMT-138 and MGMT-404 timers SHALL store an absolute endAt s
 - **AND** Progress below zero hides, progress 100 expires after 1000 ms, and changed incomplete progress expires after 5000 ms.
 
 ### Requirement: Saved folder and profile navigation
-MAIN-077, MAIN-078, MGMT-142 and MGMT-170 SHALL reuse allocated profile pages for folder/createFolder and Back, retain nested return contexts, and restore the prior profile/page after emojiBack. Invalid or stale destinations SHALL not select a fallback. switchProfile SHALL honor profile/page, -1 next, -2 previous and 0 default, skip empty or hidden groups and wrap in numeric profile order. Slides 0/1/2/3 SHALL use previous page/next page/previous group/next group.
+MAIN-077, MAIN-078, MGMT-142 and MGMT-170 SHALL reuse allocated profile pages for folder/createFolder and Back, retain nested return contexts, and restore the prior profile/page after emojiBack. Invalid or stale destinations SHALL not select a fallback. switchProfile SHALL honor profile/page, -1 next, -2 previous and 0 default. Saved Next and Previous SHALL use the same persisted visible-profile order, including empty profiles and excluding hidden profiles. Slides 0/1/2/3 SHALL use previous page/next page/previous group/next group; group slides SHALL skip empty or hidden groups and wrap in numeric profile-name order.
 
 #### Scenario: Nested folders and default profile use the committed selection
 - **WHEN** saved folder and Back keys navigate nested allocated pages, or a slide or switchProfile key changes selection

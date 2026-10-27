@@ -507,7 +507,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					if (decoded._tag === "Left")
 						return yield* new InvalidKeyAction("config.actions", decoded.left);
 					const ref = decoded.right.actions[0].value;
-					if (ref === "-1") {
+					if (ref === "-1" || ref === "-2") {
 						const visible = env.profiles.filter(
 							(p) =>
 								!(Option.getOrUndefined(env.manager)?.hidden ?? []).includes(
@@ -519,17 +519,13 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								pageIndex(
 									visible.findIndex((p) => p.id === profile.id),
 									visible.length,
-									1,
+									ref === "-1" ? 1 : -1,
 								)
 							];
 						if (next) {
 							yield* port.select(deviceId, next.id, next.pages[0].id);
 							yield* refresh(deviceId);
 						}
-						return;
-					}
-					if (ref === "-2") {
-						yield* navigate(deviceId, 2);
 						return;
 					}
 					const startup =
