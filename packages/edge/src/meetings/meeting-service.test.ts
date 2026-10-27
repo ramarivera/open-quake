@@ -1678,3 +1678,223 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+for (const operation of ["cleanup", "list", "upload", "delete"] as const) {
+	it.scoped(
+		`remote ${operation} releases the capture lock and retains failed cleanup`,
+		() =>
+			Effect.gen(function* () {
+				const f = setup();
+				const entered = yield* Deferred.make<void>();
+				const release = yield* Deferred.make<void>();
+				const blocked = Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+				);
+				const adapter: MeetingAdapter = {
+					...f.adapter,
+					cleanup: () =>
+						blocked.pipe(
+							Effect.zipRight(Effect.fail(meetingError("Unavailable"))),
+						),
+					files: {
+						list: () => blocked.pipe(Effect.as([])),
+						upload: () => blocked.pipe(Effect.as("owned")),
+						remove: () => blocked,
+					},
+				};
+				// Override the captured adapter object used by this fixture's layer.
+				Object.assign(f.adapter, adapter);
+				yield* Effect.gen(function* () {
+					yield* MeetingService.configure(
+						{ ...defaultMeetingConfig, autoGenerate: false },
+						true,
+					);
+					const record = (yield* MeetingService.action("meetingMinutes"))
+						.records[0];
+					if (!record) throw new Error("Missing meeting");
+					yield* TestClock.adjust(5001);
+					yield* MeetingService.action("meetingMinutes");
+					yield* MeetingService.rename(record.id, "Preserved local record");
+					// Upload requires a transcript saved through the real repository.
+					if (operation === "upload")
+						yield* MeetingRepository.update((records) =>
+							records.map((r) =>
+								r.id === record.id
+									? { ...r, transcript: segments, transcription: "complete" }
+									: r,
+							),
+						);
+					const remote = yield* (
+						operation === "cleanup"
+							? MeetingService.delete(record.id)
+							: MeetingService.files(record.id, operation, "owned")
+					).pipe(Effect.either, Effect.fork);
+					yield* Deferred.await(entered);
+					const control = yield* MeetingService.action("mic").pipe(
+						Effect.timeoutOption(100),
+						Effect.fork,
+					);
+					yield* TestClock.adjust(101);
+					expect(Option.isSome(yield* Fiber.join(control))).toBe(true);
+					yield* Deferred.succeed(release, undefined);
+					const result = yield* Fiber.join(remote);
+					if (operation === "cleanup") {
+						expect(Either.isLeft(result)).toBe(true);
+						expect(
+							(yield* MeetingService.snapshot()).records.some(
+								(r) => r.id === record.id,
+							),
+						).toBe(true);
+					}
+				}).pipe(Effect.provide(f.layer));
+			}),
+	);
+}
+
+for (const change of [
+	{ autoGenerate: false },
+	{ minutesModel: "another-summary-model" },
+	{ microphoneId: "another-input" },
+])
+	it.effect(
+		`retains in-flight translation through unrelated ${Object.keys(change)[0]} configuration`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				yield* MeetingService.action("liveAudioTranslate");
+				const entered = yield* Deferred.make<void>();
+				const release = yield* Deferred.make<void>();
+				f.translations([
+					{
+						id: "delivered",
+						speaker: "1",
+						text: "translated text",
+						final: true,
+						at: 0,
+					},
+				]);
+				f.pauseTranslation(
+					Deferred.succeed(entered, undefined).pipe(
+						Effect.zipRight(Deferred.await(release)),
+					),
+				);
+				const job = yield* MeetingService.translate(new Uint8Array(14400)).pipe(
+					Effect.fork,
+				);
+				yield* Deferred.await(entered);
+				yield* MeetingService.configure({
+					...(yield* MeetingService.snapshot()).config,
+					...change,
+				});
+				yield* Deferred.succeed(release, undefined);
+				yield* Fiber.join(job);
+				const state = yield* MeetingService.snapshot();
+				expect(state.translating).toBe(true);
+				expect(state.translations).toMatchObject([
+					{ id: "delivered", text: "translated text" },
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+
+for (const completion of ["summary", "transcription failure"] as const) {
+	for (const cleanup of ["failure", "timeout"] as const) {
+		it.scoped(
+			`keeps processing deletion cancelled after late ${completion} and cleanup ${cleanup}`,
+			() =>
+				Effect.gen(function* () {
+					const f = setup();
+					const workEntered = yield* Deferred.make<void>();
+					const finishWork = yield* Deferred.make<void>();
+					const cleanupEntered = yield* Deferred.make<void>();
+					const finishCleanup = yield* Deferred.make<void>();
+					const pausedWork = Deferred.succeed(workEntered, undefined).pipe(
+						Effect.zipRight(Deferred.await(finishWork)),
+					);
+					if (completion === "summary") f.pauseSummary(pausedWork);
+					else {
+						f.pauseSubmit(pausedWork);
+						Object.assign(f.adapter, {
+							poll: () => Effect.fail(meetingError("TranscriptionFailed")),
+						});
+					}
+					let rejectCleanup = true;
+					Object.assign(f.adapter, {
+						cleanup: () =>
+							Effect.suspend(() =>
+								rejectCleanup
+									? Deferred.succeed(cleanupEntered, undefined).pipe(
+											Effect.zipRight(
+												cleanup === "timeout"
+													? Effect.never
+													: Deferred.await(finishCleanup).pipe(
+															Effect.zipRight(
+																Effect.fail(meetingError("Unavailable")),
+															),
+														),
+											),
+										)
+									: Effect.void,
+							),
+					});
+					yield* Effect.gen(function* () {
+						yield* configure;
+						const record = (yield* MeetingService.action("meetingMinutes"))
+							.records[0];
+						if (!record) throw new Error("Missing meeting");
+						yield* TestClock.adjust(5001);
+						yield* MeetingService.action("meetingMinutes");
+						const endedAt = (yield* MeetingService.snapshot()).records[0]
+							?.endedAt;
+						const work = yield* MeetingService.process(record.id).pipe(
+							Effect.either,
+							Effect.fork,
+						);
+						yield* Deferred.await(workEntered);
+						yield* TestClock.adjust(1000);
+						const deletion = yield* MeetingService.delete(record.id).pipe(
+							Effect.either,
+							Effect.fork,
+						);
+						yield* Deferred.await(cleanupEntered);
+						yield* Deferred.succeed(finishWork, undefined);
+						const outcome = yield* Fiber.join(work);
+						expect(Either.isRight(outcome)).toBe(completion === "summary");
+						if (cleanup === "timeout") yield* TestClock.adjust(30001);
+						else yield* Deferred.succeed(finishCleanup, undefined);
+						const result = yield* Fiber.join(deletion);
+						expect(Either.isLeft(result) && result.left.code).toBe(
+							cleanup === "timeout"
+								? "QUAKE.MEETING.TIMEOUT"
+								: "QUAKE.MEETING.UNAVAILABLE",
+						);
+						const retained = (yield* MeetingService.snapshot()).records.find(
+							(r) => r.id === record.id,
+						);
+						expect(retained?.state).toBe("cancelled");
+						expect(retained?.endedAt).toEqual(endedAt);
+						expect(
+							f.saved().records.find((r) => r.id === record.id)?.state,
+						).toBe("cancelled");
+						expect(f.calls).not.toContain("delete:1");
+						// The start action retains its independent five-second cooldown.
+						yield* TestClock.adjust(5001);
+						const restarted = yield* MeetingService.action("meetingMinutes");
+						expect(
+							restarted.records.some(
+								(r) => r.id !== record.id && r.state === "recording",
+							),
+						).toBe(true);
+						rejectCleanup = false;
+						yield* MeetingService.delete(record.id);
+						expect(
+							(yield* MeetingService.snapshot()).records.some(
+								(r) => r.id === record.id,
+							),
+						).toBe(false);
+					}).pipe(Effect.provide(f.layer));
+				}),
+		);
+	}
+}

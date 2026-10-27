@@ -25,7 +25,7 @@ current revision, so concurrent saves cannot silently overwrite one another.
 The version 1 envelope contains `serial`, nonnegative `revision`, `settings`
 and `clock`. The device display Schemas define these fields:
 
-- `isTransparent`: false for this release.
+- `isTransparent`: suppresses wallpaper media, neutral fill and playlist work while preserving the saved list.
 - `enableSound`: defaults to false when missing in a version-1 record.
 - `bgFillMode`: `contain`, `cover` or `center`, default `cover`.
 - `gapInterval` and `gapIntervalUnit`: integer seconds 3–86400 with unit 0,
@@ -34,9 +34,9 @@ and `clock`. The device display Schemas define these fields:
   playlists switch at each item's duration; a singleton video loops in place.
 - `displayMediaList`: zero to 128 ordered items with unique content hashes. Each
   item contains nonempty `name`, `filePath: media:<sha256>` and `duration` in
-  milliseconds. Images use `type: image`, decoded `format: image/png|image/jpeg`
+  milliseconds. Images use `type: image`, decoded `format: image/png|image/jpeg|image/gif`
   and duration matching the interval. Videos use `type: video`, decoded
-  `format: video/mp4|video/quicktime|video/webm` and the probed duration, at least
+  `format: video/mp4|video/quicktime|video/webm|video/x-matroska|video/x-msvideo` and an interval-derived placeholder duration. Playback uses probed metadata, at least
   2000 ms.
 - `clock`: `type: dkDesktopClock` and exactly one
   `{type: hourFormat, value: 24h|12h}` action.
@@ -72,7 +72,7 @@ selection can call the same controller later; they do not infer a serial here.
 The active serial selection is session-local; each serial's settings persist.
 
 The `wallpaper:request` channel accepts decoded
-read/select/import/configure/clear/restore/sound/reorder/remove commands. Import
+read/select/import/configure/clear/restore/sound/reorder/remove plus save/factory/insert/pick/failed commands. Save validates one complete settings draft; pick stages managed bytes without committing settings. Factory atomically restores the app-owned five-video silent pack, independently of backup restore. Insert prepends media. Import
 replaces the list by default; `append: true` adds a new content hash and ignores
 duplicates. Reorder requires valid indices and the current revision; moving an
 item to its existing index preserves the revision. Remove deletes one index;
@@ -141,8 +141,12 @@ directory, and use `env -u ELECTRON_RUN_AS_NODE` for the Electron invocation.
 
 ## Wallpaper playlists and sound
 
-The editor appends managed JPEG/PNG images and decodable MP4, MOV or WebM
-videos, removes duplicates by content, and persists drag or move-button order.
+The editor stages JPEG/PNG/GIF images and decodable MP4, MOV, MKV, AVI or WebM
+videos, deduplicates content, and commits drag or move-button order on Save.
+Cancel discards the draft. Empty-list Save restores the five-video factory list.
+New serials default to cover, five seconds, sequential, opaque and sound off.
+Legacy `ws_` records and assets remain readable; writes use only canonical serials.
+The five bundled VP9 animations are original procedural replacements, not vendor art.
 Videos need finite metadata, at least two seconds, at most 8 MiB and at most
 64 million pixels. Codec support follows the bundled Electron build. The hidden
 metadata worker never plays and stays muted, with an eight-second deadline.
@@ -152,6 +156,10 @@ verifying managed bytes and saved formats. Cold misses after restart or eviction
 probe once. No native probe holds the controller semaphore, and delayed snapshot
 results cannot overwrite a newer selection, revision or playback identity.
 
+The media controller preloads at duration minus 1000 ms, then starts an 800 ms
+crossfade 200 ms later. Videos wait for canplaythrough before activation.
+The shared renderer keeps at most two media layers, mutes inactive layers and
+clears media on hide or transparency. Failed entries are skipped until all fail.
 The existing media controller chooses the active item for both renderers and
 wraps sequential playlists. A singleton video loops in place. Management
 previews stay muted. Panel sound requests require current window identity,

@@ -365,3 +365,48 @@ The assertion remains unchanged; this failure is tracked in open-quake-lih.16.14
 That same follow-up records valid new bot findings 4380486754 and 4380486762 for
 size-appropriate OSS upload deadlines and interruptible conversion acquisition.
 Both receive follow-up replies without another fix round.
+
+
+## PR #109 post-round follow-ups
+
+Follow-up PR #124 handles all 16 findings in open-quake-lih.16.15 and
+open-quake-lih.16.14, leaving both beads in progress for lead review and merge.
+Each finding has a separate commit with an observed failing-before regression;
+the two overlapping Codex findings have separate source-stream and cancel/delete
+consumer regressions against their shared production fixes.
+
+Provider conversion uses the duration-based ASR deadline. Cancellation aborts
+conversion, waits for the converter to close, and removes partial private output.
+Recording upload budgets scale with normalized file size at 64 kB/s plus 30 seconds,
+capped at 30 minutes and still bounded by the complete ASR deadline. OpenAI omits
+an unspecified source-language hint and stops PCM sends when its reader fails.
+
+Remote file operations have a 30-second service deadline, reserve affected
+records, and run outside the capture transition lock. Deletion serializes with
+file uploads and preserves local records and private ownership after a remote
+file cleanup failure. Task cancellation rejection does not block owned file
+cleanup. Listing follows provider cursors with cycle/page bounds and returns
+only locally owned IDs. A forced local deletion that loses cleanup ownership
+is declined under the existing private recoverable resource requirement.
+
+Translation history accepts translated response events, retains speaker identity
+through source-item linkage, and survives changes to unrelated settings. Fresh
+ASR attempts reset internal retries while recovered pending tasks keep their
+budget. Renderer feedback clears stale error codes and gives actionable English
+recovery. The rollover regression now rejects stop-before-start ordering.
+
+Validation at functional head 30a9dc51: exact root loose-environment suite passes
+4,418 tests with four existing skips across 443 passing and two skipped files;
+all six typechecks, Biome 1,459 files with zero errors, 15 existing warnings and
+two infos, production build, both bundle modes and 47 strict OpenSpec items pass.
+Hidden muted meetings smoke passes and exits with 28 captures. Two captures were
+inspected. Logs retain Chromium/macOS process-policy and existing missing
+quake:device-ready fixture-handler diagnostics. Physical/audio/paid-provider
+acceptance remains unverified; only synthetic audio and fake providers ran.
+
+Logs and red/green evidence remain external under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/fix-meeting-followups/`.
+Build output is removed after verification and the requested SSD worktree is
+retained. Original review replies cite each finding's fix commit; no thread is
+resolved and no merge is performed. Hosted checks and current-head bot review
+remain parent-owned.

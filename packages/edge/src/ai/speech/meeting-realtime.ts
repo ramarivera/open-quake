@@ -8,7 +8,12 @@ import { AiProtocolInvalid } from "../ai-errors.js";
 import type { ResolveMeetingConnection } from "./meeting-resources.js";
 import type { SpeechSocket, SpeechWebSocket } from "./speech-ports.js";
 import { pcmResampler } from "./speech-resample.js";
-import { encodeAudio, receiveObject, sendEvent } from "./speech-session.js";
+import {
+	encodeAudio,
+	object,
+	receiveObject,
+	sendEvent,
+} from "./speech-session.js";
 
 /** One app-owned translation session. Host socket and PCM queues are bounded independently. */
 export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
@@ -90,6 +95,20 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 							import("../ai-errors.js").AiError
 						>();
 						const text = new Map<string, string>();
+						const speakers = new Map<string, string>();
+						const rememberSpeaker = (id: unknown, speaker: unknown) => {
+							if (
+								typeof id !== "string" ||
+								id.length > 256 ||
+								(typeof speaker !== "string" && typeof speaker !== "number")
+							)
+								return;
+							speakers.set(id, String(speaker).slice(0, 256));
+							while (speakers.size > 200) {
+								const first = speakers.keys().next().value;
+								if (first !== undefined) speakers.delete(first);
+							}
+						};
 						let disconnected = false;
 						const reader = yield* Effect.gen(function* () {
 							while (true) {
@@ -97,6 +116,19 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 								if (generation !== epoch) return;
 								if (event.type === "session.updated")
 									yield* Deferred.succeed(ready, undefined);
+								if (event.type === "input_audio_buffer.speech_started")
+									rememberSpeaker(event.item_id, event.speaker_id);
+								if (event.type === "conversation.item.created") {
+									const item = object(event.item);
+									const previous =
+										event.previous_item_id ?? item.previous_item_id;
+									rememberSpeaker(
+										item.id,
+										typeof previous === "string"
+											? speakers.get(previous)
+											: undefined,
+									);
+								}
 								if (event.type === "error")
 									return yield* new AiProtocolInvalid();
 								if (
@@ -104,8 +136,6 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 										"response.text.delta",
 										"response.text.text",
 										"response.text.done",
-										"conversation.item.input_audio_transcription.text",
-										"conversation.item.input_audio_transcription.completed",
 									].includes(String(event.type))
 								)
 									continue;
@@ -121,11 +151,9 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 									typeof event.text === "string"
 										? event.text +
 											(typeof event.stash === "string" ? event.stash : "")
-										: (event.delta ?? event.text ?? event.transcript);
+										: (event.delta ?? event.text);
 								if (typeof value !== "string") continue;
-								const final =
-									String(event.type).endsWith("done") ||
-									String(event.type).endsWith("completed");
+								const final = event.type === "response.text.done";
 								const content = (
 									event.type === "response.text.delta"
 										? (text.get(id) ?? "") + value
@@ -147,7 +175,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 										typeof event.speaker_id === "string" ||
 										typeof event.speaker_id === "number"
 											? String(event.speaker_id)
-											: "",
+											: (speakers.get(id) ?? ""),
 									text: content,
 									final,
 									at: yield* Clock.currentTimeMillis,

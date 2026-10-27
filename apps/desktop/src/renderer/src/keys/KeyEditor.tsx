@@ -40,6 +40,7 @@ import { AudioBotSettings } from "../strip/tiles/voiceKey/AudioBotSettings";
 import { GameModeSettings } from "../hardware/GameModeSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
+import { WallpaperSettings } from "../wallpaper/WallpaperViews";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { AgentKeyFields } from "./AgentKeyFields";
 import { AssistantEditor } from "./AssistantEditor";
@@ -849,6 +850,9 @@ export function KeyEditor({
 							locale={locale}
 							onChange={(next) => void update(next)}
 						/>
+						{key.config.type === "colorfulScreenSettings" && (
+							<WallpaperSettings embedded wallpaper={wallpaperController} />
+						)}
 						{key.config.type === "hotkeySwitch" && (
 							<Row label="State">
 								<button

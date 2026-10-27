@@ -203,3 +203,55 @@ document locale; that fixture repair is in the same follow-up bead. No product
 assertion or safety gate was weakened. Evidence stays in SSD meeting-provider/fix2.
 No thread resolution or merge; execution bead open-quake-lih.16.13 stays open for
 the lead. Physical and paid-provider qualification remains unverified.
+
+## 13. PR #109 post-round follow-ups
+
+Execution: open-quake-lih.16.15 and open-quake-lih.16.14. Leave both in progress for lead-owned review and merge.
+
+- [x] 13.1 Address the five Major findings with fail-before consumer regressions.
+- [x] 13.2 Reconcile three overlapping/later Codex findings, paginated file ownership, upload deadlines and interruptible conversion.
+- [x] 13.3 Address remaining Minor/Trivial findings with fail-before regressions and original-thread replies.
+- [x] 13.4 Run requested full gates and hidden meetings smoke, open a PR with per-finding outcomes, and retain the SSD worktree.
+
+
+Post-round delivery: PR #124, all 16 original PR109 comments answered with fix
+commit and model attribution. Exact root suite 4418 pass / four existing skips,
+six package typechecks, Biome zero errors, build, both bundle modes, strict
+OpenSpec 47/47 and hidden meetings smoke pass. Source and evidence details:
+`apps/desktop/src/main/meetings/README.md`. Both execution beads remain in progress
+with the PR link; parent owns hosted review/check reconciliation and merge.
+
+## 14. PR #124 single bot-review fix round
+
+Execution: open-quake-lih.16.15.1, left open for parent acceptance and merge.
+
+- [x] 14.1 Fix Devin 4381700721 by retaining failed cancellation and file cleanup identities across retries, with fake consumer regressions.
+- [x] 14.2 Fix CodeRabbit 4381802226 by persisting processing cancellation before remote deletion, preserving recording end times and covering late completion with cleanup failure or timeout.
+- [x] 14.3 Run the requested full gates and hidden meetings smoke, reply after each fix, and reconcile unanswered GraphQL threads without resolving or merging.
+
+PR124 review round delivery: main `500bd2b0` merged without conflicts as
+`d4bc34aa`, preserving all tests. Devin 4381700721 fixed in `9ebbdf00` with
+two fake consumer regressions, including a failed-before combined cancellation
+and file deletion failure. CodeRabbit 4381802226 fixed in `10059da4` with
+four failed-before late job completion/failure and cleanup failure/timeout
+regressions. Each finding was committed, pushed and replied to separately.
+The focused provider and service files pass 55 and 71 tests.
+
+Validation: all six package typechecks, Biome 1505 files with zero errors,
+16 warnings and two infos, production build, both bundle modes and all 47
+strict OpenSpec items pass. Hidden muted meetings smoke passes and exits with
+28 captures; English and German summary captures were inspected. Root tests
+with SSD TMPDIR, loose Turbo environment and maxWorkers=2 were not fully green.
+The first run has 4585 pass, one key-editor 5000 ms timeout and four existing
+skips; that file passes all 65 tests alone unchanged. The second run has 4584
+pass, two desktop lifecycle wait failures and four existing skips; that file
+passes all 49 tests alone unchanged. No timeout, assertion or product code was
+changed to make these unrelated tests pass. Full logs and captures remain in
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/fix-meeting-followups/fix1/`.
+
+Final GraphQL inspection found two answered threads and zero unanswered threads.
+CodeRabbit marked its own thread resolved; this worker resolved none. No second
+review round, merge, real provider, microphone, hardware or audible audio was
+used. The execution bead stays open for parent acceptance and hosted checks.
+The temporary fix worktree and generated build output are removed at handoff;
+the original lane worktree is untouched.

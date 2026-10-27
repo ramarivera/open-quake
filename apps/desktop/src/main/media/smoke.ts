@@ -72,6 +72,7 @@ import { SystemMediaAdapter } from "../weather-media/system-media";
 import { mediaSession } from "../weather-media/test-fixtures";
 import { WeatherNetwork } from "../weather-media/weather-network";
 import { MediaLive, registerMedia } from "./index";
+import { applyWallpaperBackground } from "./native-background";
 
 assert.equal(
 	process.env.OPEN_QUAKE_MOCK_DEVICE,
@@ -180,6 +181,8 @@ async function smoke(): Promise<void> {
 	await writeFile(jpegPath, image.toJPEG(90));
 	const options = {
 		show: false,
+		focusable: false,
+		transparent: true,
 		useContentSize: true,
 		width: 1920,
 		height: 480,
@@ -283,7 +286,17 @@ async function smoke(): Promise<void> {
 			),
 		),
 	);
-	registerMedia(runtime, () => management);
+	registerMedia(
+		runtime,
+		() => management,
+		undefined,
+		true,
+		() => panel,
+		undefined,
+		undefined,
+		(snapshot) =>
+			applyWallpaperBackground(panel, snapshot.saved.settings.isTransparent),
+	);
 	const clock = registerClock(
 		ManagedRuntime.make(ClockLive(directory)),
 		() => management,
@@ -411,7 +424,8 @@ async function smoke(): Promise<void> {
 	});
 	assert.equal(jpg.saved.settings.displayMediaList[0]?.format, "image/jpeg");
 	const b = await request(management, { _tag: "select", serial: "smoke-B" });
-	assert.equal(b.asset._tag, "empty");
+	assert.equal(b.asset._tag, "ready");
+	assert.equal(b.saved.settings.displayMediaList.length, 5);
 	const a = await request(management, { _tag: "select", serial: "smoke-A" });
 	assert.equal(a.asset._tag, "ready");
 	for (const window of [management, panel])
@@ -475,8 +489,17 @@ async function smoke(): Promise<void> {
 		append: true,
 	});
 	await settle(150);
+	const beforeDraft = await request(management, { _tag: "read" });
 	await management.webContents.executeJavaScript(
 		`document.querySelector('button[aria-label="Move checkerboard.png up"]').click(); null;`,
+	);
+	await settle(100);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.revision,
+		beforeDraft.saved.revision,
+	);
+	await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.wallpaper-settings button')].find(button => button.textContent.trim() === 'Save').click(); null;`,
 	);
 	await settle(150);
 	assert.equal(
@@ -491,6 +514,15 @@ async function smoke(): Promise<void> {
  rows[1].dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }));
  return null;
  })()`);
+	await settle(100);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.settings
+			.displayMediaList[0]?.name,
+		"checkerboard.png",
+	);
+	await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.wallpaper-settings button')].find(button => button.textContent.trim() === 'Save').click(); null;`,
+	);
 	await settle(150);
 	assert.equal(
 		(await request(management, { _tag: "read" })).saved.settings
@@ -510,7 +542,7 @@ async function smoke(): Promise<void> {
 	);
 	for (const enabled of [true, false]) {
 		await management.webContents.executeJavaScript(
-			`(() => { const row = [...document.querySelectorAll('.row')].find(row => row.textContent.includes('Video Sound')); row.querySelector('input[value="${enabled ? "on" : "off"}"]').click(); return null; })()`,
+			`(() => { document.querySelector('.wallpaper-settings input[type="checkbox"]').click(); [...document.querySelectorAll('.wallpaper-settings button')].find(button => button.textContent.trim() === 'Save').click(); return null; })()`,
 		);
 		await settle(150);
 		assert.equal(
@@ -522,6 +554,54 @@ async function smoke(): Promise<void> {
 	assert.equal(panel.webContents.isAudioMuted(), true);
 	process.stdout.write(
 		"Cluster 18 renderer PASS: move buttons, drag reorder, persisted order, sound on/off, muted windows.\n",
+	);
+
+	await profiles.dispose();
+	profiles = serveProfiles(stripFixtureEnvelope(vividProfile, "smoke-A"));
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await settle(200);
+	const beforeTransparent = await request(management, { _tag: "read" });
+	const panelBounds = panel.getBounds();
+	await request(management, {
+		_tag: "save",
+		serial: "smoke-A",
+		revision: beforeTransparent.saved.revision,
+		settings: { ...beforeTransparent.saved.settings, isTransparent: true },
+	});
+	await settle(150);
+	assert.deepEqual(panel.getBounds(), panelBounds);
+	for (const window of [panel, management]) {
+		assert.equal(
+			await window.webContents.executeJavaScript(
+				`document.querySelectorAll('.strip-wallpaper image, .strip-wallpaper video, .strip-wallpaper rect').length`,
+			),
+			0,
+		);
+	}
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript(
+			`(() => { const strip = document.querySelector('.strip-screen'); return { vivid: strip?.dataset.vivid, background: strip && getComputedStyle(strip).backgroundColor }; })()`,
+		),
+		{ vivid: "true", background: "rgba(0, 0, 0, 0)" },
+	);
+	const transparent = await request(management, { _tag: "read" });
+	await request(management, {
+		_tag: "save",
+		serial: "smoke-A",
+		revision: transparent.saved.revision,
+		settings: { ...transparent.saved.settings, isTransparent: false },
+	});
+	await settle(150);
+	assert.equal(
+		await panel.webContents.executeJavaScript(
+			`document.querySelectorAll('.wallpaper-canvas image').length`,
+		),
+		1,
+	);
+	process.stdout.write(
+		"Wallpaper draft Save and transparent/opaque native panel + preview PASS.\n",
 	);
 
 	const errors: unknown = await management.webContents.executeJavaScript(
@@ -578,6 +658,41 @@ async function smoke(): Promise<void> {
 		);
 		management.setSize(1100, 1000);
 	}
+
+	const factory = await request(management, {
+		_tag: "factory",
+		serial: "smoke-A",
+		revision: (await request(management, { _tag: "read" })).saved.revision,
+	});
+	assert.equal(factory.saved.settings.displayMediaList.length, 5);
+	await settle(1200);
+	await waitForVoice(
+		panel,
+		`(() => { const video = document.querySelector('.wallpaper-canvas video'); return !!video && !video.paused && video.readyState >= 2 && video.currentTime > 0.1; })()`,
+	);
+	const factoryPlayback = await panel.webContents.executeJavaScript(
+		`(() => { const video = document.querySelector('.wallpaper-canvas video'); return { hidden: document.hidden, video: !!video, paused: video?.paused, error: video?.error?.message ?? null, layer: video?.closest('[data-state]')?.dataset.state, vivid: document.querySelector('.strip-screen')?.dataset.vivid }; })()`,
+	);
+	assert.deepEqual(factoryPlayback, {
+		hidden: false,
+		video: true,
+		paused: false,
+		error: null,
+		layer: "active",
+		vivid: "true",
+	});
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "wallpaper-factory-panel.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+	process.stdout.write("Five-video factory reset native playback PASS.\n");
+	await profiles.dispose();
+	profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await settle(150);
 
 	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
 	await management.webContents.executeJavaScript(
