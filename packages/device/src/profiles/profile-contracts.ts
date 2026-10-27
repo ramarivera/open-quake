@@ -283,3 +283,23 @@ export const createInitialProfileEnvelope = (): ProfileEnvelope =>
 		],
 		activeByDevice: {},
 	});
+
+/** Profile-level routing is inherited by every page. */
+export const createDefaultProfileKnob = (): typeof ProfileKnob.Type =>
+	Schema.decodeUnknownSync(ProfileKnob)({
+		keyCode: "0,1",
+		config: {
+			type: "knob",
+			icon: "0-50",
+			subActions: [
+				{
+					type: "assistant",
+					animations: ["0-47", "0-48", "0-49", "0-51"],
+					actions: [
+						{ type: "voiceRoute", value: "legacyAssistant" },
+						{ type: "assistant", value: "" },
+					],
+				},
+			],
+		},
+	});

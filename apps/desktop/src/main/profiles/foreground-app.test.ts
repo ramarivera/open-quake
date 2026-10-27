@@ -391,3 +391,38 @@ describe("Windows foreground probe consumer", () => {
 		},
 	);
 });
+
+it.effect(
+	"MAIN-084 denies native foreground reads until fake Accessibility permission is granted",
+	() =>
+		Effect.gen(function* () {
+			let trusted = false,
+				denied = 0,
+				reads = 0;
+			const probe = yield* makeScopedForegroundProbe(
+				"darwin",
+				async () => {
+					reads++;
+					return Option.some({ id: "fake", path: "/Applications/Fake.app" });
+				},
+				{
+					trusted: () => trusted,
+					denied: () => {
+						denied++;
+					},
+				},
+			);
+			expect((yield* probe().pipe(Effect.either))._tag).toBe("Left");
+			expect((yield* probe().pipe(Effect.either))._tag).toBe("Left");
+			expect(reads).toBe(0);
+			expect(denied).toBe(1);
+			trusted = true;
+			expect(yield* probe()).toEqual(
+				Option.some({ id: "fake", path: "/Applications/Fake.app" }),
+			);
+			expect(reads).toBe(1);
+			trusted = false;
+			expect((yield* probe().pipe(Effect.either))._tag).toBe("Left");
+			expect(denied).toBe(2);
+		}).pipe(Effect.scoped),
+);

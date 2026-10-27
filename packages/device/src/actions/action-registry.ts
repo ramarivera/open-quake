@@ -197,6 +197,17 @@ export const ACTION_REGISTRY = [
 	media("fastForward", "audio_forward"),
 	media("repeatPlay", "audio_repeat"),
 	media("randomPlay", "audio_random"),
+	define("switchProfile", C.SwitchProfileConfig, {
+		submenu: "navigation",
+		requiredAdapter: "profiles.navigation",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		},
+	}),
 	define("goToPage", C.GoToPageConfig, {
 		submenu: "navigation",
 		requiredAdapter: "profiles.navigation",

@@ -6,6 +6,7 @@ import {
 	ProfileCommandFailed,
 	ProfileDeliveryFailed,
 	type ProfileDesktopError,
+	ProfileNotFound,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 	ProfileWriteFailed,
@@ -35,6 +36,7 @@ export interface ProfileDesktopPort {
 			readonly name: string;
 			readonly path: string;
 			readonly identifier: string;
+			readonly icon?: string;
 		}[]
 	>;
 	readonly confirm: (message: string, detail: string) => Promise<boolean>;
@@ -140,7 +142,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		): Effect.fn.Return<void, ProfileDesktopError> {
 			const envelope = yield* manager.read();
 			const p = envelope.profiles.find((p) => p.id === id);
-			if (!p) return;
+			if (!p) return yield* ProfileNotFound.fromCause(undefined);
 			const border = showEmptyGridDashedBorder;
 			const data = yield* thumbnail(() =>
 				port.capture(
@@ -177,6 +179,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						failed: progress.failed + (result._tag === "Left" ? 1 : 0),
 					};
 					yield* Effect.sync(() => port.progress(progress));
+					yield* publish();
 				}
 				progress = { ...progress, running: false };
 				yield* Effect.sync(() => port.progress(progress));

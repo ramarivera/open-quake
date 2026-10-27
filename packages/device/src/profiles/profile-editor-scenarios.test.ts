@@ -329,7 +329,12 @@ describe("page and diagnosed import scenarios", () => {
 				expect(
 					dispatch.profiles[0].pages[0].keys.map((k) => k.keyCode),
 				).toEqual(["1,2"]);
-				expect(envelope.profiles[0].pages[0].keys).toHaveLength(2);
+				expect(envelope.profiles[0].pages[0].keys).toHaveLength(16);
+				expect(
+					envelope.profiles[0].pages[0].keys.filter(
+						(key) => key.config.type !== "",
+					),
+				).toHaveLength(2);
 			}).pipe(
 				Effect.provide(
 					profileFunctionContractsLayer(actionProfileFunctionContracts),
@@ -607,5 +612,8 @@ it("retains source indices after null slots and imports canonical profiles", () 
 	expect(imported.profile?.knob).toEqual(
 		Option.isSome(canonical.knob) ? canonical.knob.value : undefined,
 	);
-	expect(imported.profile?.pages[0].keys.length).toBe(2);
+	expect(imported.profile?.pages[0].keys.length).toBe(16);
+	expect(
+		imported.profile?.pages[0].keys.filter((key) => key.config.type !== ""),
+	).toHaveLength(2);
 });

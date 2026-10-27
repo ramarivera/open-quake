@@ -53,3 +53,14 @@ export const foregroundChanged = (
 				onSome: (n) => p.id !== n.id || p.path !== n.path,
 			}),
 	});
+
+/** Transport aliases address one controller, never its auxiliary HID collection. */
+export const logicalProfileSerial = (serial: string): string =>
+	serial.startsWith("ws_") ? serial.slice(3) : serial;
+export const appLinkTargetsSerial = (
+	link: AppProfileLink,
+	serial: string,
+): boolean =>
+	Option.isNone(link.device) ||
+	link.device.value === "All Device" ||
+	logicalProfileSerial(link.device.value) === logicalProfileSerial(serial);

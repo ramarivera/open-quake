@@ -919,6 +919,53 @@ export function KeyEditor({
 							locale={locale}
 							onChange={(next) => void update(next)}
 						/>
+						{key.config.type === "switchProfile" && (
+							<Row label="Profile">
+								<select
+									aria-label="Switch profile"
+									value={String(
+										key.config.actions.find((a) => a.type === "profile")
+											?.value ?? "-1",
+									)}
+									onChange={(event) => {
+										void update({
+											...key,
+											config: {
+												...key.config,
+												actions: [
+													{ type: "profile", value: event.target.value },
+													{ type: "page", value: 1 },
+												],
+											},
+										});
+									}}
+								>
+									<option value="-1">Next Profile</option>
+									{envelope?.profiles.filter((p) => !(Option.getOrUndefined(envelope.manager)?.hidden ?? []).includes(p.id)).map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.name}
+										</option>
+									))}
+								</select>
+							</Row>
+						)}
+						{key.config.type === "switchProfile" &&
+							key.config.actions.find((action) => action.type === "profile")?.value !== "-1" && (
+								<Row label={locale === "de" ? "Seitennummer" : "Page Number"}>
+									<select
+										aria-label="Switch profile page"
+										value={String(key.config.actions.find((action) => action.type === "page")?.value ?? 1)}
+										onChange={(event) => void update({
+											...key,
+											config: { ...key.config, actions: key.config.actions.map((action) => action.type === "page" ? { ...action, value: Number(event.target.value) } : action) },
+										})}
+									>
+										{envelope?.profiles.find((profile) => profile.id === key.config.actions.find((action) => action.type === "profile")?.value)?.pages.map((page, index) => (
+											<option key={page.id} value={index + 1}>{index + 1}</option>
+										))}
+									</select>
+								</Row>
+							)}
 						{key.config.type === "clawbot" && (
 							<AgentKeyFields
 								value={key}

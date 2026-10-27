@@ -2,6 +2,7 @@ import { useState } from "react";
 import { pageIndex } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { Profile } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { PROFILE_PAGE_LIMIT } from "../../../../../../packages/device/src/profiles/profile-pages.js";
 import { Row } from "../ui/Form";
 
 export function KeyPageControls({
@@ -70,6 +71,7 @@ export function KeyPageControls({
 			<button
 				type="button"
 				id="keys-add-page"
+				disabled={profile.pages.length >= PROFILE_PAGE_LIMIT}
 				onClick={() => edit("add-page", crypto.randomUUID())}
 			>
 				{de ? "Seite hinzufügen" : "Add page"}

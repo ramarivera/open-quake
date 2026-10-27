@@ -139,3 +139,68 @@ The DK Claw preset SHALL retain the 1,1 quakeBot conversation tile with agentId 
 #### Scenario: Round trip the protected preset
 - **WHEN** the shipped DK Claw preset is installed, saved and reloaded through ProfileService
 - **THEN** all exact tile payloads and protection flags remain and each agent tile activates its matching identity through the fake voice runtime
+
+
+### Requirement: Page lifecycle and canonical legacy imports
+Each profile SHALL keep stable page IDs, expose page add/delete controls with a ten-page limit and last-page guard, and repair all device selections to the adjacent surviving page on deletion without renumbering. The profile-level knob SHALL apply to every page; a newly created custom or a profile lacking a knob SHALL receive center legacyAssistant with icon 0-50 and animations 0-47, 0-48, 0-49, 0-51. New pages SHALL contain sixteen empty 2 by 8 cells with the canonical title defaults. Folder creation SHALL seed Back at 1,1 with icon 0-5 and a parentFolder reference, and nested navigation SHALL retain its parent profile menu identity. Sparse legacy imports SHALL pad uncovered cells, normalize empty actions and missing size/display, retain the knob separately and preserve DK Claw dkclaw/main routing and animations through save. Numeric page actions -1 and -2 SHALL become previousPage and nextPage. Sources: MGMT-086, MGMT-088, MGMT-089, MGMT-090, MGMT-342, MGMT-345, MGMT-352, MGMT-401.
+
+#### Scenario: Page capacity and first-page deletion
+- **WHEN** a user adds pages up to ten, attempts an eleventh, then deletes the first page
+- **THEN** the extra add leaves the envelope unchanged, surviving IDs remain, selected devices fall back to a surviving page, and every new page has sixteen empty cells and the inherited center assistant
+
+#### Scenario: Legacy sparse configuration and folder return
+- **WHEN** sparse legacy keys with numeric page navigation and a knob are imported and a folder is created and opened
+- **THEN** uncovered cells receive canonical defaults, page actions execute their named equivalents, Back returns to the parent page, and the selected profile remains the parent menu item
+
+### Requirement: Complete manager creation and properties
+Add Item SHALL allocate Custom<N> monotonically, preserve the stable selection anchor, select the new custom and use the exact default template. The live Add Item plus inline rename replaces the unused vendor name/color dialog; color is represented by the profile's rendered contents, not unused dialog metadata. The page-based manager SHALL expose a keyboard-accessible return to Keys. Selected properties SHALL follow committed selection. Linked apps SHALL support search, displayed app identity, None, installed apps and Other with serial scope; cancellation and failed persistence SHALL preserve the committed link. Sources: MGMT-314, MGMT-318, MGMT-326, MGMT-328, MGMT-329.
+
+#### Scenario: Create, select and recover linked-app changes
+- **WHEN** Add Item creates a custom, its linked app is selected or cleared, Other is cancelled, or saving a link fails
+- **THEN** its name/order/template and anchor are correct, successful changes retain serial scope, and cancellation/failure leaves the prior properties selected
+
+### Requirement: Region-neutral catalog and retained resource semantics
+Quick's website and Help SHALL point to the open-quake repository and issues in every locale and region. OpenAI SHALL remain available independently of vendor region policy. Commented legacy 2 by 6 and AI presets SHALL remain importable as inert or supported canonical profiles, padded to the 2 by 8 grid; they SHALL NOT appear as additional shipped defaults. Resource imports SHALL preserve Icon, DeviceConfig, AlertTone, GIF, PluginIcon, Wallpaper and Emoji metadata and references through their existing owned storage and compatibility records. Sources: MGMT-341, MGMT-385, MGMT-398, MGMT-400.
+
+#### Scenario: Portable catalog and resources
+- **WHEN** platform catalogs and legacy resource fixtures are imported under supported locales
+- **THEN** project/help URLs and OpenAI availability remain region-neutral, legacy layouts remain selectable after import, and resource kinds and references survive round trips
+
+### Requirement: Foreground permission and logical device rules
+The monitor SHALL check macOS Accessibility without prompting, provide guidance when denied, resume probing when granted, and reload links after committed manager edits even if the foreground identity is unchanged. Native serials and ws_ aliases SHALL identify one logical device; All Device rules SHALL address each connected logical device once. Failure reports SHALL be bounded to one warning per error code in thirty seconds without stopping polls or recovery. Sources: MAIN-084, MAIN-085, SETTINGS-109.
+
+#### Scenario: Permission recovery and live rule edits
+- **WHEN** a fake permission source changes denied to granted, or a linked rule changes while the app stays foreground
+- **THEN** denial yields guidance without a native foreground query, granted permission resumes switching, and the edited link is delivered after debounce
+
+#### Scenario: Aliases and sustained failures
+- **WHEN** native/ws_ rules target connected twins, and repeated probes fail for thirty seconds before recovering
+- **THEN** each logical device gets one selection, logs remain bounded per code, and polling resumes successful delivery
+
+### Requirement: Bounded owned thumbnail pipeline
+The six vendor thumbnail operations/events SHALL map to typed read, thumbnail, thumbnails, cancel-thumbnails, progress and snapshot messages. Read SHALL prefetch a map, progress and updates SHALL fan out to all live windows, and picker consumers SHALL decode before publication and discard cancelled or stale work. Captures SHALL produce owned 960 by 240 PNGs rather than vendor WebP q85 paths; opaque content/locale/border hashes replace generator-version filenames and numeric-only resource IDs. The thirty-visible-profile limit replaces the vendor sixty-four capture guard; existing retention SHALL keep current saved-profile hashes and prune obsolete owned files. Invalid or missing IDs, busy/unsupported capture, deadlines and IO errors SHALL fail closed through typed profile errors. Capture SHALL wait for fonts, decoded images and video frames, then compare up to six frames for two consecutive equal frames. Platform capture SHALL use a hidden window on macOS/Windows and offscreen rendering on Linux, avoiding foreground activation. Load, execution and capture SHALL be bounded to thirty, five and eight seconds. Optional startup sweep SHALL run after eight seconds, disabled on Linux unless explicitly enabled. Sources: SCREEN-096, SCREEN-097, SCREEN-098.
+
+#### Scenario: Decode, stabilize and cancel capture
+- **WHEN** fake images/videos become ready and frames settle, or readiness/capture times out or is cancelled
+- **THEN** only a current stable image is published, failed jobs publish no partial image, all windows receive progress/update messages, and cache retention remains bounded
+
+### Requirement: Atomic bounded backup lifecycle
+Imports SHALL enforce the shared thirty-visible-profile capacity before any publication, retain resource metadata and restore OBS key group identity. Exports SHALL time out after 120 seconds, cancel pending work and publish no partial archive; successful exports SHALL return native feedback. Import counts SHALL use the active locale. Sources: MGMT-322, MGMT-428, MGMT-429.
+
+#### Scenario: Over-capacity import and export deadline
+- **WHEN** an archive would exceed thirty visible profiles, or export passes 120 seconds or is cancelled
+- **THEN** no profile/resource mutation or partial destination is published, and success paths still report their result
+
+### Requirement: Wizard profile visibility
+Wizard profile choices SHALL start from persisted built-in visibility, default to all eligible built-ins on fresh installations, lock the final enabled built-in, persist the complete choice and refresh the visible menu while preserving a valid active selection. Connected mock devices SHALL receive the updated menu through the existing profile manager delivery path. Source: SETTINGS-059.
+
+#### Scenario: Wizard deselection
+- **WHEN** a user disables built-ins in the wizard and advances
+- **THEN** the last enabled choice cannot be disabled and saved visibility and connected menus reflect the choices without duplicating profiles
+
+### Requirement: Profile switch key
+Switch Profile SHALL expose Next Profile with sentinel -1, explicit profile and page selection. Next SHALL wrap across visible profiles; invalid or hidden destinations SHALL not change selection. Source: MGMT-297.
+
+#### Scenario: Next and explicit destinations
+- **WHEN** a saved switch key selects Next at the final visible profile or names a missing profile/page
+- **THEN** Next wraps to the first visible profile and invalid references fail without selection changes

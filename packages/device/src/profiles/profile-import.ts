@@ -8,6 +8,7 @@ import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
 import {
+	createEmptyProfileKey,
 	Profile,
 	ProfileJson,
 	ProfileJsonObject,
@@ -17,6 +18,7 @@ import {
 	type ProfileFunctionContract,
 	profileKeyFunctionIssues,
 } from "./profile-function-contracts.js";
+import { occupiedCells } from "./profile-invariants.js";
 
 export const ImportDiagnostic = Schema.Struct({
 	code: Schema.Literal(
@@ -95,7 +97,24 @@ export function inspectProfileImport(
 			report("invalid-field", path, true);
 			return input;
 		}
-		const next = { ...config };
+		const next: Record<string, typeof ProfileJson.Type> = {
+			...config,
+			size: config.size ?? [1, 1],
+			display: config.display ?? true,
+		};
+		if (config.type === "page" && Array.isArray(config.actions)) {
+			const action = config.actions.map(record).find((a) => a?.type === "page");
+			if (
+				action?.value === -1 ||
+				action?.value === -2 ||
+				action?.value === "-1" ||
+				action?.value === "-2"
+			) {
+				next.type = Number(action.value) === -1 ? "previousPage" : "nextPage";
+				next.actions = [];
+			}
+		}
+
 		if (typeof config.errorCode === "number") {
 			const diagnosticCode = legacyDiagnosticCode(config.errorCode);
 			if (diagnosticCode)
@@ -135,8 +154,8 @@ export function inspectProfileImport(
 			}
 		}
 		let unsupported = record(source.compatibility)?.unsupported === true;
-		if (Array.isArray(config.actions))
-			next.actions = config.actions.flatMap((action, index) => {
+		if (Array.isArray(next.actions))
+			next.actions = next.actions.flatMap((action, index) => {
 				const a = record(action);
 				if (
 					action === null ||
@@ -170,13 +189,13 @@ export function inspectProfileImport(
 			});
 		if (config.type === "" && source.childrenName === "")
 			report("legacy-sentinel", `${path}.childrenName`);
-		if (typeof config.type === "string" && config.type !== "") {
-			if (!contracts.has(config.type)) {
+		if (typeof next.type === "string" && next.type !== "") {
+			if (!contracts.has(next.type)) {
 				report("unknown-function", `${path}.config.type`);
 				unsupported = true;
 			} else if (
-				findAction(config.type) &&
-				validateAction(config.type, next)._tag === "Left"
+				findAction(next.type) &&
+				validateAction(next.type, next)._tag === "Left"
 			) {
 				report("invalid-action", `${path}.config.actions`);
 				unsupported = true;
@@ -186,6 +205,9 @@ export function inspectProfileImport(
 			...source,
 			...(source.childrenName === "" || source.childrenName === null
 				? { childrenName: undefined }
+				: {}),
+			...(typeof next.type === "string" && next.type !== config.type
+				? { childrenName: next.type }
 				: {}),
 			config: next,
 			compatibility: { ...record(source.compatibility), unsupported, source },
@@ -282,7 +304,7 @@ export function inspectProfileImport(
 				report("legacy-sentinel", `pages.${index}.keys.${keyIndex}`);
 				return [];
 			}
-			if (legacy && record(key)?.keyCode === "0,1") {
+			if (record(key)?.keyCode === "0,1") {
 				if (knob) report("invalid-field", "knob", true);
 				knob = key;
 				return [];
@@ -295,6 +317,21 @@ export function inspectProfileImport(
 				),
 			];
 		});
+		// Pad only uncovered cells so spanning widgets never gain overlapping placeholders.
+		const decodedKeys = keys.map((key) =>
+			Schema.decodeUnknownEither(ProfileKey)(key),
+		);
+		const occupied = new Set<string>();
+		for (const decoded of decodedKeys) {
+			if (decoded._tag !== "Right") continue;
+			for (const code of occupiedCells(decoded.right)) occupied.add(code);
+		}
+		for (let row = 1; row <= 2; row++)
+			for (let col = 1; col <= 8; col++) {
+				const code = `${row},${col}`;
+				if (!occupied.has(code))
+					keys.push(Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code)));
+			}
 		return { ...page, keys };
 	});
 	const candidate = {

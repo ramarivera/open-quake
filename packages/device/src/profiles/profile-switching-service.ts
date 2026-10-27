@@ -1,4 +1,4 @@
-import { Context, Effect, Option } from "effect";
+import { Clock, Context, Effect, Option } from "effect";
 import type { Profile } from "./profile-contracts.js";
 import {
 	type ProfileDeliveryFailed,
@@ -14,8 +14,10 @@ import {
 	ProfileRepository,
 } from "./profile-repository.js";
 import {
+	appLinkTargetsSerial,
 	type ForegroundApp,
 	foregroundChanged,
+	logicalProfileSerial,
 	matchAppProfiles,
 } from "./profile-switching-invariants.js";
 
@@ -46,6 +48,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			const repository = yield* ProfileRepository;
 			const port = yield* ProfileSwitchingPort;
 			const sessions = new Set<string>();
+			const lastReports = new Map<string, number>();
 			const lifetimes = new Map<string, number>();
 			const generations = new Map<string, number>();
 			let previous: Option.Option<ForegroundApp> = Option.none();
@@ -93,7 +96,13 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				serial: string,
 				reported?: string,
 			): Effect.fn.Return<void, ProfileSwitchingError> {
-				if (sessions.has(serial)) return;
+				if (
+					[...sessions].some(
+						(connected) =>
+							logicalProfileSerial(connected) === logicalProfileSerial(serial),
+					)
+				)
+					return;
 				// Reserve before storage yields. A disconnect also invalidates this initialization.
 				sessions.add(serial);
 				lifetimes.set(serial, (lifetimes.get(serial) ?? 0) + 1);
@@ -130,9 +139,12 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			const disconnect = Effect.fn("ProfileSwitching.disconnect")(
 				(serial: string): Effect.Effect<void> =>
 					Effect.sync(() => {
-						sessions.delete(serial);
-						generations.set(serial, (generations.get(serial) ?? 0) + 1);
-						lifetimes.set(serial, (lifetimes.get(serial) ?? 0) + 1);
+						for (const connected of sessions) {
+							if (logicalProfileSerial(connected) !== logicalProfileSerial(serial)) continue;
+							sessions.delete(connected);
+							generations.set(connected, (generations.get(connected) ?? 0) + 1);
+							lifetimes.set(connected, (lifetimes.get(connected) ?? 0) + 1);
+						}
 					}),
 			);
 			const probe = Effect.fn("ProfileSwitching.probe")(
@@ -153,10 +165,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 					for (const serial of sessions)
 						for (const link of matchAppProfiles(
 							next.value.path,
-							links.filter(
-								(link) =>
-									Option.isNone(link.device) || link.device.value === serial,
-							),
+							links.filter((link) => appLinkTargetsSerial(link, serial)),
 						))
 							targets.set(serial, link.profileId);
 					yield* Effect.forEach(
@@ -167,15 +176,20 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				},
 			);
 			const report = (error: ProfileSwitchingError): Effect.Effect<void> =>
-				Effect.sync(() => {
+				Effect.gen(function* () {
 					previous = Option.none();
-				}).pipe(
-					Effect.zipRight(
-						Effect.logWarning("Foreground profile probe failed", {
-							code: error.code,
-						}),
-					),
-				);
+					const now = yield* Clock.currentTimeMillis;
+					if (
+						now - (lastReports.get(error.code) ?? Number.NEGATIVE_INFINITY) <
+						30_000
+					)
+						return;
+					lastReports.set(error.code, now);
+					yield* Effect.logWarning("Foreground profile probe failed", {
+						code: error.code,
+					});
+				});
+
 			const checkedProbe = probe().pipe(
 				Effect.catchTags({
 					ProfileReadFailed: report,

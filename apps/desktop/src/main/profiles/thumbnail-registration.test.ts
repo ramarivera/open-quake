@@ -123,7 +123,7 @@ async function setup(
 	fixture.windows.length = 0;
 	fixture.load.mockResolvedValue(undefined);
 	fixture.ready.mockResolvedValue(undefined);
-	fixture.capture.mockResolvedValue({ isEmpty: () => false, toPNG: () => png });
+	fixture.capture.mockResolvedValue({ isEmpty: () => false, resize: () => ({ toPNG: () => png }) });
 	await prepare?.(fixture.root);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
 	const profiles = registerProfiles(

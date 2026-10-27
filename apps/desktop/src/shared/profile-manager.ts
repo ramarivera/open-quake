@@ -56,6 +56,7 @@ export interface ProfileView {
 		readonly name: string;
 		readonly path: string;
 		readonly identifier: string;
+		readonly icon?: string;
 	}[];
 	readonly thumbnails: Readonly<Record<string, string>>;
 	/** Border style of the returned captures; absent in older snapshots. */
@@ -94,6 +95,7 @@ export const ProfileReplySchema = Schema.Union(
 					name: Schema.String,
 					path: Schema.String,
 					identifier: Schema.String,
+					icon: Schema.optional(Schema.String),
 				}),
 			),
 			thumbnails: Schema.Record({ key: Schema.String, value: Schema.String }),

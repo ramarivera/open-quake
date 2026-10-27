@@ -11,6 +11,10 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	managerState,
+	PROFILE_LIMIT,
+} from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { ClockRecord } from "../clock/clock-store";
 import {
@@ -108,6 +112,18 @@ function archiveRelative(path: string, base: string): string {
 	if (!normalized.startsWith(`${root}/`)) throw new BackupInvalid();
 	return safeArchivePath(normalized.slice(root.length + 1));
 }
+const assertCapacity = (
+	current: ProfileEnvelope,
+	profiles: readonly Profile[],
+): void => {
+	const hidden = managerState(current).hidden;
+	if (
+		profiles.filter((profile) => !hidden.includes(profile.id)).length >
+		PROFILE_LIMIT
+	)
+		throw new BackupInvalid();
+};
+
 export interface BackupMerge {
 	readonly profileIds?: ReadonlyMap<string, string>;
 	readonly envelope: typeof ProfileEnvelope.Encoded;
@@ -198,6 +214,7 @@ export function mergeBackup(
 			profileIds.set(profile.id, id);
 			added++;
 		}
+		assertCapacity(envelope, profiles);
 		return {
 			envelope: encodeProfileEnvelope({
 				...envelope,
@@ -467,6 +484,7 @@ export function mergeBackup(
 		seenProfiles.add(content);
 		added++;
 	}
+	assertCapacity(envelope, profiles);
 	return {
 		envelope: encodeProfileEnvelope({
 			...envelope,

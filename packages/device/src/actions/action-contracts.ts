@@ -428,3 +428,17 @@ export const AudioBotConfig = Schema.Struct({
 		),
 	),
 });
+
+export const SwitchProfileConfig = Schema.Struct({
+	type: Schema.Literal("switchProfile"),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("profile"),
+			value: Schema.NonEmptyString,
+		}),
+		Schema.Struct({
+			type: Schema.Literal("page"),
+			value: Schema.Int.pipe(Schema.positive()),
+		}),
+	),
+});

@@ -138,6 +138,7 @@ export function ProfilesManager(): React.JSX.Element {
 	const retained = useRef(
 		new Map<string, { source: string; signature: string }>(),
 	);
+	const [appSearch, setAppSearch] = useState("");
 	const [deviceChoice, setDeviceChoice] = useState({ id: "", serial: "" });
 	useEffect(() => {
 		if (view?.progress.running) setFailedThumbnails([]);
@@ -315,6 +316,17 @@ export function ProfilesManager(): React.JSX.Element {
 	return (
 		<section className="profiles-manager" aria-label="Knob Profile">
 			<header>
+				<button
+					type="button"
+					aria-label={locale === "de" ? "Zurück zu Tasten" : "Return to Keys"}
+					onClick={() =>
+						window.dispatchEvent(
+							new CustomEvent("open-quake:navigate", { detail: "keys" }),
+						)
+					}
+				>
+					{locale === "de" ? "Zurück" : "Close"}
+				</button>
 				<h2>{text("functionWheelEditor.title")}</h2>
 				<label>
 					{localeText("language")}
@@ -458,6 +470,22 @@ export function ProfilesManager(): React.JSX.Element {
 						</select>
 					</label>
 					<label>
+						{locale === "de" ? "Anwendungen suchen" : "Search applications"}
+						<input
+							type="search"
+							value={appSearch}
+							onChange={(event) => setAppSearch(event.target.value)}
+						/>
+					</label>
+					{view.apps.find((app) => app.path === link?.appPath)?.icon && (
+						<img
+							width={20}
+							height={20}
+							alt={link?.appIdentifier ?? ""}
+							src={view.apps.find((app) => app.path === link?.appPath)?.icon}
+						/>
+					)}
+					<label>
 						{text("settings.selectApplication")}{" "}
 						<select
 							value={link?.appPath ?? ""}
@@ -497,7 +525,13 @@ export function ProfilesManager(): React.JSX.Element {
 								<option value={link.appPath}>{link.appIdentifier}</option>
 							)}
 							{view.apps
-								.filter((app) => app.path !== link?.appPath)
+								.filter(
+									(app) =>
+										app.path !== link?.appPath &&
+										`${app.name} ${app.identifier} ${app.path}`
+											.toLocaleLowerCase()
+											.includes(appSearch.trim().toLocaleLowerCase()),
+								)
 								.map((app) => (
 									<option key={app.path} value={app.path}>
 										{app.name}

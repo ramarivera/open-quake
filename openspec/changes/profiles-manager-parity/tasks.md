@@ -29,3 +29,12 @@
 - [x] 1.11 Drive registration initialization retries with TestClock and controlled storage failure/recovery, isolate monitor/thumbnail IO, separate locale and document authority checks, and remove unrelated catalog installation/live clocks from selection-lifecycle fixtures. Preserve typed errors, retry boundaries, IPC authority, selection commits and reset deadlines. Reproduce under load, run the fixed file 50 times concurrently with the desktop suite, and run all lane gates without raising timeouts or adding retries. Bead `open-quake-lih.9.10` remains in progress for lead merge.
 
 Task 1.11 verification: the baseline read/write cases timed out on the first shuffled run under 12 CPU burners and a concurrent desktop suite. The final two files passed 50 shuffled serial-worker runs, 500 tests with zero failures. The slowest recovery case took 343 ms. The exact root command `pnpm exec turbo run test --env-mode=loose -- --maxWorkers=2` passed 4,220 tests with four existing skips. Six typecheck tasks, Biome with zero errors, production build, both bundle modes and all 47 strict OpenSpec items passed. Evidence is outside git in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/fix-registration-flake/`. The deliberately saturated load-generator suite hit three unchanged test deadlines; its results remain recorded separately from the passing root gate. No production clock changes, test retries or timeout increases were needed. The lead retains review and merge; the bead stays in progress.
+
+## profiles burn-down lane
+
+- [ ] 2.1 Page/folder lifecycle, canonical templates and legacy action imports. Bead open-quake-lih.9.15.
+- [ ] 2.2 Manager properties, searchable linked apps, catalog/resource compatibility and wizard visibility. Bead open-quake-lih.9.16.
+- [ ] 2.3 Foreground permission, logical serial normalization and throttled reporting. Bead open-quake-lih.9.17.
+- [ ] 2.4 Stable media-ready thumbnails, incremental decoding, fan-out and cancellation. Bead open-quake-lih.9.18.
+- [ ] 2.5 Capacity-atomic imports, bounded exports, metadata and OBS restore. Bead open-quake-lih.9.19.
+- [ ] 2.6 Merge current main, rerun gates and native mock EN/DE smoke, deliver PR without merge or thread resolution.

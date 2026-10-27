@@ -244,7 +244,7 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 														config: {
 															...back.config,
 															type: "back",
-															icon: key.config.icon,
+															icon: "0-5",
 															title: { ...back.config.title, text: "Back" },
 															actions: [
 																{ type: "parentFolder", value: target.pageId },

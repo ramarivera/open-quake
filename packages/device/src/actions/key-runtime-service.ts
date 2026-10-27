@@ -326,6 +326,32 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					audioPresses.delete(control);
 					return;
 				}
+				if (type === "switchProfile") {
+					const destination = key.config.actions.find(
+						(a) => a.type === "profile",
+					)?.value;
+					const number = key.config.actions.find(
+						(a) => a.type === "page",
+					)?.value;
+					if (destination === "-1") {
+						yield* navigate(deviceId, 3);
+						return;
+					}
+					const target = env.profiles.find(
+						(p) =>
+							p.id === destination &&
+							!(Option.getOrUndefined(env.manager)?.hidden ?? []).includes(
+								p.id,
+							),
+					);
+					const targetPage =
+						typeof number === "number" ? target?.pages[number - 1] : undefined;
+					if (!target || !targetPage)
+						return yield* Effect.fail(new InvalidKeyAction("config.actions"));
+					yield* port.select(deviceId, target.id, targetPage.id);
+					yield* refresh(deviceId);
+					return;
+				}
 				if (type === "hotkeySwitch") {
 					const decoded = Schema.decodeUnknownEither(HotkeySwitchConfig)(input);
 					if (decoded._tag === "Left")
