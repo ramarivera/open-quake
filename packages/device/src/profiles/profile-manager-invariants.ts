@@ -261,6 +261,48 @@ export const applyManagerCommand = (
 			};
 			break;
 		}
+		case "default-visibility": {
+			const ids = new Set(command.ids);
+			if (
+				ids.size !== command.ids.length ||
+				command.ids.some(
+					(id) => !profiles.some((p) => p.id === id && isBuiltinProfile(id)),
+				)
+			)
+				return reject("missing");
+			if (ids.size === 0) return reject("last-builtin");
+			const hidden = [
+				...new Set([
+					...state.hidden.filter((id) => !isBuiltinProfile(id)),
+					...profiles
+						.filter((p) => isBuiltinProfile(p.id) && !ids.has(p.id))
+						.map((p) => p.id),
+				]),
+			];
+			if (profiles.filter((p) => !hidden.includes(p.id)).length > PROFILE_LIMIT)
+				return reject("limit");
+			nextState = {
+				...state,
+				hidden,
+				startup: Option.filter(state.startup, (id) => !hidden.includes(id)),
+			};
+			const ordered = [
+				...profiles.filter((p) => isBuiltinProfile(p.id)),
+				...profiles.filter((p) => !isBuiltinProfile(p.id)),
+			];
+			profiles = [ordered[0] ?? profiles[0], ...ordered.slice(1)];
+			const fallback = profiles.find((p) => ids.has(p.id));
+			if (fallback)
+				selections = Object.fromEntries(
+					Object.entries(selections).map(([serial, selection]) => [
+						serial,
+						hidden.includes(selection.profileId)
+							? { profileId: fallback.id, pageId: fallback.pages[0].id }
+							: selection,
+					]),
+				);
+			break;
+		}
 		case "visibility": {
 			if (!isBuiltinProfile(command.id)) return reject("builtin");
 			const hidden = command.visible

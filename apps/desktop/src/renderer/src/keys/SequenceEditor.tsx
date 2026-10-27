@@ -1,18 +1,32 @@
 import { Option, Schema } from "effect";
 import { useRef, useState } from "react";
-import {
-	MAX_SEQUENCE_OPERATIONS,
-	SequenceLeaf,
-} from "../../../../../../packages/device/src/actions/action-contracts";
+import { MAX_SEQUENCE_OPERATIONS } from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	ACTION_REGISTRY,
 	createActionDraft,
 } from "../../../../../../packages/device/src/actions/action-registry";
-import { SEQUENCE_LIBRARY } from "../../../../../../packages/device/src/actions/sequence-library";
+import {
+	isSequenceSelectable,
+	SEQUENCE_LIBRARY,
+} from "../../../../../../packages/device/src/actions/sequence-library";
 import {
 	ProfileJsonObject,
 	type ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+
+// Registry defaults and sequence membership don't depend on the row or draft.
+// Reuse the immutable options so editing 100 rows doesn't rebuild Schema parsers.
+const sequenceFunctionOptions = SEQUENCE_LIBRARY.flatMap((group) => [
+	...group.ids,
+]).map((type) => {
+	const supported = isSequenceSelectable(type);
+	return (
+		<option key={type} disabled={!supported}>
+			{type}
+		</option>
+	);
+});
+
 export const withSequenceIds = (key: ProfileKey): ProfileKey => ({
 	...key,
 	config: {
@@ -137,7 +151,7 @@ export function SequenceEditor({
 										const entry = ACTION_REGISTRY.find(
 											(entry) => entry.id === type,
 										);
-										if (entry?.binding === "media") {
+										if (entry) {
 											const draft = Schema.decodeUnknownSync(Step)({
 												config: createActionDraft(entry.id),
 											});
@@ -164,45 +178,31 @@ export function SequenceEditor({
 										});
 									}}
 								>
-									{SEQUENCE_LIBRARY.flatMap((group) => [...group.ids]).map(
-										(type) => {
-											const entry = ACTION_REGISTRY.find(
-												(entry) => entry.id === type,
-											);
-											const supported =
-												type === "delay" ||
-												(!!entry &&
-													(Schema.is(Schema.encodedSchema(SequenceLeaf))(
-														entry.defaultConfig,
-													) ||
-														["website", "hotkey", "text", "open"].includes(
-															type,
-														)));
-											return (
-												<option key={type} disabled={!supported}>
-													{type}
-												</option>
-											);
-										},
-									)}
+									{sequenceFunctionOptions}
 								</select>
 							</label>
-							<label>
-								{config.type === "delay" ? "Milliseconds" : "Value"}
-								<input
-									type={config.type === "delay" ? "number" : "text"}
-									value={config.actions[0]?.value ?? ""}
-									onChange={(e) =>
-										onChange(
-											value.map((step, i) =>
-												i === index
-													? changeSequenceValue(step, e.target.value)
-													: step,
-											),
-										)
-									}
-								/>
-							</label>
+							{!["buzzer", "mic"].includes(config.type) && (
+								<label>
+									{config.type === "delay"
+										? "Milliseconds"
+										: config.type === "homeAssistant"
+											? "Home Assistant configuration (JSON)"
+											: "Value"}
+									<input
+										type={config.type === "delay" ? "number" : "text"}
+										value={config.actions[0]?.value ?? ""}
+										onChange={(e) =>
+											onChange(
+												value.map((step, i) =>
+													i === index
+														? changeSequenceValue(step, e.target.value)
+														: step,
+												),
+											)
+										}
+									/>
+								</label>
+							)}
 							<label>
 								Interval for executing next operation
 								<input

@@ -57,3 +57,41 @@ it("exits after successful replacement even if its result dialog is unavailable"
 	});
 	expect(exit).toHaveBeenCalledExactlyOnceWith(0);
 });
+
+it("MGMT-429 reports import counts in every supported active locale", async () => {
+	for (const [locale, message] of [
+		["en", "Import Success (2 skipped, 7 imported). Reopen open-quake."],
+		[
+			"de",
+			"Import erfolgreich (2 übersprungen, 7 importiert). Öffne open-quake erneut.",
+		],
+		[
+			"es",
+			"Importación completada (2 omitidos, 7 importados). Vuelve a abrir open-quake.",
+		],
+		["fr", "Importation réussie (2 ignorés, 7 importés). Rouvrez open-quake."],
+		[
+			"it",
+			"Importazione riuscita (2 ignorati, 7 importati). Riapri open-quake.",
+		],
+		[
+			"ja",
+			"インポート成功（スキップ 2 件、インポート 7 件）。open-quake を再起動してください。",
+		],
+		["ko", "가져오기 성공 (건너뜀 2개, 가져옴 7개). open-quake를 다시 여세요."],
+		["zh", "导入成功（跳过 2 项，导入 7 项）。请重新打开 open-quake。"],
+	] as const) {
+		const report = vi.fn(async (_message: string) => {});
+		await restoreAndExit({
+			locale,
+			validate: async () => {},
+			stop: async () => {},
+			commit: async () => ({ imported: 7, skipped: 2 }),
+			report,
+			exit: () => {},
+		});
+		expect(report).toHaveBeenCalledExactlyOnceWith(message);
+		if (locale !== "en")
+			expect(report.mock.calls[0]?.[0]).not.toContain("Import Success");
+	}
+});

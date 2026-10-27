@@ -11,7 +11,16 @@ import {
 	FAKE_QUAKE_DEVICE,
 	makeFakeHidTransport,
 } from "@open-quake/device/fake";
-import { Effect, Exit, Layer, Queue, Scope, TestClock } from "effect";
+import {
+	Deferred,
+	Effect,
+	Exit,
+	Fiber,
+	Layer,
+	Queue,
+	Scope,
+	TestClock,
+} from "effect";
 import { vi } from "vitest";
 import { TOUCH_IDENTITY } from "../../../../packages/device/src/touch/touch-contracts";
 import type { QuakeEvent } from "../preload/quake";
@@ -656,4 +665,132 @@ it.scoped(
 				expect(b.some((e) => e.kind === "json")).toBe(false);
 			}).pipe(Effect.provide(withTransport(two.layer)));
 		}),
+);
+
+for (const target of ["A", "B"] as const) {
+	for (const phase of ["discovery", "connect"] as const) {
+		it.scoped(
+			`VIA awaits ${target} reconnect ${phase} and leaves the other serial owned`,
+			() =>
+				Effect.gen(function* () {
+					const two = yield* makeTwoStrips;
+					two.devices.push(two.b);
+					const transport = yield* HidTransport.pipe(Effect.provide(two.layer));
+					const entered = yield* Deferred.make<void>();
+					const proceed = yield* Deferred.make<void>();
+					let armed = false;
+					let settled = false;
+					const gate = Effect.gen(function* () {
+						armed = false;
+						yield* Deferred.succeed(entered, undefined);
+						yield* Deferred.await(proceed);
+						settled = true;
+					}).pipe(Effect.uninterruptible);
+					const layer = Layer.succeed(HidTransport, {
+						...transport,
+						discover: () =>
+							Effect.suspend(() =>
+								armed && phase === "discovery"
+									? gate.pipe(Effect.zipRight(transport.discover()))
+									: transport.discover(),
+							),
+						open: (info) =>
+							Effect.suspend(() =>
+								armed && phase === "connect" && info.serialNumber === target
+									? gate.pipe(Effect.zipRight(transport.open(info)))
+									: transport.open(info),
+							),
+					});
+					yield* Effect.gen(function* () {
+						const h = yield* makeHarness;
+						yield* h.next;
+						yield* TestClock.adjust(1000);
+						const bus = h.bus.device?.(target);
+						expect(bus?.currentStatus()).toEqual(connected);
+						if (!bus?.releaseForVia || !bus.recover)
+							return yield* Effect.die("missing bus handoff");
+						const selected = target === "A" ? two.first : two.second;
+						const other = target === "A" ? two.second : two.first;
+						yield* selected.failRead(new Error("reconnect fixture"));
+						yield* TestClock.adjust(0);
+						expect(yield* selected.closes).toBe(1);
+						armed = true;
+						yield* bus.recover();
+						yield* TestClock.adjust(0);
+						yield* Deferred.await(entered);
+						let granted = false;
+						const leasing = yield* bus.releaseForVia().pipe(
+							Effect.tap(() =>
+								Effect.sync(() => {
+									granted = true;
+								}),
+							),
+							Effect.fork,
+						);
+						yield* TestClock.adjust(0);
+						expect(settled).toBe(false);
+						expect(granted).toBe(false);
+						yield* Deferred.succeed(proceed, undefined);
+						const resume = yield* Fiber.join(leasing);
+						expect(settled).toBe(true);
+						expect(granted).toBe(true);
+						expect(yield* selected.opens).toBe(yield* selected.closes);
+						expect(yield* other.opens).toBe(1);
+						expect(yield* other.closes).toBe(0);
+						yield* TestClock.adjust(10_000);
+						expect(yield* selected.opens).toBe(yield* selected.closes);
+						yield* resume;
+						yield* TestClock.adjust(0);
+						expect(bus.currentStatus()).toEqual(connected);
+						expect((yield* selected.opens) - (yield* selected.closes)).toBe(1);
+						expect(yield* other.opens).toBe(1);
+						yield* h.close;
+						expect(yield* selected.opens).toBe(yield* selected.closes);
+						expect(yield* other.closes).toBe(1);
+					}).pipe(
+						Effect.ensuring(Deferred.succeed(proceed, undefined)),
+						Effect.provide(withTransport(layer)),
+					);
+				}),
+		);
+	}
+}
+
+it.scoped("cancelling a queued VIA handoff restores native reconnect", () =>
+	Effect.gen(function* () {
+		const fake = yield* makeFakeHidTransport();
+		const entered = yield* Deferred.make<void>();
+		const proceed = yield* Deferred.make<void>();
+		let gated = true;
+		const layer = Layer.succeed(HidTransport, {
+			...fake.transport,
+			open: (info) =>
+				Effect.gen(function* () {
+					if (gated) {
+						gated = false;
+						yield* Deferred.succeed(entered, undefined);
+						yield* Deferred.await(proceed);
+					}
+					return yield* fake.transport.open(info);
+				}),
+		});
+		yield* Effect.gen(function* () {
+			const h = yield* makeHarness;
+			yield* Deferred.await(entered);
+			if (!h.bus.releaseForVia) return yield* Effect.die("missing bus handoff");
+			const leasing = yield* h.bus.releaseForVia().pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			yield* Fiber.interrupt(leasing);
+			yield* Deferred.succeed(proceed, undefined);
+			expect(yield* h.next).toEqual(connected);
+			yield* fake.end();
+			yield* TestClock.adjust(1000);
+			expect(h.bus.currentStatus()).toEqual(connected);
+			expect(yield* fake.opens).toBe(2);
+			expect(yield* fake.closes).toBe(1);
+		}).pipe(
+			Effect.ensuring(Deferred.succeed(proceed, undefined)),
+			Effect.provide(withTransport(layer)),
+		);
+	}),
 );

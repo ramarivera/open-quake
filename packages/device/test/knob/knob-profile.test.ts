@@ -80,6 +80,26 @@ describe("profile-owned knob saves", () => {
 					"ProfileRevisionConflict",
 				);
 				expect(stored).toEqual(encodeProfileEnvelope(saved));
+				const malformedHa = knob([
+					{
+						childrenName: "homeAssistant",
+						config: {
+							type: "homeAssistant",
+							actions: [{ type: "configData", value: "{}" }],
+						},
+					},
+					nextPage,
+					nextPage,
+				]);
+				const invalid = yield* saveProfileKnob(
+					profile.id,
+					changed.revision,
+					malformedHa,
+				).pipe(Effect.either);
+				expect(Either.isLeft(invalid) && invalid.left._tag).toBe(
+					"ProfileValidationFailed",
+				);
+				expect(stored).toEqual(encodeProfileEnvelope(saved));
 			}).pipe(Effect.provide(layer));
 		},
 	);

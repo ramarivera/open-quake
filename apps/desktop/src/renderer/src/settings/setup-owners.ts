@@ -1,7 +1,8 @@
 import { Schema } from "effect";
 import { useEffect, useState } from "react";
+import { isBuiltinProfile } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
-import { visibleProfiles } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
+import { managerState } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
 import type {
 	AgentConnectionReply,
 	AgentConnectionsBridge,
@@ -15,8 +16,8 @@ import type { AppLocale } from "../../../shared/locale";
 import type { ProfileBridge } from "../../../shared/profile-manager";
 
 /**
- * Read-only views of the canonical owners. Setup never configures a device,
- * creates a profile or starts a runtime; it only offers what they report.
+ * Read views of canonical owners. Setup applies default visibility through the
+ * profile manager; it never creates profiles or starts a runtime.
  */
 export type DisplayChoices =
 	| {
@@ -37,7 +38,7 @@ export async function readDisplay(
 		if (reply._tag === "None") return { state: "failed" };
 		const value = reply.value;
 		if (value._tag === "offline") return { state: "offline" };
-		if (value._tag === "failure") return { state: "failed" };
+		if (value._tag !== "ready") return { state: "failed" };
 		return value.snapshot.available
 			? { state: "connected", serial: value.snapshot.serial, mock: value.mock }
 			: { state: "offline" };
@@ -68,7 +69,11 @@ export function latestRead<T>(accept: (value: T) => void): {
 	};
 }
 
-export type ProfileChoice = { readonly id: string; readonly name: string };
+export type ProfileChoice = {
+	readonly id: string;
+	readonly name: string;
+	readonly enabled?: boolean;
+};
 export type ProfileChoices =
 	| {
 			readonly state: "ready";
@@ -95,10 +100,17 @@ export async function readProfiles(
 		return {
 			state: "ready",
 			// The manager's own visibility rule, as the root validates it.
-			profiles: visibleProfiles(envelope).map((profile) => ({
-				id: profile.id,
-				name: profile.name,
-			})),
+			profiles: envelope.profiles
+				.filter(
+					(profile) =>
+						isBuiltinProfile(profile.id) &&
+						!(navigator.platform.includes("Mac") && profile.id === "1-0"),
+				)
+				.map((profile) => ({
+					id: profile.id,
+					name: profile.name,
+					enabled: !managerState(envelope).hidden.includes(profile.id),
+				})),
 			active: Object.fromEntries(
 				Object.entries(envelope.activeByDevice).map(([serial, selection]) => [
 					serial,

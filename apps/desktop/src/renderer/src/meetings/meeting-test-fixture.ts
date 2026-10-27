@@ -1,5 +1,6 @@
 import { Option, Schema } from "effect";
-import { act, type ReactNode } from "react";
+import { GTProvider } from "gt-react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { vi } from "vitest";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
@@ -11,6 +12,7 @@ import {
 	MeetingSnapshot,
 	type MeetingsBridge,
 } from "../../../shared/meeting-bridge";
+import { type AppLocale, appDictionaries } from "../i18n";
 import { stripLayout } from "../strip/geometry";
 import { previewVoiceContext } from "../strip/overlays/voice/voice-context";
 import type { StripTileProps } from "../strip/tileRegistry";
@@ -55,6 +57,7 @@ let revision = 0;
 export function meetingDom(
 	records: readonly MeetingRecord[] = [],
 	patch: Partial<MeetingSnapshot> = {},
+	locale: AppLocale = "en",
 ) {
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	revision += 100;
@@ -148,7 +151,18 @@ export function meetingDom(
 	const root = createRoot(host);
 	const render = async (node: ReactNode) => {
 		await act(async () => {
-			root.render(node);
+			root.render(
+				createElement(
+					GTProvider,
+					{
+						locale,
+						translations: { en: {}, de: {} },
+						dictionaries: appDictionaries,
+						_reload: () => {},
+					},
+					node,
+				),
+			);
 		});
 	};
 	return {

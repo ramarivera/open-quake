@@ -3,6 +3,7 @@ import type { ProfileLocale } from "../../../../../../packages/device/src/profil
 import { visibleProfiles } from "../../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import type {
 	ProfileBridge,
+	ProfileForegroundGuidance,
 	ProfileView,
 	ThumbnailProgress,
 } from "../../../shared/profile-manager";
@@ -23,10 +24,16 @@ export const subscribeManagerView = (
 	view: (view: ProfileView) => void,
 	progress: (progress: ThumbnailProgress) => void,
 	status: (reason: string) => void,
+	guidance?: (value: ProfileForegroundGuidance) => void,
 ): (() => void) => {
 	let active = true;
 	const off = bridge.onSnapshot(view);
 	const offProgress = bridge.onProgress(progress);
+	const offGuidance = guidance
+		? bridge.onForegroundGuidance?.((value) => {
+				if (active) guidance(value);
+			})
+		: undefined;
 	void bridge.request({ type: "read", locale }).then((reply) => {
 		if (!active) return;
 		if (reply._tag === "success") view(reply.view);
@@ -36,5 +43,6 @@ export const subscribeManagerView = (
 		active = false;
 		off();
 		offProgress();
+		offGuidance?.();
 	};
 };

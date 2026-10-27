@@ -9,17 +9,23 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Cause, Effect, Option, Runtime } from "effect";
+import { Cause, Effect, Option, Runtime, Schema } from "effect";
+import { BrowserWindow, ipcMain, systemPreferences } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	type Profile,
+	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
+	PROFILE_PROGRESS,
+	PROFILE_REQUEST,
 	PROFILE_SELECTION,
 	PROFILE_SNAPSHOT,
 } from "../../shared/profile-manager";
@@ -30,7 +36,7 @@ import {
 import { desktopKnobAdapters } from "../knob/desktop-adapters";
 import { knobProfileBinding } from "../knob/profile-binding";
 import { knobThumbnailReader } from "../knob/thumbnail-binding";
-import { registerProfiles } from "./index";
+import { registerTestProfiles } from "../test/profile-registration";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
 
 const png = Buffer.from(
@@ -47,6 +53,8 @@ const fixture = vi.hoisted(() => ({
 	capture: vi.fn(),
 	ready: vi.fn<(source: string) => Promise<unknown>>(),
 	published: vi.fn(),
+	secondPublished: vi.fn(),
+	resize: vi.fn(),
 	load: vi.fn<(url: string) => Promise<void>>(),
 	saved: undefined as unknown,
 }));
@@ -58,6 +66,9 @@ vi.mock("./local-profile-storage", () => ({
 		},
 		recoveries: [],
 	}),
+}));
+vi.mock("../monitor/monitor-store", () => ({
+	monitorStorage: () => ({ load: async () => undefined }),
 }));
 vi.mock("./profile-ipc", () => ({
 	registerProfiles: () => ({ dispose: async () => {} }),
@@ -72,6 +83,7 @@ vi.mock("electron", () => {
 			fixture.windows.push(this);
 		}
 		webContents = {
+			mainFrame: { url: "file:///application/index.html" },
 			executeJavaScript: (source: string) => fixture.ready(source),
 			capturePage: () => fixture.capture(),
 			isDestroyed: () => this.destroyed,
@@ -82,7 +94,15 @@ vi.mock("electron", () => {
 		destroy = () => {
 			this.destroyed = true;
 		};
+		static fromWebContents = () => true;
 		static getAllWindows = () => [
+			{
+				isDestroyed: () => false,
+				webContents: {
+					isDestroyed: () => false,
+					send: fixture.secondPublished,
+				},
+			},
 			{
 				isDestroyed: () => false,
 				webContents: { isDestroyed: () => false, send: fixture.published },
@@ -93,6 +113,7 @@ vi.mock("electron", () => {
 		app: { getPath: () => fixture.root },
 		BrowserWindow: Window,
 		dialog: {},
+		systemPreferences: { isTrustedAccessibilityClient: vi.fn(() => true) },
 		ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
 		nativeImage: {
 			createFromBuffer: (bytes: Buffer) => ({
@@ -109,25 +130,49 @@ afterEach(async () => {
 	for (const path of directories.splice(0))
 		await rm(path, { recursive: true, force: true });
 	vi.unstubAllEnvs();
+	vi.unstubAllGlobals();
 });
 async function setup(
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	prepare?: (root: string) => Promise<void>,
 	diagnostics?: DesktopDiagnostics,
+	management?: BrowserWindow,
 ) {
 	fixture.root = await mkdtemp(
 		join(process.env.OPEN_QUAKE_TEST_SCRATCH ?? tmpdir(), "producer-"),
 	);
 	directories.push(fixture.root);
-	fixture.saved = encodeProfileEnvelope(createInitialProfileEnvelope());
+	// Cache/capture integration needs two installed profiles, not a fresh catalog.
+	const initial = encodeProfileEnvelope(createInitialProfileEnvelope());
+	fixture.saved = encodeProfileEnvelope(
+		Schema.decodeUnknownSync(ProfileEnvelope)({
+			...initial,
+			profiles: ["1-2", "1-3"].map((id) => ({
+				...initial.profiles[0],
+				id,
+				name: id,
+			})),
+			manager: {
+				revision: 1,
+				installed: true,
+				hidden: [],
+				links: [],
+				approvedCommands: [],
+				userHasSetDefault: false,
+			},
+		}),
+	);
 	fixture.windows.length = 0;
 	fixture.load.mockResolvedValue(undefined);
 	fixture.ready.mockResolvedValue(undefined);
-	fixture.capture.mockResolvedValue({ isEmpty: () => false, toPNG: () => png });
+	fixture.capture.mockResolvedValue({
+		isEmpty: () => false,
+		resize: fixture.resize.mockReturnValue({ toPNG: () => png }),
+	});
 	await prepare?.(fixture.root);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
-	const profiles = registerProfiles(
-		() => undefined,
+	const profiles = registerTestProfiles(
+		() => management,
 		"file:///application/index.html",
 		deliver,
 		undefined,
@@ -140,78 +185,98 @@ async function setup(
 	return profiles;
 }
 describe("production manager thumbnail producer", () => {
-	it("cleans startup orphans and edited captures through actual profile commits while retaining other locales", async () => {
-		const obsolete = `${"a".repeat(64)}.png`;
-		const nativeUnlink = (
-			await vi.importActual<typeof import("node:fs/promises")>(
-				"node:fs/promises",
-			)
-		).unlink;
-		let startupDeleted: () => void = () => {};
-		const startupDeletion = new Promise<void>((resolve) => {
-			startupDeleted = resolve;
-		});
-		const startupUnlink = vi
-			.spyOn(filesystem, "unlink")
-			.mockImplementation(async (path) => {
-				await nativeUnlink(path);
-				if (String(path).endsWith(obsolete)) startupDeleted();
+	it.each(["darwin", "linux"] as const)(
+		"cleans startup orphans and edited captures through actual profile commits while retaining other locales on %s",
+		async (platform) => {
+			vi.stubGlobal("process", { ...process, platform });
+			const obsolete = `${"a".repeat(64)}.png`;
+			const nativeUnlink = (
+				await vi.importActual<typeof import("node:fs/promises")>(
+					"node:fs/promises",
+				)
+			).unlink;
+			let startupDeleted: () => void = () => {};
+			const startupDeletion = new Promise<void>((resolve) => {
+				startupDeleted = resolve;
 			});
-		const profiles = await setup(undefined, async (root) => {
-			await mkdir(join(root, "profiles", "thumbnails"), { recursive: true });
-			await writeFile(join(root, "profiles", "thumbnails", obsolete), png);
-		});
-		const cache = join(fixture.root, "profiles", "thumbnails");
-		try {
-			await profiles.refresh();
-			await startupDeletion;
-			expect(await readdir(cache)).not.toContain(obsolete);
-		} finally {
-			startupUnlink.mockRestore();
-		}
-		await profiles.thumbnail("1-2", "de", new AbortController().signal);
-		const original = await profiles.runtime.runPromise(ProfileManager.read());
-		const manager = await profiles.runtime.runPromise(ProfileManager);
-		const created = await profiles.runtime.runPromise(
-			manager.command({ type: "create" }),
-		);
-		if (created._tag !== "updated") throw new Error("Create fixture rejected");
-		const custom = created.envelope.profiles.find(
-			(p) => !original.profiles.some((old) => old.id === p.id),
-		);
-		if (!custom) throw new Error("Missing custom fixture");
-		await profiles.thumbnail(custom.id, "en", new AbortController().signal);
-		const before = `${profileThumbnailKey(translateProfile(custom, "en"), "en")}.png`;
-		expect(await readdir(cache)).toContain(before);
-		const native =
-			await vi.importActual<typeof import("node:fs/promises")>(
-				"node:fs/promises",
-			);
-		let deleted: () => void = () => {};
-		const deletion = new Promise<void>((resolve) => {
-			deleted = resolve;
-		});
-		const unlink = vi
-			.spyOn(filesystem, "unlink")
-			.mockImplementation(async (path) => {
-				await native.unlink(path);
-				if (String(path).endsWith(before)) deleted();
+			const startupUnlink = vi
+				.spyOn(filesystem, "unlink")
+				.mockImplementation(async (path) => {
+					await nativeUnlink(path);
+					if (String(path).endsWith(obsolete)) startupDeleted();
+				});
+			const profiles = await setup(undefined, async (root) => {
+				// Catalog installation has separate coverage. Keep the real installed
+				// Quick profile and all eight locales, without translating/hashing eight
+				// unrelated built-ins during every cleanup and publication in this test.
+				const installed = installProfileCatalog(
+					createInitialProfileEnvelope(),
+					platform,
+				);
+				const quick = installed.profiles.find(
+					(profile) => profile.id === "1-2",
+				);
+				if (!quick) throw new Error("Missing Quick fixture");
+				fixture.saved = encodeProfileEnvelope({
+					...installed,
+					profiles: [quick],
+				});
+				await mkdir(join(root, "profiles", "thumbnails"), { recursive: true });
+				await writeFile(join(root, "profiles", "thumbnails", obsolete), png);
 			});
-		try {
-			await profiles.runtime.runPromise(
-				manager.command({ type: "rename", id: custom.id, name: "Changed" }),
+			const cache = join(fixture.root, "profiles", "thumbnails");
+			try {
+				await profiles.refresh();
+				await startupDeletion;
+				expect(await readdir(cache)).not.toContain(obsolete);
+			} finally {
+				startupUnlink.mockRestore();
+			}
+			await profiles.thumbnail("1-2", "de", new AbortController().signal);
+			const original = await profiles.runtime.runPromise(ProfileManager.read());
+			const manager = await profiles.runtime.runPromise(ProfileManager);
+			const created = await profiles.runtime.runPromise(
+				manager.command({ type: "create" }),
 			);
-			await deletion;
-			expect(await readdir(cache)).not.toContain(before);
-		} finally {
-			unlink.mockRestore();
-		}
-		const retained = original.profiles.find((p) => p.id === "1-2");
-		if (!retained) throw new Error("Missing retained fixture");
-		expect(await readdir(cache)).toContain(
-			`${profileThumbnailKey(translateProfile(retained, "de"), "de")}.png`,
-		);
-	});
+			if (created._tag !== "updated")
+				throw new Error("Create fixture rejected");
+			const custom = created.envelope.profiles.find(
+				(p) => !original.profiles.some((old) => old.id === p.id),
+			);
+			if (!custom) throw new Error("Missing custom fixture");
+			await profiles.thumbnail(custom.id, "en", new AbortController().signal);
+			const before = `${profileThumbnailKey(translateProfile(custom, "en"), "en")}.png`;
+			expect(await readdir(cache)).toContain(before);
+			const native =
+				await vi.importActual<typeof import("node:fs/promises")>(
+					"node:fs/promises",
+				);
+			let deleted: () => void = () => {};
+			const deletion = new Promise<void>((resolve) => {
+				deleted = resolve;
+			});
+			const unlink = vi
+				.spyOn(filesystem, "unlink")
+				.mockImplementation(async (path) => {
+					await native.unlink(path);
+					if (String(path).endsWith(before)) deleted();
+				});
+			try {
+				await profiles.runtime.runPromise(
+					manager.command({ type: "rename", id: custom.id, name: "Changed" }),
+				);
+				await deletion;
+				expect(await readdir(cache)).not.toContain(before);
+			} finally {
+				unlink.mockRestore();
+			}
+			const retained = original.profiles.find((p) => p.id === "1-2");
+			if (!retained) throw new Error("Missing retained fixture");
+			expect(await readdir(cache)).toContain(
+				`${profileThumbnailKey(translateProfile(retained, "de"), "de")}.png`,
+			);
+		},
+	);
 
 	it("logs cleanup failures through the owning runtime without preventing snapshot publication", async () => {
 		const diagnosticRoot = await mkdtemp(
@@ -491,6 +556,10 @@ describe("production manager thumbnail producer", () => {
 it("waits for asynchronous owned tile artwork and decoded images before capturing", async () => {
 	const profiles = await setup();
 	const checks: Array<() => void> = [];
+	let checking: () => void = () => {};
+	const artworkPending = new Promise<void>((resolve) => {
+		checking = resolve;
+	});
 	const image = { complete: false, naturalWidth: 0 };
 	const tile = {
 		dataset: { tileArtworkState: "pending" },
@@ -516,13 +585,16 @@ it("waits for asynchronous owned tile artwork and decoded images before capturin
 			{ querySelector: () => preview, fonts: { ready: Promise.resolve() } },
 			(callback: () => void) => callback(),
 			(callback: () => void, delay: number) => {
-				if (delay === 20) checks.push(callback);
+				if (delay === 20) {
+					checks.push(callback);
+					checking();
+				}
 			},
 		),
 	);
 	fixture.capture.mockClear();
 	const pending = profiles.thumbnail("1-2", "en", new AbortController().signal);
-	await vi.waitFor(() => expect(fixture.ready).toHaveBeenCalled());
+	await artworkPending;
 	expect(fixture.capture).not.toHaveBeenCalled();
 	expect(checks.length).toBe(1);
 	tile.dataset.tileArtworkState = "ready";
@@ -533,5 +605,80 @@ it("waits for asynchronous owned tile artwork and decoded images before capturin
 	image.naturalWidth = 170;
 	checks.shift()?.();
 	await pending;
-	expect(fixture.capture).toHaveBeenCalledOnce();
+	expect(fixture.capture).toHaveBeenCalledTimes(2);
+});
+
+it("SCREEN-096/097 broadcasts thumbnail map and batch progress to two windows and produces 960x240 PNG", async () => {
+	const management = new BrowserWindow({ show: false });
+	await setup(undefined, undefined, undefined, management);
+	const handler = vi
+		.mocked(ipcMain.handle)
+		.mock.calls.find(([channel]) => channel === PROFILE_REQUEST)?.[1];
+	if (!handler) throw new Error("Missing manager handler");
+	const event = {
+		sender: management.webContents,
+		senderFrame: management.webContents.mainFrame,
+	};
+	fixture.published.mockClear();
+	fixture.secondPublished.mockClear();
+	await handler(event as Electron.IpcMainInvokeEvent, { type: "thumbnails" });
+	await vi.waitFor(() =>
+		expect(
+			fixture.published.mock.calls.some(
+				([channel, value]) =>
+					channel === PROFILE_PROGRESS &&
+					value.running === false &&
+					value.done > 0,
+			),
+		).toBe(true),
+	);
+	for (const channel of [PROFILE_PROGRESS, PROFILE_SNAPSHOT]) {
+		const first = fixture.published.mock.calls.filter(
+			([name]) => name === channel,
+		);
+		expect(first.length).toBeGreaterThan(0);
+		expect(
+			fixture.secondPublished.mock.calls.filter(([name]) => name === channel),
+		).toEqual(first);
+	}
+	expect(fixture.resize).toHaveBeenCalledWith({ width: 960, height: 240 });
+	const snapshots = fixture.published.mock.calls.filter(
+		([channel]) => channel === PROFILE_SNAPSHOT,
+	);
+	expect(
+		Object.values(snapshots.at(-1)?.[1].thumbnails ?? {}).some(
+			(value) =>
+				typeof value === "string" && value.startsWith("data:image/png;base64,"),
+		),
+	).toBe(true);
+});
+
+it("MAIN-084 replays nonprompting permission guidance on manager read and clears it after recovery", async () => {
+	vi.stubGlobal("process", { ...process, platform: "darwin" });
+	const management = new BrowserWindow({ show: false });
+	await setup(undefined, undefined, undefined, management);
+	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "0");
+	const trusted = vi.mocked(systemPreferences.isTrustedAccessibilityClient);
+	const handler = vi
+		.mocked(ipcMain.handle)
+		.mock.calls.slice()
+		.reverse()
+		.find(([channel]) => channel === PROFILE_REQUEST)?.[1];
+	if (!handler) throw new Error("Missing manager handler");
+	const event = {
+		sender: management.webContents,
+		senderFrame: management.webContents.mainFrame,
+	};
+	for (const allowed of [false, true]) {
+		trusted.mockReturnValue(allowed);
+		await handler(event as Electron.IpcMainInvokeEvent, {
+			type: "read",
+			locale: "en",
+		});
+		expect(trusted).toHaveBeenLastCalledWith(false);
+		expect(management.webContents.send).toHaveBeenLastCalledWith(
+			PROFILE_FOREGROUND_GUIDANCE,
+			allowed ? "available" : "accessibility-denied",
+		);
+	}
 });

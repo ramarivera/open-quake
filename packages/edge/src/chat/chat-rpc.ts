@@ -1,5 +1,6 @@
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { Schema } from "effect";
+import { AssistantSettings } from "../../../device/src/profiles/assistant-contracts.js";
 import {
 	FileResult,
 	ProviderListing,
@@ -36,9 +37,45 @@ export class ChatRpcFailure extends Schema.TaggedError<ChatRpcFailure>()(
 	"ChatRpcFailure",
 	{ code: Schema.String, message: Schema.String },
 ) {}
+export const AssistantSelection = Schema.Struct({
+	generation: Schema.Int,
+	sessionId: SessionId,
+	settings: AssistantSettings,
+	transcript: Schema.optional(Schema.String.pipe(Schema.maxLength(8000))),
+});
+export type AssistantSelection = typeof AssistantSelection.Type;
 const session = { sessionId: SessionId };
 const turn = { ...session, turnId: TurnId };
 export const ChatRpcs = RpcGroup.make(
+	Rpc.make("assistant.read", {
+		success: AssistantSettings,
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.update", {
+		payload: {
+			settings: AssistantSettings,
+			generation: Schema.NullOr(Schema.Int),
+		},
+		success: AssistantSettings,
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.visibility", {
+		payload: { visible: Schema.Boolean },
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.selection", {
+		success: Schema.NullOr(AssistantSelection),
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.navigate", {
+		payload: { sessionId: SessionId, generation: Schema.NullOr(Schema.Int) },
+		success: Schema.NullOr(AssistantSelection),
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.ack", {
+		payload: { generation: Schema.Int },
+		error: ChatRpcFailure,
+	}),
 	Rpc.make("provider.files", {
 		payload: PublicFileRequest,
 		success: FileResult,

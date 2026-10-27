@@ -6,6 +6,7 @@ import {
 	normalizeClockStyle,
 } from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
+import { GameModeTile } from "../hardware/GameModeTile";
 import type { PanelKeyTarget } from "../keys/panel-key-dispatch";
 import { EmojiTile } from "../management/emoji/EmojiTile";
 import { ObsTile } from "../obs/ObsTile";
@@ -52,6 +53,10 @@ import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
+	readonly currentPage?: number | undefined;
+	readonly hardware?:
+		| import("../../../shared/hardware-contracts").HardwareSnapshot
+		| undefined;
 	/** Legacy context retained for other tile consumers. Clocks read their key. */
 	readonly hourFormat: HourFormat;
 	readonly clockTarget?: ClockTarget | undefined;
@@ -247,6 +252,25 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
+		[
+			"pageNo",
+			({ context, tile }) => (
+				<div
+					data-page-number={context.currentPage ?? 1}
+					style={{
+						width: tile.box.width,
+						height: tile.box.height,
+						display: "grid",
+						placeItems: "center",
+						fontSize: 64,
+						fontWeight: 700,
+						color: "white",
+					}}
+				>
+					{context.currentPage ?? 1}
+				</div>
+			),
+		],
 		["playAudio", PlayerSlot],
 		["playAudioLegacy", PlayerSlot],
 		["meetingMinutes", MeetingKey],
@@ -254,6 +278,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 		["meetingRecordMark", MeetingKey],
 		["liveAudioTranslate", MeetingKey],
 		["mic", MeetingKey],
+		["gameMode", GameModeTile],
 		["liveAudioTranslateDisplay", MeetingDisplay],
 		// strip-voice-ui: AI Copilot 5×2, ClawBotView 4×2, ClawBotInput 2×2, AI keys.
 		["aiChatView", AiCopilotTile],

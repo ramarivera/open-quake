@@ -42,6 +42,11 @@ import {
 	MeetingService,
 } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
+	AUDIO_SETUP_CHANNEL,
+	AudioSetupRequest,
+	audioSetupText,
+} from "../../shared/audio-setup";
+import {
 	CAPTURE_CHUNK,
 	CAPTURE_LOST,
 	CAPTURE_PCM,
@@ -54,7 +59,9 @@ import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { agentRequestAllowed } from "../agents/controller";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
+import { meetingHardwareFeedback } from "../hardware/meeting-feedback";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { audioSetup, openBlackHoleInstaller } from "./audio-setup";
 import { createCapturePort } from "./capture-port";
 import { writePrivateFile } from "./private-files";
 import { liveMeetingProviders, type MeetingProviderOptions } from "./provider";
@@ -102,8 +109,9 @@ export function prepareMeetings(
 		microphone?: () => Effect.Effect<
 			import("../../shared/speech").MicrophoneIdentity | undefined
 		>;
+		locale?: () => string;
 		userData: string;
-		hardware: () => HardwareSession | undefined;
+		hardware: (serial?: string) => HardwareSession | undefined;
 		mock: boolean;
 		renderer?: string;
 		management?: () =>
@@ -230,6 +238,9 @@ export function prepareMeetings(
 			)
 		: (live?.layer ?? MeetingProvider.Default);
 
+	const feedback = meetingHardwareFeedback(options.hardware);
+	let enqueueFeedback: (work: Effect.Effect<void>) => Effect.Effect<void> =
+		() => Effect.void;
 	const prepared = prepareDesktopModule(
 		MeetingService.DefaultWithoutDependencies.pipe(
 			Layer.provideMerge(
@@ -237,22 +248,32 @@ export function prepareMeetings(
 					MeetingRepository.Default(meetingStorage(root)),
 					providers,
 					captureLayer,
-					Layer.succeed(MeetingProgress, {
-						publish: (event) =>
-							Effect.promise(async () => {
-								await options.publishVoice?.({
-									_tag: "MeetingStage",
-									serial:
-										event.origin?.serial ??
-										options.serial?.() ??
-										"desktop-preview",
-									keyCode: event.origin?.keyCode ?? "0,0",
-									meetingId: event.meetingId,
-									stage: event.stage,
-									status: event.status,
-								});
-							}),
-					}),
+					Layer.scoped(
+						MeetingProgress,
+						Effect.gen(function* () {
+							const toneScope = yield* Effect.scope;
+							enqueueFeedback = (work) =>
+								Effect.forkIn(work, toneScope).pipe(Effect.asVoid);
+							return {
+								publish: (event) =>
+									Effect.promise(async () => {
+										await options.publishVoice?.({
+											_tag: "MeetingStage",
+											serial:
+												event.origin?.serial ??
+												options.serial?.() ??
+												"desktop-preview",
+											keyCode: event.origin?.keyCode ?? "0,0",
+											meetingId: event.meetingId,
+											stage: event.stage,
+											status: event.status,
+										});
+									}).pipe(
+										Effect.zipRight(enqueueFeedback(feedback.stage(event))),
+									),
+							};
+						}),
+					),
 				),
 			),
 			Layer.tap((context) =>
@@ -348,6 +369,14 @@ export function prepareMeetings(
 								serial: options.serial?.() ?? "desktop-preview",
 								keyCode: command.keyCode ?? "0,0",
 							});
+							if (command.action === "meetingRecordMark")
+								yield* enqueueFeedback(
+									feedback.mark(
+										before,
+										next,
+										options.serial?.() ?? "desktop-preview",
+									),
+								);
 							for (const record of next.records)
 								if (
 									record.state === "recorded" &&
@@ -443,6 +472,61 @@ export function prepareMeetings(
 					}
 					return yield* snapshot;
 				});
+			const setup = audioSetup({
+				active: () => !disposed,
+				platform: process.platform,
+				mock: options.mock,
+				confirm: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
+					return (
+						(
+							await dialog.showMessageBox({
+								type: "warning",
+								message: text.nativeConfirm,
+								detail: `${text.warning}\n\n${text.retention}`,
+								buttons: [text.cancel, text.nativeChoose],
+								defaultId: 0,
+								cancelId: 0,
+							})
+						).response === 1
+					);
+				},
+				select: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
+					const result = await dialog.showOpenDialog({
+						title: text.nativeTitle,
+						buttonLabel: text.nativeChoose,
+						properties: ["openFile"],
+						filters: [{ name: text.nativeFilter, extensions: ["pkg"] }],
+					});
+					return result.canceled ? undefined : result.filePaths[0];
+				},
+				openInstaller: (selected) =>
+					openBlackHoleInstaller({
+						selected,
+						root: join(root, "installer-handoffs"),
+						open: (path) => shell.openPath(path),
+					}),
+			});
+			ipcMain.handle(AUDIO_SETUP_CHANNEL, async (event, value: unknown) => {
+				if (
+					!agentRequestAllowed(
+						{
+							senderId: event.sender.id,
+							frameURL: event.senderFrame?.url ?? "",
+							mainFrame: event.senderFrame === event.sender.mainFrame,
+						},
+						options.management?.()?.webContents.id,
+						renderer,
+					) ||
+					!Schema.is(AudioSetupRequest)(value)
+				)
+					return { platform: process.platform, state: "failed" };
+				if (disposed) return { platform: process.platform, state: "failed" };
+				return value.action === "status"
+					? setup.status()
+					: Effect.runPromise(setup.install());
+			});
 			ipcMain.handle(
 				MEETING_REQUEST,
 				async (event, value: unknown): Promise<unknown> => {
@@ -541,6 +625,7 @@ export function prepareMeetings(
 				disposed = true;
 				disposal = (async () => {
 					ipcMain.removeHandler(MEETING_REQUEST);
+					ipcMain.removeHandler(AUDIO_SETUP_CHANNEL);
 					for (const fiber of jobs.values())
 						await runtime.runPromise(Fiber.interrupt(fiber));
 					await runtime.runPromiseExit(MeetingService.suspend());

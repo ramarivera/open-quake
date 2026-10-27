@@ -8,7 +8,15 @@ import type {
 	MenuItemConstructorOptions,
 	Rectangle,
 } from "electron";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	createEmptyProfileKey,
 	ProfileKey,
@@ -59,6 +67,12 @@ const electron = vi.hoisted(() => {
 		destroyed = false;
 		contentListeners = new Map<string, () => void>();
 		webContents = {
+			session: {
+				on: vi.fn(),
+				removeListener: vi.fn(),
+				setDevicePermissionHandler: vi.fn(),
+				flushStorageData: vi.fn(),
+			},
 			id: 1,
 			mainFrame: { url: "http://localhost:5173/?surface=management" },
 			getURL: () => "http://localhost:5173/?surface=management",
@@ -132,7 +146,7 @@ const electron = vi.hoisted(() => {
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
-			getPath: vi.fn(() => join(tmpdir(), "open-quake-window-test")),
+			getPath: vi.fn(() => fixtureDirectory),
 			getVersion: () => "0.0.0",
 			getLocale: vi.fn(() => "en-US"),
 			on: vi.fn<
@@ -188,10 +202,56 @@ vi.mock("./speech/composition", async (original) => {
 		createSpeechVoiceBinding: vi.fn(actual.createSpeechVoiceBinding),
 	};
 });
+
+// Compile the entry graph before timing individual behavior cases. Refusing the
+// fake lock prevents startup resources; every case still evaluates a fresh entry.
+beforeAll(async () => {
+	native.layer = (await Effect.runPromise(makeFakeHidTransport([]))).layer;
+	const output = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+	electron.app.requestSingleInstanceLock.mockReturnValueOnce(false);
+	try {
+		await import("./index");
+	} finally {
+		output.mockRestore();
+	}
+});
+let fixtureDirectory = "";
+beforeEach(async () => {
+	fixtureDirectory = await mkdtemp(join(tmpdir(), "open-quake-window-test-"));
+	electron.app.getPath.mockReturnValue(fixtureDirectory);
+});
+afterEach(async () => {
+	await rm(fixtureDirectory, { recursive: true, force: true });
+});
 vi.mock("./mockDeviceBus", async (original) => {
 	const actual = await original<typeof import("./mockDeviceBus")>();
 	return { ...actual, startMockDeviceBus: vi.fn(actual.startMockDeviceBus) };
 });
+// Lifecycle assertions need the real tracer, without unrelated diagnostic disk IO.
+vi.mock("./diagnostics/persistence", () => ({
+	createDiagnosticStorage: () => {
+		let written = 0;
+		let closed = false;
+		const status = () => ({
+			written,
+			closed,
+			dropped: 0,
+			storageFailures: 0,
+			queuedBytes: 0,
+		});
+		return {
+			emit: () => {
+				written++;
+			},
+			status,
+			flush: async () => status(),
+			close: async () => {
+				closed = true;
+				return status();
+			},
+		};
+	},
+}));
 vi.mock("./diagnostics/runtime", async (original) => {
 	const actual = await original<typeof import("./diagnostics/runtime")>();
 	return { ...actual, makeDesktopRuntime: vi.fn(actual.makeDesktopRuntime) };
@@ -603,6 +663,49 @@ describe("desktop window lifecycle", () => {
 			expect(management.show).toHaveBeenCalled();
 			expect(management.focus).toHaveBeenCalled();
 		});
+	});
+
+	it("MAIN-082 SCREEN-108: saved-key management port restores and recreates one window at the requested tab", async () => {
+		const actions = vi.mocked(registerProfiles).mock.calls[0]?.[11];
+		if (
+			!actions ||
+			typeof actions !== "object" ||
+			!("management" in actions) ||
+			typeof actions.management !== "function"
+		)
+			throw new Error("Missing saved-key management composition");
+		const { management } = windows();
+		management.isMinimized.mockReturnValue(true);
+		actions.management("keys");
+		const ready = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_READY,
+		)?.[1];
+		if (!ready) throw new Error("Missing renderer ready owner");
+		ready({
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		});
+		await vi.waitFor(() => expect(management.restore).toHaveBeenCalledOnce());
+		expect(management.webContents.send).toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"keys",
+		);
+		const count = electron.BrowserWindow.windows.length;
+		management.destroy();
+		actions.management("settings");
+		await vi.waitFor(() =>
+			expect(electron.BrowserWindow.windows).toHaveLength(count + 1),
+		);
+		const replacement = electron.BrowserWindow.windows.at(-1);
+		if (!replacement) throw new Error("Missing replacement");
+		ready({
+			sender: replacement.webContents,
+			senderFrame: replacement.webContents.mainFrame,
+		});
+		expect(replacement.webContents.send).toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"settings",
+		);
 	});
 
 	it("SETTINGS-064: saved locale refreshes the native Dock menu and Settings activates the existing management route", async () => {
@@ -1451,6 +1554,7 @@ describe("desktop main with the real device service and fake HID", () => {
 
 	beforeEach(async () => {
 		vi.resetModules();
+		vi.useFakeTimers();
 		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "");
 		vi.stubEnv("ELECTRON_RENDERER_URL", "http://localhost:5173");
 		fake = await Effect.runPromise(makeFakeHidTransport());
@@ -1462,9 +1566,19 @@ describe("desktop main with the real device service and fake HID", () => {
 	});
 
 	afterEach(async () => {
-		appEvent("before-quit");
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
-		vi.unstubAllEnvs();
+		try {
+			const priorQuits = electron.app.quit.mock.calls.length;
+			const event = appEvent("before-quit");
+			if (event.preventDefault.mock.calls.length > 0)
+				await vi.waitFor(() =>
+					expect(electron.app.quit.mock.calls.length).toBeGreaterThan(
+						priorQuits,
+					),
+				);
+		} finally {
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		}
 	});
 
 	async function start(): Promise<void> {
@@ -1922,7 +2036,7 @@ describe("desktop main with the real device service and fake HID", () => {
 			expect(profiles?.disconnect).toHaveBeenCalledExactlyOnceWith(serial);
 			expect(await Effect.runPromise(fake.closes)).toBe(1);
 		} finally {
-			path.mockImplementation(() => join(tmpdir(), "open-quake-window-test"));
+			path.mockImplementation(() => fixtureDirectory);
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
@@ -1946,6 +2060,8 @@ describe("desktop main with the real device service and fake HID", () => {
 			)?.[1];
 		expect(resume).toBeDefined();
 		resume?.();
+		// Drive the 2.5 s resume settle and 1 s HID reconnect without host time.
+		await vi.advanceTimersByTimeAsync(3500);
 		await vi.waitFor(
 			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
 			{ timeout: 7000 },
@@ -1998,6 +2114,17 @@ describe("desktop main with the real device service and fake HID", () => {
 		await vi.waitFor(
 			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
 			{ timeout: 3000 },
+		);
+		// Opening the fake handle precedes stream subscription. Wait for the bus.
+		await vi.waitFor(() =>
+			expect(
+				panel.webContents.send.mock.calls.filter(
+					([channel, event]) =>
+						channel === "quake:event" &&
+						event.kind === "status" &&
+						event.state === "connected",
+				),
+			).toHaveLength(2),
 		);
 		await Effect.runPromise(fake.emit(report(3, 2, [1])));
 		for (const window of [panel, management])
@@ -2108,10 +2235,23 @@ describe("desktop main with the real device service and fake HID", () => {
 			);
 			if (!reopened) throw new Error("Management must reopen");
 			expect(reopened).not.toBe(management);
+			expect(
+				electron.BrowserWindow.getAllWindows().filter(
+					(window) => window.options.title === "open-quake panel",
+				),
+			).toHaveLength(1);
 			if (event === "second-instance") {
 				expect(reopened.show).toHaveBeenCalledOnce();
 				expect(reopened.focus).toHaveBeenCalledOnce();
 			}
+			// The native open counter doesn't prove the new bus subscribed yet.
+			await vi.waitFor(() =>
+				expect(reopened.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "status",
+					state: "connected",
+				}),
+			);
 			await Effect.runPromise(fake.emit(report(3, 1, [0])));
 			for (const window of electron.BrowserWindow.getAllWindows())
 				await vi.waitFor(() =>
@@ -2121,6 +2261,7 @@ describe("desktop main with the real device service and fake HID", () => {
 						direction: -1,
 					}),
 				);
+			await vi.advanceTimersByTimeAsync(2500);
 			await vi.waitFor(
 				() =>
 					expect(reopened.webContents.send).toHaveBeenCalledWith(
@@ -2189,6 +2330,33 @@ describe("desktop main with the real device service and fake HID", () => {
 });
 
 describe("single-instance startup and release policy", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		electron.app.requestSingleInstanceLock.mockReset().mockReturnValue(true);
+	});
+
+	afterEach(async () => {
+		try {
+			// Lock refusal never registers shutdown. Successful startup must finish it.
+			if (
+				electron.app.on.mock.calls.some(([event]) => event === "before-quit")
+			) {
+				const priorQuits = electron.app.quit.mock.calls.length;
+				const event = appEvent("before-quit");
+				if (event.preventDefault.mock.calls.length > 0)
+					await vi.waitFor(() =>
+						expect(electron.app.quit.mock.calls.length).toBeGreaterThan(
+							priorQuits,
+						),
+					);
+			}
+		} finally {
+			electron.app.requestSingleInstanceLock.mockReset().mockReturnValue(true);
+			electron.app.isPackaged = false;
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		}
+	});
 	it("MAIN-119 prepares Chromium and privileged protocols before the lock, readiness and windows", async () => {
 		vi.resetModules();
 		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
@@ -2264,10 +2432,6 @@ describe("single-instance startup and release policy", () => {
 			} else expect(reopened).toBe(management);
 			if (state === "minimized")
 				expect(management.restore).toHaveBeenCalledOnce();
-			appEvent("before-quit");
-			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
-			electron.app.isPackaged = false;
-			vi.unstubAllEnvs();
 		},
 	);
 });

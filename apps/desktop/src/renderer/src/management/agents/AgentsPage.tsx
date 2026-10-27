@@ -568,6 +568,7 @@ export function AgentsPage({
 				<ConversationWorkspace
 					locale={locale}
 					model={directChatModel(view?.models)}
+					models={view?.models}
 					configurationLoading={!view && !error}
 					configurationError={!view ? error : undefined}
 					onRetryConfiguration={() => void request({ type: "read" })}

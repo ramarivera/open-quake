@@ -7,6 +7,7 @@ import {
 	useState,
 } from "react";
 import { resolveAppLocale } from "../../../../../../packages/edge/src/settings/settings-invariants";
+import audioSetup from "../../../shared/audio-setup-strings.json";
 import type {
 	AppLocale,
 	AppLocaleBridge,
@@ -30,6 +31,7 @@ export type AppDictionaries = Readonly<
 >;
 export const appDictionaries: AppDictionaries = {
 	en: {
+		audioSetup: audioSetup.en,
 		app: { language: "Language", english: "English", german: "German" },
 		chat: chat.en,
 		agentHttp: agentHttp.en,
@@ -39,6 +41,7 @@ export const appDictionaries: AppDictionaries = {
 		...recovered.en,
 	},
 	de: {
+		audioSetup: audioSetup.de,
 		app: { language: "Sprache", english: "Englisch", german: "Deutsch" },
 		chat: chat.de,
 		agentHttp: agentHttp.de,

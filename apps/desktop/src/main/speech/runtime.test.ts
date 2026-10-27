@@ -8,6 +8,7 @@ import {
 	Queue,
 	Redacted,
 	Schema,
+	TestClock,
 } from "effect";
 import { AiCredentials } from "../../../../../packages/edge/src/ai/ai-credentials";
 import {
@@ -26,12 +27,16 @@ import {
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
 import {
+	GridVoice,
+	GridVoiceRuntime,
 	VoiceSurface,
 	VoiceSurfacePublisher,
 	VoiceTonePort,
 } from "../../../../../packages/edge/src/voice/surface";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import { pinAgentKnob } from "../agent-http/knob-route";
 import type { CaptureDriver } from "./capture";
 import { createProductionVoiceRuntime } from "./runtime";
 
@@ -57,6 +62,7 @@ const surfaceLayer = (
 	events: VoiceSurfaceEvent[],
 	onEvent: (event: VoiceSurfaceEvent) => Effect.Effect<void> = () =>
 		Effect.void,
+	tones?: string[],
 ) =>
 	VoiceSurface.Default.pipe(
 		Layer.provide(
@@ -67,7 +73,12 @@ const surfaceLayer = (
 							Effect.zipRight(onEvent(event)),
 						),
 				}),
-				Layer.succeed(VoiceTonePort, { play: () => Effect.void }),
+				Layer.succeed(VoiceTonePort, {
+					play: (_serial, tone) =>
+						Effect.sync(() => {
+							tones?.push(tone);
+						}),
+				}),
 			),
 		),
 	);
@@ -78,12 +89,29 @@ const credentials = Layer.succeed(AiCredentials, {
 const tick = Effect.yieldNow().pipe(Effect.repeatN(10));
 
 describe("production voice consumer", () => {
-	it.effect(
-		"uses actual STT after matching readiness, sends final transcript only after physical recorder/socket finalization, ignores stale release",
-		() =>
+	it.effect.each([false, true])(
+		"uses actual STT after readiness and recorder/socket finalization, ignores stale release, pinned agent route %s",
+		(agentRoute) =>
 			Effect.scoped(
 				Effect.gen(function* () {
 					const events: VoiceSurfaceEvent[] = [];
+					let selectedAgent = "writer";
+					let pins = 0;
+					const captureRequest: CaptureRequest = agentRoute
+						? {
+								...request,
+								type: "knob",
+								keyCode: "0,1",
+								knob: {
+									profileId: "saved",
+									revision: 2,
+									route: "dkclaw",
+									agentId: "writer",
+									providerId: "",
+									modelId: "retained/unknown",
+								},
+							}
+						: request;
 					const messages = yield* Queue.unbounded<unknown>();
 					const configured = yield* Deferred.make<string>();
 					const listening = yield* Deferred.make<void>();
@@ -95,7 +123,10 @@ describe("production voice consumer", () => {
 						socketClosed = 0,
 						pulls = 0;
 					const capture: CaptureDriver = {
-						permission: Effect.succeed(true),
+						permission: Effect.sync(() => {
+							if (agentRoute) expect(pins).toBe(1);
+							return true;
+						}),
 						open: (id) =>
 							Effect.sync(() => {
 								opened++;
@@ -190,6 +221,35 @@ describe("production voice consumer", () => {
 						const speech = yield* AiSpeechService;
 						const controller = yield* createProductionVoiceRuntime({
 							speech,
+							pinAgentRoute: (snapshot) =>
+								Effect.suspend(() => {
+									pins++;
+									return pinAgentKnob(
+										snapshot,
+										{ status: "ready", agentIds: ["writer"] },
+										{ connectionId: "gateway", agentId: selectedAgent },
+										{
+											generation: 5,
+											status: "connected",
+											connectionId: "gateway",
+										},
+										() =>
+											Effect.succeed({
+												capabilities: {
+													health: "supported",
+													chat: "supported",
+													listAgents: "supported",
+													sessions: "unsupported",
+													resources: "unsupported",
+													models: "unsupported",
+													toolEvents: "unsupported",
+													usage: "unsupported",
+												},
+												agents: [{ id: "writer", name: "Writer" }],
+											}),
+										3,
+									);
+								}),
 							capture,
 							profiles: () =>
 								Effect.succeed({ stt: sttProfile, speakAnswers: false }),
@@ -198,23 +258,32 @@ describe("production voice consumer", () => {
 								Effect.gen(function* () {
 									expect(closed).toBe(1);
 									expect(socketClosed).toBe(1);
+									if (agentRoute)
+										expect(input.agentRoute).toEqual({
+											connectionId: "gateway",
+											agentId: "writer",
+											modelId: "retained/unknown",
+											generation: 3,
+											registryGeneration: 5,
+										});
 									yield* Deferred.succeed(transcript, input.message);
 								}),
 						});
-						yield* controller.runtime.startCapture(request);
+						yield* controller.runtime.startCapture(captureRequest);
 						const task = yield* Deferred.await(configured);
 						expect(opened).toBe(0);
 						yield* Queue.offer(messages, event(task, "task-started"));
 						yield* Deferred.await(listening);
+						selectedAgent = "other-selected-agent";
 						yield* controller.runtime.releaseCapture(
-							request.serial,
-							request.keyCode,
+							captureRequest.serial,
+							captureRequest.keyCode,
 							0,
 						);
 						expect(yield* Deferred.isDone(stop)).toBe(false);
 						yield* controller.runtime.releaseCapture(
-							request.serial,
-							request.keyCode,
+							captureRequest.serial,
+							captureRequest.keyCode,
 							1,
 						);
 						expect(yield* Deferred.await(transcript)).toBe("Turn left");
@@ -523,6 +592,223 @@ it.effect(
 				}).pipe(
 					Effect.provide(
 						Layer.mergeAll(surfaceLayer([]), AiSpeechService.Default),
+					),
+				);
+			}),
+		),
+);
+
+it.effect.each(["", "a", "𠮷", "好。", "a.", "...", "okay"])(
+	"KNOB-046 short recognition %s ends once without chat or server failure",
+	(text) =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const events: VoiceSurfaceEvent[] = [],
+					tones: string[] = [],
+					sent: string[] = [];
+				yield* Effect.gen(function* () {
+					const speech = yield* AiSpeechService;
+					const terminal = yield* Deferred.make<void>();
+					const controller = yield* createProductionVoiceRuntime({
+						speech: { ...speech, recognize: () => Effect.succeed(text) },
+						profiles: () =>
+							Effect.succeed({ stt: sttProfile, speakAnswers: false }),
+						capture: {
+							permission: Effect.succeed(true),
+							open: () =>
+								Effect.die("fake recognition doesn't acquire recorder"),
+						},
+						sendText: () => Effect.void,
+						sendTranscript: (r) =>
+							Effect.sync(() => {
+								sent.push(r.message);
+							}),
+						hostTone: (_serial, tone) =>
+							Effect.sync(() => {
+								tones.push(tone);
+							}),
+						diagnostics: {
+							layer: Layer.empty,
+							instrument: (effect) => effect,
+							recordCapture: () =>
+								Deferred.succeed(terminal, undefined).pipe(Effect.asVoid),
+						},
+					});
+					yield* controller.runtime.startCapture({
+						...request,
+						keyCode: "0,1",
+					});
+					yield* Deferred.await(terminal);
+					expect(tones).toEqual(["start", "end"]);
+					expect(sent).toEqual(text === "okay" ? ["okay"] : []);
+					expect(
+						events.filter(
+							(e) => e._tag === "Stage" && e.stage._tag === "failed",
+						),
+					).toHaveLength(0);
+					expect(
+						events.some(
+							(e) =>
+								e._tag === "Stage" &&
+								e.stage._tag === "idle" &&
+								e.stage.outcome === (text === "okay" ? "completed" : "empty"),
+						),
+					).toBe(true);
+				}).pipe(
+					Effect.provide(
+						Layer.mergeAll(surfaceLayer(events), AiSpeechService.Default),
+					),
+				);
+			}),
+		),
+);
+
+it.effect.each([
+	"GatewayStopped",
+	"GatewayStarting",
+	"GatewayNotReady",
+] as const)(
+	"KNOB-041 %s refuses before microphone with one busy tone and localized toast",
+	(kind) =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const events: VoiceSurfaceEvent[] = [],
+					tones: string[] = [];
+				yield* Effect.gen(function* () {
+					const speech = yield* AiSpeechService;
+					let acquired = 0;
+					const surface = yield* VoiceSurface;
+					yield* surface.reserve(request.serial, "0,1", request.captureId);
+					const controller = yield* createProductionVoiceRuntime({
+						speech,
+						profiles: () =>
+							Effect.succeed({ stt: sttProfile, speakAnswers: false }),
+						pinAgentRoute: () => Effect.fail(new VoiceKnobRejected(kind)),
+						capture: {
+							permission: Effect.sync(() => {
+								acquired++;
+								return false;
+							}),
+							open: () => Effect.die("gateway gate must precede mic"),
+						},
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.die("gateway gate must precede chat"),
+					});
+					yield* controller.runtime.startCapture({
+						...request,
+						type: "knob",
+						keyCode: "0,1",
+						knob: {
+							profileId: "p",
+							revision: 1,
+							route: "dkclaw",
+							providerId: "",
+							modelId: "",
+							agentId: "writer",
+						},
+					});
+					yield* tick;
+					expect(acquired).toBe(0);
+					expect(yield* surface.activeFlow(request.serial)).toEqual(
+						Option.none(),
+					);
+
+					expect(tones).toEqual(["busy"]);
+					expect(events.filter((e) => e._tag === "Toast")).toEqual([
+						{
+							_tag: "Toast",
+							serial: request.serial,
+							messageKey:
+								kind === "GatewayStopped"
+									? "aiAudio.openClawGatewayNotRunning"
+									: kind === "GatewayStarting"
+										? "aiAudio.openClawGatewayStarting"
+										: "aiAudio.openClawNotReady",
+						},
+					]);
+					yield* Effect.gen(function* () {
+						yield* GridVoice.input(request.serial, {
+							keyCode: "1,1",
+							kind: "down",
+							type: "aiChat",
+						});
+						yield* TestClock.adjust(1000);
+						yield* tick;
+						expect(acquired).toBe(1);
+					}).pipe(
+						Effect.provide(GridVoice.Default),
+						Effect.provideService(GridVoiceRuntime, controller.runtime),
+					);
+				}).pipe(
+					Effect.provide(
+						Layer.mergeAll(
+							surfaceLayer(events, () => Effect.void, tones),
+							AiSpeechService.Default,
+						),
+					),
+				);
+			}),
+		),
+);
+
+it.effect(
+	"AI-081/089 releases reviewed legacy preparation before permission and ignores late readiness",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const events: VoiceSurfaceEvent[] = [];
+				yield* Effect.gen(function* () {
+					const entered = yield* Deferred.make<void>();
+					const ready = yield* Deferred.make<void>();
+					let permissions = 0;
+					const controller = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						profiles: () =>
+							Effect.succeed({ stt: sttProfile, speakAnswers: false }),
+						prepareAssistant: () =>
+							Deferred.succeed(entered, undefined).pipe(
+								Effect.zipRight(Deferred.await(ready)),
+								Effect.zipRight(Effect.never),
+							),
+						capture: {
+							permission: Effect.sync(() => {
+								permissions++;
+								return true;
+							}),
+							open: () => Effect.die("released preparation must not record"),
+						},
+						sendText: () => Effect.die("no text"),
+						sendTranscript: () => Effect.die("no transcript"),
+					});
+					yield* controller.runtime.startCapture(request);
+					yield* Deferred.await(entered);
+					expect(
+						events.some(
+							(e) =>
+								e._tag === "Stage" &&
+								e.stage._tag === "recording" &&
+								e.stage.status === "preparing",
+						),
+					).toBe(true);
+					yield* controller.runtime.releaseCapture(
+						request.serial,
+						request.keyCode,
+						request.generation,
+					);
+					yield* Deferred.succeed(ready, undefined);
+					yield* tick;
+					expect(permissions).toBe(0);
+					expect(
+						events.some(
+							(e) =>
+								e._tag === "Stage" &&
+								e.stage._tag === "idle" &&
+								e.stage.outcome === "cancelled",
+						),
+					).toBe(true);
+				}).pipe(
+					Effect.provide(
+						Layer.mergeAll(surfaceLayer(events), AiSpeechService.Default),
 					),
 				);
 			}),

@@ -1262,9 +1262,12 @@ it("MGMT-057/064/066 SCREEN-138 selects the covered anchor, visibly deselects an
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(0);
 });
 
-it("MGMT-066/067 SCREEN-138/143 excludes translation tiles and localizes empty/default guidance", async () => {
-	const f = await gridFixture([gridKey("1,1", "liveAudioTranslateDisplay")]);
-	await click(button(f.host, "1,4"));
+it("MGMT-066/067 SCREEN-138/143 localizes empty/default guidance beside resizable meeting tiles", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "liveAudioTranslateDisplay", { size: [5, 2] }),
+	]);
+	await click(button(f.host, "1,7"));
+	await click(button(f.host, "1,7"));
 	expect(f.host.querySelector("#key-title")).toBeNull();
 	expect(f.host.textContent).toContain(
 		"Drag an action from the sidebar and place it in the empty key above",
@@ -1824,8 +1827,11 @@ it("remaps imported folder, emoji and page links before mounted editor navigatio
 		"imported-page-2",
 		"imported-page-3",
 	]);
+	expect(imported?.pages[0].keys).toHaveLength(16);
 	expect(
-		imported?.pages[0].keys.map((k) => k.config.actions?.[0]?.value),
+		imported?.pages[0].keys
+			.filter((k) => k.config.type !== "")
+			.map((k) => k.config.actions?.[0]?.value),
 	).toEqual(["imported-page-2", "imported-page-3", "imported-page-3", 2]);
 	expect(
 		imported?.pages.slice(1).map((p) => p.keys[0]?.config.actions?.[0]?.value),
@@ -2570,3 +2576,169 @@ it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized ed
 			?.textContent,
 	).toBe("My mute");
 });
+
+it("review: mounted Close sequence draft edits path, retains force and saves", async () => {
+	const f = await fixture();
+	await f.select();
+	const step = query(f.host, ".key-sequence-step", HTMLDivElement);
+	const select = query(step, "select", HTMLSelectElement);
+	await act(async () => {
+		select.value = "close";
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await input(
+		query(step, 'input[type="text"]', HTMLInputElement),
+		"/Applications/Synthetic.app",
+	);
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.host.textContent).toContain("Saved successfully"),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions?.[0],
+	).toMatchObject({
+		config: {
+			type: "close",
+			actions: [
+				{ type: "path", value: "/Applications/Synthetic.app" },
+				{ type: "force", value: 0 },
+			],
+		},
+	});
+});
+
+it("MGMT-401 uses only typed profile/page selects for switch-profile keys", async () => {
+	const f = await fixture({
+		configure: (envelope) => ({
+			...envelope,
+			profiles: EffectArray.map(envelope.profiles, (profile) => ({
+				...profile,
+				pages: EffectArray.map(profile.pages, (page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.keyCode === "1,1"
+							? {
+									...key,
+									childrenName: "switchProfile",
+									config: {
+										...key.config,
+										type: "switchProfile",
+										actions: [
+											{ type: "profile", value: "p" },
+											{ type: "page", value: 1 },
+										],
+									},
+								}
+							: key,
+					),
+				})),
+			})),
+		}),
+	});
+	await f.select();
+	expect(f.host.querySelector('[aria-label="Switch profile"]')).not.toBeNull();
+	expect(
+		f.host.querySelector('[aria-label="Switch profile page"]'),
+	).not.toBeNull();
+	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
+	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
+		"Next Profile",
+	);
+});
+
+it("AI-334 enables meeting viewer size controls and saves an alternate span", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "liveAudioTranslateDisplay", { size: [5, 2] }),
+	]);
+	await f.select();
+	const span = query(f.host, "#key-span", HTMLSelectElement);
+	expect(span.disabled).toBe(false);
+	await input(span, "3,1");
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.size).toEqual([
+			3, 1,
+		]),
+	);
+});
+
+for (const state of ["hidden", "deleted"] as const) {
+	it(`review: switch-profile editor displays its saved ${state} destination`, async () => {
+		const f = await fixture({
+			configure: (envelope) =>
+				Schema.encodeSync(ProfileEnvelope)(
+					Schema.decodeUnknownSync(ProfileEnvelope)({
+						...envelope,
+						manager: {
+							revision: 0,
+							installed: true,
+							userHasSetDefault: false,
+							approvedCommands: [],
+							hidden: state === "hidden" ? ["destination"] : [],
+							links: [],
+						},
+						profiles: [
+							...envelope.profiles.map((profile) => ({
+								...profile,
+								pages: profile.pages.map((page) => ({
+									...page,
+									keys: page.keys.map((key) =>
+										key.keyCode === "1,1"
+											? {
+													...key,
+													childrenName: "switchProfile",
+													config: {
+														...key.config,
+														type: "switchProfile",
+														actions: [
+															{ type: "profile", value: "destination" },
+															{ type: "page", value: 1 },
+														],
+													},
+												}
+											: key,
+									),
+								})),
+							})),
+							...(state === "hidden"
+								? [
+										{
+											id: "destination",
+											name: "Hidden destination",
+											revision: 0,
+											pages: [{ id: "one", keys: [] }],
+										},
+									]
+								: []),
+						],
+					}),
+				),
+		});
+		await f.select();
+		const select = query(
+			f.host,
+			'[aria-label="Switch profile"]',
+			HTMLSelectElement,
+		);
+		expect(select.value).toBe("destination");
+		const saved = select.selectedOptions[0];
+		expect(saved?.disabled).toBe(true);
+		expect(saved?.textContent).toBe(
+			state === "hidden" ? "Hidden destination" : "destination",
+		);
+		expect(
+			query(f.host, '[aria-label="Switch profile page"]', HTMLSelectElement)
+				.disabled,
+		).toBe(true);
+		expect(select.querySelector('option[value="-1"]')?.textContent).toBe(
+			"Next Profile",
+		);
+		expect(
+			select.querySelector<HTMLOptionElement>('option[value="p"]')?.disabled,
+		).toBe(false);
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual([
+			{ type: "profile", value: "destination" },
+			{ type: "page", value: 1 },
+		]);
+	});
+}

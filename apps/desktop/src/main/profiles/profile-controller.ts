@@ -1,11 +1,21 @@
-import { createHash } from "node:crypto";
-import { Effect, Array as EffectArray, Option } from "effect";
+import { createHash, randomUUID } from "node:crypto";
+import { Effect, Array as EffectArray, Option, Schema } from "effect";
+import {
+	MultiActionConfig,
+	normalizeSequenceWebsites,
+} from "../../../../../packages/device/src/actions/action-contracts.js";
+import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
-import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	type Profile,
+	type ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileCommandFailed,
 	ProfileDeliveryFailed,
 	type ProfileDesktopError,
+	ProfileNotFound,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 	ProfileWriteFailed,
@@ -35,6 +45,7 @@ export interface ProfileDesktopPort {
 			readonly name: string;
 			readonly path: string;
 			readonly identifier: string;
+			readonly icon?: string;
 		}[]
 	>;
 	readonly confirm: (message: string, detail: string) => Promise<boolean>;
@@ -63,6 +74,11 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		const manager = yield* ProfileManager;
 		const repository = yield* ProfileRepository;
 		const switching = yield* ProfileSwitching;
+		const approvalLifetime = randomUUID();
+		const approvalSessions = new Map<
+			string,
+			{ readonly id: string; readonly owns: () => boolean }
+		>();
 		let progress: ThumbnailProgress = {
 			running: false,
 			done: 0,
@@ -140,7 +156,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		): Effect.fn.Return<void, ProfileDesktopError> {
 			const envelope = yield* manager.read();
 			const p = envelope.profiles.find((p) => p.id === id);
-			if (!p) return;
+			if (!p) return yield* ProfileNotFound.fromCause(undefined);
 			const border = showEmptyGridDashedBorder;
 			const data = yield* thumbnail(() =>
 				port.capture(
@@ -177,12 +193,111 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						failed: progress.failed + (result._tag === "Left" ? 1 : 0),
 					};
 					yield* Effect.sync(() => port.progress(progress));
+					yield* publish();
 				}
 				progress = { ...progress, running: false };
 				yield* Effect.sync(() => port.progress(progress));
 				yield* publish();
 			},
 		);
+		const runKeyCommand = Effect.fn("ProfileDesktop.runKeyCommand")(function* (
+			key: ProfileKey,
+			activation: KeyActivation,
+			requireSelection = true,
+		): Effect.fn.Return<boolean, ProfileDesktopError> {
+			const command = key.config.actions.find((a) => a.type === "text")?.value;
+			if (
+				key.config.type !== "cmd" ||
+				typeof command !== "string" ||
+				!command.trim()
+			)
+				return false;
+			const owns = (env: typeof ProfileEnvelope.Type) => {
+				const p = env.profiles.find((p) => p.id === activation.profileId);
+				const saved = p?.pages
+					.find((p) => p.id === activation.pageId)
+					?.keys.find((k) => k.keyCode === key.keyCode);
+				const selection = env.activeByDevice[activation.deviceId];
+				const sameCommand =
+					saved?.config.type === "cmd" &&
+					saved.config.actions.some(
+						(a) => a.type === "text" && a.value === command,
+					);
+				const nested = Schema.decodeUnknownEither(MultiActionConfig)(
+					normalizeSequenceWebsites(
+						saved ? Schema.encodeSync(ProfileKey)(saved).config : undefined,
+						saved?.config.title.text ?? "",
+					),
+				);
+				const nestedCommand =
+					nested._tag === "Right" &&
+					nested.right.subActions.some(
+						(step) =>
+							step.isPlugin !== true &&
+							step.config.type === "cmd" &&
+							step.config.actions.some(
+								(a) => a.type === "text" && a.value === command,
+							),
+					);
+				return (
+					p?.revision === activation.revision &&
+					(sameCommand || nestedCommand) &&
+					(!requireSelection ||
+						(selection?.profileId === p.id &&
+							selection.pageId === activation.pageId))
+				);
+			};
+			let session = approvalSessions.get(activation.deviceId);
+			if (!session?.owns()) {
+				const ownsSession =
+					activation.deviceId === "desktop-preview"
+						? () => true
+						: yield* switching.sessionOwnership(activation.deviceId);
+				if (!ownsSession()) return false;
+				session = { id: randomUUID(), owns: ownsSession };
+				approvalSessions.set(activation.deviceId, session);
+			}
+			const ownsSession = session.owns;
+			const generation = yield* repository.contentGeneration(
+				activation.profileId,
+			);
+			const envelope = yield* manager.read();
+			if (!owns(envelope) || !ownsSession()) return false;
+			const digest = createHash("sha256")
+				.update(
+					`${approvalLifetime}\0${session.id}\0${activation.deviceId}\0${activation.profileId}\0${activation.pageId}\0${activation.revision}\0${generation}\0${key.keyCode}\0${command}`,
+				)
+				.digest("hex");
+			if (!managerState(envelope).approvedCommands.includes(digest)) {
+				if (!(yield* native(() => port.confirm("Run command?", command))))
+					return false;
+				yield* repository.transact((current) => {
+					if (!owns(current) || !ownsSession())
+						return Effect.fail(ProfileWriteFailed.fromCause(undefined));
+					const state = managerState(current);
+					return Effect.succeed({
+						...current,
+						manager: Option.some({
+							...state,
+							approvedCommands: [
+								...new Set([...state.approvedCommands, digest]),
+							],
+							revision: state.revision + 1,
+						}),
+					});
+				});
+			}
+			if (
+				!owns(yield* manager.read()) ||
+				!ownsSession() ||
+				generation !==
+					(yield* repository.contentGeneration(activation.profileId))
+			)
+				return false;
+			yield* native(() => port.execute(command));
+			return true;
+		});
+
 		const request = Effect.fn("ProfileDesktop.request")(function* (
 			input: ProfileRequest,
 			scope?: ProfileSelectionScope,
@@ -215,7 +330,11 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						}
 						for (const id of [...pendingStyleCaptures]) {
 							const result = yield* capture(id, locale).pipe(Effect.either);
-							if (result._tag === "Right") pendingStyleCaptures.delete(id);
+							if (
+								result._tag === "Right" ||
+								result.left._tag === "ProfileNotFound"
+							)
+								pendingStyleCaptures.delete(id);
 							else
 								yield* Effect.logWarning(
 									"profiles.thumbnail.style.failed",
@@ -236,7 +355,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						input.command.type === "create" ||
 						input.command.type === "duplicate" ||
 						input.command.type === "delete" ||
-						input.command.type === "visibility";
+						input.command.type === "visibility" ||
+						input.command.type === "default-visibility";
 					const result = yield* manager.command(
 						input.command,
 						(envelope) =>
@@ -259,7 +379,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 									yield* ensureCurrent;
 									const target =
 										input.command.type === "delete" ||
-										input.command.type === "visibility"
+										input.command.type === "visibility" ||
+										input.command.type === "default-visibility"
 											? envelope.activeByDevice[serial]
 											: selected;
 									const profile = envelope.profiles.find(
@@ -272,7 +393,13 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 											...selections,
 											[serial]: {
 												profileId: profile.id,
-												pageId: profile.pages[0].id,
+												pageId:
+													target &&
+													profile.pages.some(
+														(page) => page.id === target?.pageId,
+													)
+														? target.pageId
+														: profile.pages[0].id,
 											},
 										};
 									}
@@ -342,60 +469,34 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 					break;
 				}
 				case "run-command": {
-					const getCommand = (p: Profile | undefined): Option.Option<string> =>
-						Option.fromNullable(
-							p?.pages[0].keys
-								.find(
-									(k) => k.keyCode === input.keyCode && k.config.type === "cmd",
-								)
-								?.config.actions.find(
-									(a) => a.type === "text" && typeof a.value === "string",
-								)?.value,
-						).pipe(
-							Option.filter(
-								(value): value is string => typeof value === "string",
-							),
-						);
 					const envelope = yield* manager.read();
-					const command = getCommand(
-						envelope.profiles.find((p) => p.id === input.id),
+					const p = envelope.profiles.find((p) => p.id === input.id);
+					const page = p?.pages[0];
+					const key = page?.keys.find(
+						(k) => k.keyCode === input.keyCode && k.config.type === "cmd",
 					);
-					if (Option.isNone(command))
+					if (!p || !page || !key)
 						return { _tag: "rejected", reason: "missing" };
-					const digest = createHash("sha256")
-						.update(`${input.id}\0${input.keyCode}\0${command.value}`)
-						.digest("hex");
-					if (!managerState(envelope).approvedCommands.includes(digest)) {
-						const approved = yield* native(() =>
-							port.confirm("Run command?", command.value),
-						);
-						if (!approved) return { _tag: "rejected", reason: "cancelled" };
-						yield* repository.transact((current) => {
-							const actual = getCommand(
-								current.profiles.find((p) => p.id === input.id),
-							);
-							if (Option.isNone(actual) || actual.value !== command.value)
-								return Effect.fail(ProfileWriteFailed.fromCause(undefined));
-							const state = managerState(current);
-							return Effect.succeed({
-								...current,
-								manager: Option.some({
-									...state,
-									approvedCommands: [
-										...new Set([...state.approvedCommands, digest]),
-									],
-									revision: state.revision + 1,
-								}),
-							});
-						});
-					}
-					yield* native(() => port.execute(command.value));
+					if (
+						!(yield* runKeyCommand(
+							key,
+							{
+								deviceId: scope?.deviceId ?? "desktop-preview",
+								profileId: p.id,
+								pageId: page.id,
+								revision: p.revision,
+							},
+							false,
+						))
+					)
+						return { _tag: "rejected", reason: "cancelled" };
 					break;
 				}
 			}
 			return { _tag: "success", view: yield* publish() };
 		});
 		return {
+			runKeyCommand,
 			request,
 			view,
 			publish,

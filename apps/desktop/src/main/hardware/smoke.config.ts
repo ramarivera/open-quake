@@ -9,7 +9,7 @@ export default defineConfig({
 			},
 			rollupOptions: {
 				input: resolve("src/main/hardware/smoke.ts"),
-				external: ["electron", "effect"],
+				external: ["electron", "effect", "koffi", "node-hid"],
 			},
 		},
 	},

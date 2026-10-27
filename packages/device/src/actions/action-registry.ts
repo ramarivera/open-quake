@@ -1,10 +1,16 @@
 import { Schema } from "effect";
+import {
+	BuzzerKeyConfig,
+	GameModeKeyConfig,
+	LuminanceKeyConfig,
+	MicKeyConfig,
+} from "../hardware/hardware-actions.js";
 import * as C from "./action-contracts.js";
 import { OBS_IDS, obsDraft, obsKeyConfig } from "./obs-contracts.js";
 
-const define = <A, const I extends string>(
+const define = <A, Encoded, const I extends string>(
 	id: I,
-	inputSchema: Schema.Schema<A>,
+	inputSchema: Schema.Schema<A, Encoded>,
 	options: {
 		readonly submenu:
 			| "shortcut"
@@ -13,7 +19,8 @@ const define = <A, const I extends string>(
 			| "deviceControl"
 			| "decoKeeAI"
 			| "display"
-			| "obsStudio";
+			| "obsStudio"
+			| "system";
 		readonly requiredAdapter: string;
 		readonly binding:
 			| "website"
@@ -46,7 +53,7 @@ const define = <A, const I extends string>(
 		alternateState: options.alternateState ?? false,
 		editPolicy: {
 			title: true,
-			grid: true,
+			grid: !["buzzer", "mic", "homeAssistant"].includes(id),
 			icon: true,
 			allowDelete: true,
 			allowDrag: true,
@@ -80,6 +87,157 @@ const media = <const I extends string, const Command extends C.MediaCommand>(
 
 /** The editor, validator and conductor consume these same declarations. */
 export const ACTION_REGISTRY = [
+	define("close", C.CloseAppConfig, {
+		submenu: "shortcut",
+		requiredAdapter: "host.application.close",
+		binding: "delegate",
+		permission: "sensitive",
+		defaults: {
+			actions: [
+				{ type: "path", value: "" },
+				{ type: "force", value: 0 },
+			],
+		},
+	}),
+	...(["playAudioLegacy", "stopAudio"] as const).map((id) =>
+		define(
+			id,
+			C.SequenceAudioConfig.pipe(Schema.filter((c) => c.type === id)),
+			{
+				submenu: "shortcut",
+				requiredAdapter: "soundboard.runtime",
+				binding: "delegate",
+				defaults: {
+					actions:
+						id === "stopAudio"
+							? []
+							: [
+									{ type: "sound", value: "" },
+									{ type: "audioAction", value: 0 },
+									{ type: "audioFade", value: "0-0" },
+									{ type: "volume", value: 100 },
+								],
+				},
+			},
+		),
+	),
+	define("cmd", C.CommandConfig, {
+		submenu: "system",
+		requiredAdapter: "profiles.command",
+		binding: "delegate",
+		permission: "sensitive",
+		defaults: {
+			actions: [{ type: "text", value: "" }],
+			basicEditableItems: { grid: false },
+		},
+	}),
+	define("managementCenter", C.ManagementConfig, {
+		submenu: "navigation",
+		requiredAdapter: "desktop.management",
+		binding: "delegate",
+		defaults: { actions: [] },
+	}),
+	define("screenshot", C.ScreenshotConfig, {
+		submenu: "system",
+		requiredAdapter: "host.screenshot",
+		binding: "delegate",
+		permission: "sensitive",
+		defaults: { actions: [] },
+	}),
+	define("lock", C.LockConfig, {
+		submenu: "system",
+		requiredAdapter: "host.lock",
+		binding: "delegate",
+		permission: "sensitive",
+		defaults: { actions: [] },
+	}),
+	define("switchProfile", C.SwitchProfileConfig, {
+		submenu: "navigation",
+		requiredAdapter: "profiles.navigation",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		},
+	}),
+	define("pageNo", C.PageNumberConfig, {
+		submenu: "navigation",
+		requiredAdapter: "profiles.page-number",
+		binding: "delegate",
+		permission: "read",
+		supportTouchEffect: false,
+		defaults: { actions: [] },
+	}),
+
+	define("homeAssistant", C.HomeAssistantKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "integrations.homeAssistant",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{
+					type: "configData",
+					value: JSON.stringify({
+						entity_id: "light.example",
+						service: "toggle",
+						service_data: {},
+						custom_display_type: "default",
+						custom_display_settings: { fontSize: 20 },
+						custom_display_detail: [],
+					}),
+				},
+			],
+		},
+	}),
+	define("buzzer", BuzzerKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		alternateState: true,
+		defaults: {
+			icon: "0-58",
+			alterIcon: "0-101",
+			actions: [
+				{ type: "toggle", value: 0 },
+				{ type: "toggle", value: 1 },
+			],
+		},
+	}),
+	define("mic", MicKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		alternateState: true,
+		defaults: {
+			icon: "0-59",
+			alterIcon: "0-100",
+			actions: [
+				{ type: "toggle", value: 0 },
+				{ type: "toggle", value: 1 },
+			],
+		},
+	}),
+	define("luminance", LuminanceKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "hardware.controls",
+		binding: "delegate",
+		supportKnob: true,
+		defaults: {
+			icon: "0-57",
+			actions: [
+				{ type: "level", value: 1 },
+				{ type: "level", value: 0 },
+			],
+		},
+	}),
+	define("gameMode", GameModeKeyConfig, {
+		submenu: "deviceControl",
+		requiredAdapter: "hardware.mode",
+		binding: "delegate",
+		defaults: { icon: "0-118", size: [4, 2], actions: [] },
+	}),
 	define("audioBot", C.AudioBotConfig, {
 		submenu: "decoKeeAI",
 		requiredAdapter: "speech.runtime",
@@ -304,3 +462,74 @@ export const createActionDraft = (id: ActionId): Record<string, unknown> => {
 	const entry = findAction(id);
 	return entry ? structuredClone(entry.defaultConfig) : {};
 };
+
+/** MAIN-066: retained DK-Suite dispatch inventory. Owners reference existing composition,
+ * not substitute handlers. Plugin registration is deliberately supplied by the plugins lane. */
+export const RETAINED_ACTION_OWNERS = {
+	timer: "keys",
+	brightness: "hardware",
+	multiActions: "keys",
+	delay: "sequence",
+	folder: "keys",
+	emojiFolder: "keys",
+	back: "keys",
+	emojiBack: "keys",
+	switchProfile: "keys",
+	pageUp: "keys",
+	pageDown: "keys",
+	goToPage: "keys",
+	pageNo: "display",
+	website: "native",
+	hotkeySwitch: "keys",
+	hotkey: "native",
+	open: "native",
+	close: "native",
+	text: "native",
+	media: "media",
+	mute: "media",
+	playPause: "media",
+	stopPlay: "media",
+	skipBackward: "media",
+	skipForward: "media",
+	fastBackward: "media",
+	fastForward: "media",
+	repeatPlay: "media",
+	randomPlay: "media",
+	vol: "hardware",
+	playAudio: "soundboard",
+	playAudioLegacy: "soundboard",
+	stopAudio: "soundboard",
+	knob: "knob",
+	assistant: "voice",
+	cmd: "profiles.command",
+	homeAssistant: "home-assistant",
+	...Object.fromEntries(
+		OBS_IDS.filter((id) => id !== "obsStats" && id !== "obsScreenshot").map(
+			(id) => [id, "obs"],
+		),
+	),
+	luminance: "hardware",
+	buzzer: "hardware",
+	mic: "hardware",
+	meetingMinutes: "meetings",
+	tempMeetingMinutes: "meetings",
+	meetingRecordMark: "meetings",
+	cpuInfo: "display",
+	gpuInfo: "display",
+	memInfo: "display",
+	diskInfo: "display",
+	processInfo: "display",
+	networkInfo: "display",
+	bluetoothInfo: "display",
+	powerInfo: "display",
+	emoji: "emoji",
+	liveAudioTranslate: "voice",
+	aiChat: "assistant",
+	aiChatView: "assistant",
+	audioBot: "voice",
+	clawbot: "agents",
+} as const;
+export const PLUGIN_ACTION_OWNER = "plugins.port";
+
+export const retainedActionOwner = (type: string): string | undefined =>
+	Object.entries(RETAINED_ACTION_OWNERS).find(([id]) => id === type)?.[1];

@@ -9,6 +9,9 @@ import {
 	HOTKEY_MODIFIERS,
 	isHotkeyChord,
 	normalizeActionImport,
+	normalizeWebsiteUrl,
+	RETAINED_ACTION_OWNERS,
+	retainedActionOwner,
 	TextConfig,
 	validateAction,
 } from "../../src/actions/index.js";
@@ -388,3 +391,81 @@ describe("narrow DK-Suite import normalization", () => {
 		}
 	});
 });
+
+it("MAIN-072: safe title templates normalize at the import boundary without evaluation", () => {
+	for (const template of [
+		"example.org/{title}",
+		"example.org/{{title}}",
+		"example.org/${title}",
+	]) {
+		const normalized = normalizeActionImport({
+			childrenName: "website",
+			config: {
+				type: "website",
+				title: { text: "hello" },
+				actions: [{ type: "url", value: template }],
+			},
+		});
+		expect(normalized.normalized).toMatchObject({
+			config: { actions: [{ type: "url", value: "http://example.org/hello" }] },
+		});
+		expect(normalized.diagnostics).toEqual(["website-normalized"]);
+	}
+	for (const value of [
+		"javascript:alert(1)",
+		"file:///private",
+		"data:text/html,hi",
+		" http://example.org",
+		"https://example.org/\n",
+	])
+		expect(normalizeWebsiteUrl(value, "hello")).toBeUndefined();
+	expect(normalizeWebsiteUrl("https://example.org/{title}", "${1+1}")).toBe(
+		"https://example.org/${1+1}",
+	);
+});
+
+it.each(["$&", "$$", "$`", "$'", "a$&b$`c", "{title}", "{{title}}"])(
+	"review: website title %s is inserted literally in every template form",
+	(title) => {
+		for (const placeholder of ["{" + "title}", "{{title}}", "$" + "{title}"]) {
+			expect(
+				normalizeWebsiteUrl(
+					`https://example.org/before/${placeholder}/after`,
+					title,
+				),
+			).toBe(`https://example.org/before/${title}/after`);
+		}
+	},
+);
+
+it("MAIN-066: all 76 retained native types have their canonical owner; plugin dispatch stays a separate port", () => {
+	const retained =
+		"timer brightness multiActions delay folder emojiFolder back emojiBack switchProfile pageUp pageDown goToPage pageNo website hotkeySwitch hotkey open close text media mute playPause stopPlay skipBackward skipForward fastBackward fastForward repeatPlay randomPlay vol playAudio playAudioLegacy stopAudio knob assistant cmd homeAssistant obsScene obsPreviewScene obsTransition obsStudioMode obsStream obsRecord obsSource obsMute obsCut obsTransitionSet obsAudioMonitor obsReplayBuffer obsVirtualCam obsMedia obsFilter obsProfile obsRecordSplit obsSceneTransitionOverride obsVolume luminance buzzer mic meetingMinutes tempMeetingMinutes meetingRecordMark cpuInfo gpuInfo memInfo diskInfo processInfo networkInfo bluetoothInfo powerInfo emoji liveAudioTranslate aiChat aiChatView audioBot clawbot".split(
+			" ",
+		);
+	expect(retained).toHaveLength(76);
+	expect(Object.keys(RETAINED_ACTION_OWNERS).sort()).toEqual(
+		[...retained].sort(),
+	);
+	for (const type of retained) expect(retainedActionOwner(type)).toBeDefined();
+	expect(retainedActionOwner("plugin.example")).toBeUndefined();
+	expect(retainedActionOwner("assistant")).toBe("voice");
+	expect(retainedActionOwner("clawbot")).toBe("agents");
+});
+
+it.each([
+	["localhost:3000/{title}", "http://localhost:3000/hello"],
+	["example.org:8080/{{title}}", "http://example.org:8080/hello"],
+	["127.0.0.1:8080/path", "http://127.0.0.1:8080/path"],
+	["localhost:65536/path", undefined],
+	["example.org:invalid/path", undefined],
+	["javascript:3000/path", undefined],
+	["data:8080/path", undefined],
+	["file:8080/path", undefined],
+	["https:3000/path", undefined],
+])(
+	"PR127: validates host ports without allowing unsafe schemes %s",
+	(value, expected) => {
+		expect(normalizeWebsiteUrl(value, "hello")).toBe(expected);
+	},
+);

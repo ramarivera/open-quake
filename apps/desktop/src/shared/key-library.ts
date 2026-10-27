@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { KeyPanelMessage } from "../../../../packages/device/src/actions/key-display-contracts.js";
 import { KnobResource } from "../../../../packages/device/src/knob/knob-contracts.js";
 import {
 	AppLibraryGroups,
@@ -23,6 +24,11 @@ export const KeyTarget = Schema.Struct({
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 });
 export const KeyRequest = Schema.Union(
+	Schema.Struct({
+		type: Schema.Literal("panel-message"),
+		deviceId: Schema.NonEmptyString,
+		message: KeyPanelMessage,
+	}),
 	Schema.Struct({ type: Schema.Literal("app-library.read") }),
 	Schema.Struct({
 		type: Schema.Literal("app-library.save"),
@@ -145,6 +151,13 @@ export const KeyRuntimeState = Schema.Struct({
 	profileId: Schema.String,
 	pageId: Schema.String,
 	keyCode: Schema.String,
+	revision: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),
+	icon: Schema.optional(Schema.String),
+	countdownPhase: Schema.optional(
+		Schema.Literal("running", "expired", "hidden"),
+	),
+	endAt: Schema.optional(Schema.Number),
+	timerCompleted: Schema.optional(Schema.Boolean),
 	volume: Schema.optional(Schema.Number.pipe(Schema.between(0, 100))),
 	muted: Schema.optional(Schema.Boolean),
 	alternate: Schema.optional(Schema.Literal(0, 1)),

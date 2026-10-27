@@ -17,6 +17,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { APP_LANGUAGES } from "../../../shared/locale";
 import type {
+	ProfileForegroundGuidance,
 	ProfileRequest,
 	ProfileView,
 } from "../../../shared/profile-manager";
@@ -131,6 +132,8 @@ export function ProfilesManager(): React.JSX.Element {
 
 	const text = (key: string): string => profileText(key, locale);
 	const [status, setStatus] = useState("");
+	const [foregroundGuidance, setForegroundGuidance] =
+		useState<ProfileForegroundGuidance>("available");
 	const [refreshing, setRefreshing] = useState<readonly string[]>([]);
 	const [failedThumbnails, setFailedThumbnails] = useState<readonly string[]>(
 		[],
@@ -138,6 +141,7 @@ export function ProfilesManager(): React.JSX.Element {
 	const retained = useRef(
 		new Map<string, { source: string; signature: string }>(),
 	);
+	const [appSearch, setAppSearch] = useState("");
 	const [deviceChoice, setDeviceChoice] = useState({ id: "", serial: "" });
 	useEffect(() => {
 		if (view?.progress.running) setFailedThumbnails([]);
@@ -150,6 +154,7 @@ export function ProfilesManager(): React.JSX.Element {
 			setView,
 			(p) => setView((v) => (v ? { ...v, progress: p } : v)),
 			setStatus,
+			setForegroundGuidance,
 		);
 	}, [locale]);
 	const request = async (command: ProfileRequest): Promise<boolean> => {
@@ -315,6 +320,17 @@ export function ProfilesManager(): React.JSX.Element {
 	return (
 		<section className="profiles-manager" aria-label="Knob Profile">
 			<header>
+				<button
+					type="button"
+					aria-label={localeText("profileReturn")}
+					onClick={() =>
+						window.dispatchEvent(
+							new CustomEvent("open-quake:navigate", { detail: "keys" }),
+						)
+					}
+				>
+					{localeText("profileClose")}
+				</button>
 				<h2>{text("functionWheelEditor.title")}</h2>
 				<label>
 					{localeText("language")}
@@ -458,6 +474,22 @@ export function ProfilesManager(): React.JSX.Element {
 						</select>
 					</label>
 					<label>
+						{localeText("profileAppSearch")}
+						<input
+							type="search"
+							value={appSearch}
+							onChange={(event) => setAppSearch(event.target.value)}
+						/>
+					</label>
+					{view.apps.find((app) => app.path === link?.appPath)?.icon && (
+						<img
+							width={20}
+							height={20}
+							alt={link?.appIdentifier ?? ""}
+							src={view.apps.find((app) => app.path === link?.appPath)?.icon}
+						/>
+					)}
+					<label>
 						{text("settings.selectApplication")}{" "}
 						<select
 							value={link?.appPath ?? ""}
@@ -497,7 +529,13 @@ export function ProfilesManager(): React.JSX.Element {
 								<option value={link.appPath}>{link.appIdentifier}</option>
 							)}
 							{view.apps
-								.filter((app) => app.path !== link?.appPath)
+								.filter(
+									(app) =>
+										app.path !== link?.appPath &&
+										`${app.name} ${app.identifier} ${app.path}`
+											.toLocaleLowerCase()
+											.includes(appSearch.trim().toLocaleLowerCase()),
+								)
 								.map((app) => (
 									<option key={app.path} value={app.path}>
 										{app.name}
@@ -524,6 +562,9 @@ export function ProfilesManager(): React.JSX.Element {
 							</button>
 						))}
 				</fieldset>
+			)}
+			{foregroundGuidance === "accessibility-denied" && (
+				<p role="alert">{localeText("foregroundAccessibility")}</p>
 			)}
 			{status && <p role="status">{status}</p>}
 		</section>

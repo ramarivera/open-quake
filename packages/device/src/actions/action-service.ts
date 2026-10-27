@@ -32,6 +32,41 @@ interface InputState {
 }
 const missing = () => new KeyFunctionUnavailable("adapter-missing");
 
+const prepareHotkey = Effect.fn("ActionService.prepareHotkey")(function* (
+	chord: string,
+	adapters: ActionHostAdapters["Type"],
+): Effect.fn.Return<() => Effect.Effect<void, ActionError>, ActionError> {
+	const token = chord;
+	const audio = Schema.decodeUnknownEither(MediaCommand)(token);
+	if (
+		AUDIO_OPERATIONS.some((value) => value === token) &&
+		Either.isRight(audio)
+	) {
+		if (
+			Option.isNone(adapters.media) ||
+			!adapters.media.value.supportedCommands.has(audio.right)
+		)
+			return yield* Effect.fail(
+				new KeyFunctionUnavailable("unsupported-command"),
+			);
+		const media = adapters.media.value;
+		return () => media.sendMedia(audio.right);
+	}
+	if (Option.isNone(adapters.keyboard)) return yield* Effect.fail(missing());
+	if (
+		!chord
+			.split("+")
+			.every(
+				(key) =>
+					Option.isSome(adapters.keyboard) &&
+					adapters.keyboard.value.supportedTokens.has(key),
+			)
+	)
+		return yield* Effect.fail(new KeyFunctionUnavailable("unsupported-token"));
+	const keyboard = adapters.keyboard.value;
+	return () => keyboard.pressChord(chord);
+});
+
 /** Host leaf execution only. Knob directional actions and view runtimes own their dispatch. */
 export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 	config: ActionConfig,
@@ -49,52 +84,18 @@ export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 				return yield* Effect.fail(new InvalidKeyAction("config.type"));
 			if (config.supportKnob)
 				return yield* Effect.fail(new KeyFunctionUnavailable("knob-routing"));
-			const token = config.actions[0].value;
-			const audio = Schema.decodeUnknownEither(MediaCommand)(token);
-			if (
-				AUDIO_OPERATIONS.some((value) => value === token) &&
-				Either.isRight(audio)
-			) {
-				if (
-					Option.isNone(adapters.media) ||
-					!adapters.media.value.supportedCommands.has(audio.right)
-				)
-					return yield* Effect.fail(
-						new KeyFunctionUnavailable("unsupported-command"),
-					);
-				return yield* adapters.media.value.sendMedia(audio.right);
-			}
-			if (Option.isNone(adapters.keyboard))
-				return yield* Effect.fail(missing());
-			const chord = config.actions[0].value;
-			if (
-				!chord
-					.split("+")
-					.every(
-						(key) =>
-							Option.isSome(adapters.keyboard) &&
-							adapters.keyboard.value.supportedTokens.has(key),
-					)
-			)
-				return yield* Effect.fail(
-					new KeyFunctionUnavailable("unsupported-token"),
-				);
-			return yield* adapters.keyboard.value.pressChord(chord);
+			const dispatch = yield* prepareHotkey(config.actions[0].value, adapters);
+			return yield* dispatch();
 		}
 		case "text": {
 			if (config.type !== "text")
 				return yield* Effect.fail(new InvalidKeyAction("config.type"));
 			if (Option.isNone(adapters.text)) return yield* Effect.fail(missing());
-			// Check both capabilities before the first side effect.
-			if (
-				config.actions.length === 2 &&
-				(Option.isNone(adapters.keyboard) ||
-					!adapters.keyboard.value.supportedTokens.has("enter"))
-			)
-				return yield* Effect.fail(missing());
+			const followup = config.actions[1]
+				? yield* prepareHotkey(config.actions[1].value, adapters)
+				: () => Effect.void;
 			yield* adapters.text.value.insertText(config.actions[0].value);
-			if (config.actions.length === 2 && Option.isSome(adapters.keyboard))
-				yield* adapters.keyboard.value.pressChord("enter");
+			yield* followup();
 			return;
 		}
 		case "open": {

@@ -58,6 +58,11 @@ Detach or target switch SHALL cancel old-session writes and discard stale readba
 - **WHEN** target A's read completes after target B is selected
 - **THEN** A's response cannot replace B's settings or cause a write to either target
 
+#### Scenario: Shared owner read cancellation
+
+- **WHEN** target refresh or replacement cancels an initial lighting read after its raw exchange has been written on the shared hardware connection
+- **THEN** that exchange SHALL drain its matching reply or existing 1500ms timeout before cancellation completes; a successful drain SHALL preserve the hardware connection, while timeout and genuine disconnect SHALL still fail it; queued unwritten operations SHALL remain cancellable
+
 ### Requirement: Unsupported bindings and per-key RGB remain unavailable
 
 Unknown QMK v3 bindings SHALL NOT be discovered through speculative writes as part of normal settings usage. Cached bindings SHALL require matching firmware/protocol evidence. Per-key RGB SHALL remain unavailable until an independently verified per-key mapping and transport are registered. Failure responses SHALL carry stable reason codes and exclude raw HID paths and original cause objects from renderer diagnostics.

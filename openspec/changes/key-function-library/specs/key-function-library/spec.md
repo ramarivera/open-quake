@@ -31,7 +31,7 @@ New leaf keys SHALL use the common schema from `profiles-key-grid` and one of th
 | `website` | Exactly `{type:'url',value:string}` containing an absolute http or https URL |
 | `hotkey`, supportKnob false | Exactly `{type:'key',value:chord}` |
 | `hotkey`, supportKnob true | Exactly two `{type:'key',value:chord}` records, interpreted by the focused knob capability, not as a toggle |
-| `text` | `{type:'text',value:string}` with at most 500 Unicode code points, followed optionally by `{type:'key',value:'enter'}`; text must be nonempty to execute |
+| `text` | `{type:'text',value:string}` with at most 500 Unicode code points, followed optionally by a supported keyboard chord or media token in `{type:'key',value:string}`; text must be nonempty to execute |
 | `open` | Exactly `{type:'path',value:string}` containing a nonempty selected application reference or absolute application path supported by the host adapter |
 | `playPause` | Exactly `{type:'key',value:'audio_play'}` |
 | `stopPlay` | Exactly `{type:'key',value:'audio_stop'}` |
@@ -53,6 +53,12 @@ A chord SHALL be a plus-separated sequence of distinct supported modifier names 
 
 - **WHEN** the same text key has an enter action after the text action
 - **THEN** the text inserts first and one enter follows only after insertion succeeds
+
+#### Scenario: Text follow-up uses its owning adapter
+
+- **WHEN** saved text includes an optional supported keyboard chord or media token
+- **THEN** its owning adapter capability is checked before insertion, exact text inserts first, and the follow-up dispatches only after insertion succeeds
+- **AND** an unavailable follow-up prevents insertion without falling back to another command
 
 #### Scenario: Invalid target
 
@@ -137,3 +143,114 @@ multiActions SHALL contain an ordered non-recursive subActions list of validated
 - **THEN** the editor uses the same first visible profile and first page as the strip, replacing the previous device's profile and page together
 - **AND** changing devices discards the previous device's unsaved key even when both devices use the same effective page
 - **AND** returning to the previous device or removing its active selection recalculates its effective selection
+
+### Requirement: Saved native runtime actions
+The saved-key consumer SHALL dispatch close, cmd, managementCenter, screenshot and lock through typed native boundaries. MAIN-066, MAIN-068, MAIN-069, MAIN-070, MAIN-071, MAIN-072, MAIN-082, MAIN-097, MGMT-158, MGMT-196 and MGMT-210 apply.
+
+#### Scenario: Saved actions use their real host owners
+- **WHEN** an authorized committed key activates a native action or sequence step
+- **THEN** its decoded parameters reach the host boundary once, cancelled approval performs no launch, and errors produce scoped INVALID feedback without changing the saved key
+- **AND** Clipboard paste SHALL preserve rich supported formats, wait 50 ms, restore only when the clipboard still belongs to the paste, then execute the saved optional second chord.
+- **AND** Website templates SHALL substitute the key title without evaluation, add http:// for missing schemes and reject unsafe schemes.
+- **AND** Close SHALL match exact executable identity and recheck the PID before termination.
+- **AND** Cmd SHALL use the profile command approval owner, bind approval to exact saved content and require approval again after edits.
+- **AND** Opening an existing app SHALL focus it without another launch.
+- **AND** Screenshot SHALL capture all displays to Pictures with collision-resistant screenshot-<ms>-<capture>-<i>.png names and exclusive creation; Windows command+l SHALL call LockWorkStation.
+
+### Requirement: Ordered saved composite execution
+MAIN-076, MGMT-163, MGMT-206 and MGMT-210 sequences SHALL accept subActions-only imports, validate every step before execution, await native and plugin completion in order, apply each gap with default 100 ms, and stop on cancellation or the first failure.
+
+#### Scenario: Nested plugin action completes before the next native action
+- **WHEN** a saved sequence contains delay, plugin and native steps
+- **THEN** TestClock-controlled delay and awaited plugin completion precede the last native effect, progress follows completed steps, and cancellation or plugin failure prevents remaining effects
+- **AND** Close, playAudioLegacy, stopAudio and cmd SHALL enter their existing owners.
+- **AND** A typed plugin port SHALL receive the committed parent activation plus plugin id, action and step index.
+- **AND** Until the plugins lane registers a runtime, it SHALL fail with typed KeyFunctionUnavailable, code QUAKE.ACTION.UNAVAILABLE and reason plugin-runtime.
+- **AND** MAIN-066 plugin inventory and MAIN-076 remain partial until that registration lands.
+
+#### Scenario: Audio validation precedes every sequence host effect
+- **WHEN** text precedes malformed playAudioLegacy in a saved sequence
+- **THEN** soundboard-owned configuration validation rejects the sequence before text insertion or playback
+- **AND** valid playback and payload-free stopAudio preserve the sequence order through their existing owner
+
+### Requirement: Scoped timer completion and feedback
+MAIN-075, MAIN-081, MGMT-138 and MGMT-404 timers SHALL store an absolute endAt scoped to device, profile, page, revision and key.
+
+#### Scenario: Expiry, clear and restart preserve timer ownership
+- **WHEN** TestClock advances a saved timer to zero, the user clears it and then activates it again outside the debounce window
+- **THEN** zero persists through the first activation, the clear emits no host operation, the next activation starts a new endAt, and obsolete profile/page/revision completion cannot alert or callback
+- **AND** Expiry SHALL retain zero until one activation clears it without restarting.
+- **AND** Duplicate timer activation within 600 ms SHALL be ignored.
+- **AND** The saved callback=1 SHALL emit exactly one typed completion for a still-active matching timer; callback=0, cancellation, revision replacement and disconnection SHALL emit none.
+- **AND** Inactive timers SHALL retain zero for return without late alarm/audio/callback.
+- **AND** STOP=0 clears alerts, INVALID=1 expires after 2000 ms, ALARM=2 retains zero without an alarm icon and CHECKMARK=3 remains until cleared.
+- **AND** Progress below zero hides, progress 100 expires after 1000 ms, and changed incomplete progress expires after 5000 ms.
+
+### Requirement: Saved folder and profile navigation
+MAIN-077, MAIN-078, MGMT-142 and MGMT-170 SHALL reuse allocated profile pages for folder/createFolder and Back, retain nested return contexts, and restore the prior profile/page after emojiBack. Invalid or stale destinations SHALL not select a fallback. switchProfile SHALL honor profile/page, -1 next, -2 previous and 0 default. Saved Next and Previous SHALL use the same persisted visible-profile order, including empty profiles and excluding hidden profiles. Slides 0/1/2/3 SHALL use previous page/next page/previous group/next group; group slides SHALL skip empty or hidden groups and wrap in numeric profile-name order.
+
+#### Scenario: Nested folders and default profile use the committed selection
+- **WHEN** saved folder and Back keys navigate nested allocated pages, or a slide or switchProfile key changes selection
+- **THEN** the existing selection owner commits the target once, restores its runtime state, and leaves selection unchanged for stale destinations
+
+### Requirement: Native action recovery and ownership
+Native actions SHALL preserve clipboard data on failed setup and interruption, canonicalize application filesystem identity before matching, and keep command approval bound to the current saved revision and device session.
+
+#### Scenario: Failed paste setup preserves data
+- **WHEN** clipboard clear or temporary write fails after a snapshot, or paste work is interrupted
+- **THEN** cleanup restores the snapshot while the clipboard still belongs to that paste and returns typed scrubbed failures
+- **AND** concurrent clipboard edits remain intact
+
+#### Scenario: Saved command revision replaces approval
+- **WHEN** a command is edited away and back, imported or restored into a replacement revision, or activated in a different device session
+- **THEN** the shared direct and sequence command owner requires confirmation again
+- **AND** repeated activations within the same approved saved revision and session reuse approval
+
+#### Scenario: Canonical applications and explicit Linux focus limits
+- **WHEN** Open or Close targets a symlink or a differently cased path on a case-insensitive volume
+- **THEN** matching uses filesystem identity and rechecks the exact PID before focus or termination
+- **AND** distinct identities on case-sensitive volumes remain distinct
+- **AND** Linux focus reports unsupported outside X11 or without xdotool and never launches a duplicate as fallback
+
+#### Scenario: Sequence normalization and replacement cleanup
+- **WHEN** a sequence includes a website template or an edited timer revision replaces running work
+- **THEN** website steps normalize against the parent title before any host effect, unsafe schemes reject the entire sequence, and the first activation starts the new timer
+- **AND** clearing expired zero retires pending alarm work so the next activation starts a timer
+
+#### Scenario: Production profile imports normalize website actions
+- **WHEN** the profile service imports a website key with a scheme-less URL and title placeholders
+- **THEN** the existing action normalizer runs before validation, the supported key executes the normalized HTTP or HTTPS URL once on activation, and import itself performs no host action
+- **AND** original JSON remains inert compatibility data, while unsafe URL schemes remain unsupported
+
+#### Scenario: Native activation takes ownership of an existing display countdown
+- **WHEN** a positive display countdown precedes activation of a longer saved timer
+- **THEN** activation interrupts and awaits the display writer before starting the native timer, so the old display deadline cannot expire or hide it
+- **AND** revision guards, activation debounce, zero-clear suppression and one completion callback remain in force
+
+#### Scenario: Scheme-less website ports remain supported
+- **WHEN** a website import or sequence contains localhost:3000/path or example.org:8080/path, including title placeholders
+- **THEN** normalization adds HTTP before existing URL validation and the owning adapter dispatches the valid target
+- **AND** unsafe explicit schemes and invalid ports remain rejected before host effects
+
+#### Scenario: Repeated Windows application focus
+
+- **WHEN** an Open key focuses an already-running Windows application twice in the same desktop process
+- **THEN** both activations enumerate and focus its window using the same cached callback type
+- **AND** each callback registration is released, including when activation is aborted
+
+#### Scenario: Owned action failures preserve their identity
+
+- **WHEN** the desktop action owner declines a command or rejects with a canonical action error
+- **THEN** the promise boundary retains that error and its original cause, so denied permission, missing applications, unavailable capabilities and invalid actions remain distinguishable
+- **AND** unexpected failures become privacy-scrubbed host failures
+
+#### Scenario: Website title substitution is literal
+
+- **WHEN** a website template includes a supported title placeholder and the key title contains dollar replacement patterns or placeholder-shaped text
+- **THEN** a single substitution pass inserts the title verbatim without evaluating replacement patterns or expanding the inserted title again
+- **AND** profile import retains the editable template while validating an expanded copy, so later activation does not substitute an already-expanded imported URL
+
+#### Scenario: Sequence pickers share selection rules
+
+- **WHEN** the function library and sequence editor list the same native sequence function
+- **THEN** both use the same registry default and selection predicate, while execution still validates the completed leaf and the editor retains its 100-operation limit

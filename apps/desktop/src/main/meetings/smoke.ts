@@ -610,17 +610,25 @@ async function smoke(): Promise<void> {
 		await click(management, ".meeting-title-dialog button[type=button]");
 		await click(management, `.meeting-record[data-record-id="${id}"]`);
 
-		// AI-334: the real owner preserves the forced 5x2 viewer footprint.
-		assert.deepEqual(
+		// AI-334: save an alternate footprint through the real preview/save owner.
+		assert.equal(
 			await management.webContents.executeJavaScript(`(async () => {
-    const state=await window.quakeKeyLibrary.request({type:'read',locale:'en'});
-    if(state._tag!=='success')throw new Error('Key read rejected');
-    const p=state.envelope.profiles.find(p=>p.id==='1-1'), page=p.pages[0], key=page.keys.find(k=>k.keyCode==='1,1');
-    const target={token:'meeting-viewer-size',profileId:p.id,pageId:page.id,keyCode:key.keyCode,revision:p.revision};
-    return window.quakeKeyLibrary.request({type:'preview',target,key:{...key,config:{...key.config,size:[3,1]}}});
-   })()`),
-			{ _tag: "rejected", reason: "layout-locked-or-invalid" },
+                const state=await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+                if(state._tag!=='success')throw new Error('Key read rejected');
+                const p=state.envelope.profiles.find(p=>p.id==='1-1'),page=p.pages[0],key=page.keys.find(k=>k.keyCode==='1,1');
+                const target={token:'meeting-viewer-size',profileId:p.id,pageId:page.id,keyCode:key.keyCode,revision:p.revision};
+                const preview=await window.quakeKeyLibrary.request({type:'preview',target,key:{...key,config:{...key.config,size:[3,1]}}});
+                if(preview._tag!=='success')throw new Error('Alternate span rejected');
+                return (await window.quakeKeyLibrary.request({type:'save',token:target.token}))._tag;
+            })()`),
+			"success",
 		);
+		await wait(
+			panel,
+			"document.querySelector('.meeting-display').getBoundingClientRect().width<800",
+		);
+		await capture(panel, "meetings-viewer-3x1");
+
 		for (const tab of ["main", "temp"] as const) {
 			await request(panel, { _tag: "tab", tab });
 			await wait(panel, "!!document.querySelector('.meeting-safe-text')");

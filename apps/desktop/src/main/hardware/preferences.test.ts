@@ -39,6 +39,8 @@ const legacy = {
 	buzzerEnabled: false,
 	knobLedAlwaysOn: false,
 	alertVolume: 32,
+	mic: false,
+	luminance: 77,
 };
 
 async function migrationFixture() {
@@ -58,6 +60,20 @@ async function migrationFixture() {
 }
 
 describe("serial preferences disk adapter", () => {
+	it("round-trips every luminance observation below the outbound command minimum", async () => {
+		const f = await migrationFixture();
+		try {
+			for (let luminance = 0; luminance < 25; luminance++) {
+				const preferences = { ...legacy, luminance };
+				await f.runtime.runPromise(f.store.write("LOW", preferences));
+				expect(await f.runtime.runPromise(f.store.read("LOW"))).toEqual(
+					Option.some(preferences),
+				);
+			}
+		} finally {
+			await f.close();
+		}
+	});
 	it("migrates a fake store's colon-serial record atomically and keeps the legacy source recoverable", async () => {
 		const f = await migrationFixture();
 		try {

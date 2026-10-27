@@ -1,4 +1,5 @@
 import { Either } from "effect";
+import { normalizeWebsiteUrl } from "./action-contracts.js";
 import { validateAction } from "./action-invariants.js";
 
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -7,6 +8,7 @@ export type ActionImportDiagnostic =
 	| "next-track-type"
 	| "hotkey-placeholder"
 	| "empty-text-enter"
+	| "website-normalized"
 	| "unsupported-or-incomplete";
 export interface NormalizedActionImport {
 	readonly original: unknown;
@@ -35,10 +37,34 @@ export function normalizeActionImport(
 	if (!record(normalized) || !record(normalized.config))
 		return { original, normalized, diagnostics: ["unsupported-or-incomplete"] };
 	const config = normalized.config;
-	const actions = config.actions;
-	if (!Array.isArray(actions))
+	const originalActions = config.actions;
+	if (
+		!Array.isArray(originalActions) &&
+		config.type === "multiActions" &&
+		Array.isArray(config.subActions)
+	)
+		config.actions = [];
+	if (!Array.isArray(config.actions))
 		return { original, normalized, diagnostics: ["unsupported-or-incomplete"] };
+	const actions = config.actions;
 	const [first, second] = actions;
+	if (
+		config.type === "website" &&
+		record(first) &&
+		first.type === "url" &&
+		typeof first.value === "string"
+	) {
+		const title =
+			record(config.title) && typeof config.title.text === "string"
+				? config.title.text
+				: "";
+		const url = normalizeWebsiteUrl(first.value, title);
+		if (url && url !== first.value) {
+			first.value = url;
+			diagnostics.push("website-normalized");
+		}
+	}
+
 	if (
 		normalized.childrenName === "skipForward" &&
 		config.type === "skipBackward" &&

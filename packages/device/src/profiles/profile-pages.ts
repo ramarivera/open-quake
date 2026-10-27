@@ -1,11 +1,17 @@
 import { Effect, Array as EffectArray, Option } from "effect";
-import type { ProfileEnvelope } from "./profile-contracts.js";
+import {
+	createDefaultProfileKnob,
+	createEmptyProfileKey,
+	type ProfileEnvelope,
+} from "./profile-contracts.js";
 import {
 	ProfileNotFound,
 	type ProfileRepositoryError,
 	ProfileRevisionConflict,
 	ProfileValidationFailed,
 } from "./profile-errors.js";
+
+export const PROFILE_PAGE_LIMIT = 10;
 
 export interface PageEdit {
 	readonly type: "add-page" | "delete-page";
@@ -30,7 +36,8 @@ export const editProfilePages = Effect.fn("ProfileService.editPages")(
 			);
 		const index = profile.pages.findIndex((p) => p.id === request.pageId);
 		if (
-			(request.type === "add-page" && index >= 0) ||
+			(request.type === "add-page" &&
+				(index >= 0 || profile.pages.length >= PROFILE_PAGE_LIMIT)) ||
 			(request.type === "delete-page" &&
 				(index < 0 || profile.pages.length === 1))
 		)
@@ -43,7 +50,15 @@ export const editProfilePages = Effect.fn("ProfileService.editPages")(
 				? [
 						first,
 						...rest,
-						{ id: request.pageId, keys: [], compatibility: Option.none() },
+						{
+							id: request.pageId,
+							keys: Array.from({ length: 16 }, (_, i) =>
+								createEmptyProfileKey(
+									`${Math.floor(i / 8) + 1},${(i % 8) + 1}`,
+								),
+							),
+							compatibility: Option.none(),
+						},
 					]
 				: profile.pages.filter((p) => p.id !== request.pageId);
 		const nextFirst = pages[0];
@@ -56,7 +71,14 @@ export const editProfilePages = Effect.fn("ProfileService.editPages")(
 			...envelope,
 			profiles: EffectArray.map(envelope.profiles, (p) =>
 				p.id === profile.id
-					? { ...p, pages: nextPages, revision: p.revision + 1 }
+					? {
+							...p,
+							pages: nextPages,
+							knob: Option.orElse(p.knob, () =>
+								Option.some(createDefaultProfileKnob()),
+							),
+							revision: p.revision + 1,
+						}
 					: p,
 			),
 			activeByDevice: {

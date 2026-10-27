@@ -107,3 +107,5 @@ Lane verification: exact root turbo command passes 4131 tests with four existing
 - [x] 13.4 Bound generated shortcut placement titles while retaining full searchable library labels. Comment 4381332353. Bead open-quake-lih.10.19.
 - [x] 13.5 Convert normalized Windows modifier chords for generated grid and sequence placement. Comment 4381332361. Bead open-quake-lih.10.19.
 - [x] 13.6 Disable directional hotkey presets in sequences while preserving ordinary grid placement. Comment 4381332371. Bead open-quake-lih.10.19.
+
+- [x] AI-334 permit meeting viewer selection and save alternate spans through Keys UI. Bead open-quake-zh8.15, parent open-quake-i3j. Mounted Keys UI saves 3x1; hidden mock Electron exercises the real preview/save owner and pane controls.

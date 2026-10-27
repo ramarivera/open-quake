@@ -44,9 +44,20 @@ function fixture(
 	invalidSlot = false,
 	composition: "canonical" | "repository-defaults" = "canonical",
 ) {
-	let saved = encodeProfileEnvelope(
-		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
+	// Keep the real DK-Claw payload; unrelated presets only amplify every commit.
+	const installed = installProfileCatalog(
+		createInitialProfileEnvelope(),
+		"darwin",
 	);
+	const relevant = installed.profiles.filter((p) =>
+		["1-2", "1-4", "1-8"].includes(p.id),
+	);
+	const [first, ...rest] = relevant;
+	if (!first) throw new Error("Missing profile fixture");
+	let saved = encodeProfileEnvelope({
+		...installed,
+		profiles: [first, ...rest],
+	});
 	let writes = 0;
 	let failDelivery = 0;
 	let deliveries = 0;

@@ -1,9 +1,11 @@
 import { Either, Schema } from "effect";
 import { useId, useRef, useState } from "react";
+import { AudioSetupReply } from "../../../shared/audio-setup";
 import {
 	defaultMeetingConfig,
 	MeetingConfig,
 } from "../../../shared/meeting-bridge";
+import { useAppTranslations } from "../i18n";
 import { TranslationLanguageSelect } from "../settings/TranslationLanguageSelect";
 import { SharedMicrophonePicker } from "../speech/SpeechSettings";
 import { meetingRequest } from "./useMeetings";
@@ -163,8 +165,34 @@ export function MeetingSettings({
 }
 
 function SystemAudioSetup(): React.JSX.Element {
+	const t = useAppTranslations("audioSetup");
 	const [status, setStatus] = useState("");
 	const [open, setOpen] = useState(false);
+	const [installable, setInstallable] = useState(false);
+	const [consent, setConsent] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const setup = async (action: "status" | "install") => {
+		try {
+			const result = Schema.decodeUnknownSync(AudioSetupReply)(
+				await window.quakeMeetings?.audioSetup?.({ action }),
+			);
+			setInstallable(
+				result.platform === "darwin" &&
+					result.state !== "mock" &&
+					result.state !== "unsupported",
+			);
+			if (action === "install")
+				setStatus(
+					result.state === "opened" || result.state === "cancelled"
+						? result.state
+						: result.state === "storage-full"
+							? "storageFull"
+							: "failed",
+				);
+		} catch {
+			if (action === "install") setStatus("unavailable");
+		}
+	};
 	const version = useRef(0);
 	const refresh = async () => {
 		const request = ++version.current;
@@ -176,53 +204,78 @@ function SystemAudioSetup(): React.JSX.Element {
 						(d) =>
 							d.kind === "audioinput" && /BlackHole|Monitor/i.test(d.label),
 					)
-						? "System audio input available"
-						: "No BlackHole or Monitor input found",
+						? "available"
+						: "missing",
 				);
 		} catch {
-			if (request === version.current)
-				setStatus(
-					"System audio inputs couldn't be checked. Refresh to try again.",
-				);
+			if (request === version.current) setStatus("checkFailed");
 		}
 	};
 	return (
 		<div>
 			<button
 				type="button"
+				className="button"
 				onClick={() => {
 					setOpen(true);
 					void refresh();
+					void setup("status");
 				}}
 			>
-				System audio setup
+				{t("title")}
 			</button>
 			{open ? (
-				<section aria-label="System audio setup">
-					<p>
-						Windows uses desktop loopback. macOS and Linux require an installed
-						BlackHole or Monitor input. On macOS, create a Multi-Output Device
-						in Audio MIDI Setup, select your output and BlackHole, and route
-						system sound to it. Grant microphone access. No driver or audio
-						routing is changed here.
-					</p>
-					<p role="status">{status}</p>
+				<section className="meeting-audio-setup" aria-label={t("title")}>
+					<p>{t("routing")}</p>
+					<p role="status">{status ? t(status) : ""}</p>
+					{installable ? (
+						<>
+							<p>{t("warning")}</p>
+							<p>{t("retention")}</p>
+							<label className="meeting-checkbox">
+								<input
+									type="checkbox"
+									checked={consent}
+									disabled={busy}
+									onChange={(event) => setConsent(event.target.checked)}
+								/>
+								{t("consent")}
+							</label>
+							<button
+								type="button"
+								className="button"
+								disabled={!consent || busy}
+								onClick={() => {
+									setBusy(true);
+									void setup("install").finally(() => {
+										setBusy(false);
+										setConsent(false);
+									});
+								}}
+							>
+								{busy ? t("opening") : t("install")}
+							</button>
+						</>
+					) : null}
 					<button
 						type="button"
+						className="button"
 						onClick={() => {
 							void refresh();
 						}}
 					>
-						Refresh inputs
+						{t("refresh")}
 					</button>
 					<button
 						type="button"
+						className="button"
 						onClick={() => {
 							version.current++;
+							setConsent(false);
 							setOpen(false);
 						}}
 					>
-						Cancel
+						{t("cancel")}
 					</button>
 				</section>
 			) : null}

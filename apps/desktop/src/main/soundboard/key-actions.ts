@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
 import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service";
 import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts";
 import type { JsonStore } from "../../../../../packages/edge/src/channels/channel-contracts";
@@ -8,6 +8,42 @@ import { importSoundConfig } from "../../../../../packages/edge/src/soundboard/s
 import type { makeSoundboardService } from "../../../../../packages/edge/src/soundboard/soundboard-service";
 import type { LocalPlayerSnapshot } from "../../shared/weather-media-contracts";
 import { localResumeRepository } from "../weather-media/local-resume";
+
+/** Parse playback with the same contract for preflight and execution. No host IO. */
+function parsePlaybackConfig(
+	config: Pick<ProfileKey["config"], "type" | "actions">,
+) {
+	return importSoundConfig({
+		type: config.type,
+		actions: config.actions.filter(
+			(a) => a.type !== "musicSource" && a.type !== "playerIntent",
+		),
+	}).pipe(
+		Either.flatMap((parsed) =>
+			!parsed.operation ||
+			!parsed.fade ||
+			parsed.volume === undefined ||
+			parsed.issues.some((issue) => issue !== "unverifiedFiles")
+				? Either.left(new SoundboardConfigInvalid())
+				: Either.right({
+						...parsed,
+						operation: parsed.operation,
+						fade: parsed.fade,
+						volume: parsed.volume,
+					}),
+		),
+	);
+}
+
+export const validateSequenceAudio = Effect.fn(
+	"SoundboardKeys.validateSequenceAudio",
+)(function* (
+	config: Pick<ProfileKey["config"], "type" | "actions">,
+): Effect.fn.Return<void, SoundboardConfigInvalid> {
+	// stopAudio has no playback payload, matching execute's stop-all contract.
+	if (config.type === "stopAudio") return;
+	yield* parsePlaybackConfig(config);
+});
 
 /** The committed-key boundary. Playback, fades, looping and output stay in their existing owner. */
 export function soundboardKeyActions(
@@ -54,19 +90,7 @@ export function soundboardKeyActions(
 			actions[0]?.value === 0
 		)
 			return false;
-		const parsed = yield* importSoundConfig({
-			type: key.config.type,
-			actions: key.config.actions.filter(
-				(a) => a.type !== "musicSource" && a.type !== "playerIntent",
-			),
-		});
-		if (
-			!parsed.operation ||
-			!parsed.fade ||
-			parsed.volume === undefined ||
-			parsed.issues.some((issue) => issue !== "unverifiedFiles")
-		)
-			return yield* new SoundboardConfigInvalid();
+		const parsed = yield* parsePlaybackConfig(key.config);
 		const intent = key.config.actions.find(
 			(a) => a.type === "playerIntent",
 		)?.value;

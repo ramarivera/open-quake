@@ -1,5 +1,6 @@
 import { Either, Schema } from "effect";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
+import { AUDIO_SETUP_CHANNEL } from "../../shared/audio-setup";
 import {
 	CAPTURE_CHUNK,
 	CAPTURE_LOST,
@@ -14,6 +15,7 @@ import {
 } from "../../shared/meeting-bridge";
 
 const bridge: MeetingsBridge = {
+	audioSetup: (request) => ipcRenderer.invoke(AUDIO_SETUP_CHANNEL, request),
 	request: (command) => ipcRenderer.invoke(MEETING_REQUEST, command),
 	onSnapshot: (callback) => {
 		const listener = (_: IpcRendererEvent, value: unknown): void =>
