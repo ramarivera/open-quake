@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readlink, writeFile } from "node:fs/promises";
+import { readdir, readlink, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -12,6 +12,34 @@ const macFocusScript =
 async function processList(
 	signal?: AbortSignal,
 ): Promise<readonly { pid: number; path: string }[]> {
+	if (platform() === "linux") {
+		signal?.throwIfAborted();
+		const entries = await readdir("/proc", { withFileTypes: true });
+		const rows = await Promise.all(
+			entries
+				.filter((entry) => entry.isDirectory() && /^[1-9]\d*$/.test(entry.name))
+				.map(async (entry) => {
+					signal?.throwIfAborted();
+					try {
+						const path = await readlink(`/proc/${entry.name}/exe`);
+						return [{ pid: Number(entry.name), path }];
+					} catch (cause) {
+						if (
+							typeof cause === "object" &&
+							cause !== null &&
+							"code" in cause &&
+							["ENOENT", "ESRCH", "EACCES", "EPERM"].includes(
+								String(cause.code),
+							)
+						)
+							return [];
+						throw cause;
+					}
+				}),
+		);
+		signal?.throwIfAborted();
+		return rows.flat();
+	}
 	if (platform() === "win32") {
 		const { stdout } = await run(
 			"powershell.exe",
