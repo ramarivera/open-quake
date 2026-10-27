@@ -7,7 +7,11 @@ export function registerTestProfiles(
 ) {
 	const prepared = prepareProfiles(...args);
 	const owner = ManagedRuntime.make(
-		Layer.merge(prepared.layer, TestContext.TestContext),
+		Layer.mergeAll(
+			prepared.layer,
+			TestContext.TestContext,
+			args[7]?.layer ?? Layer.empty,
+		),
 	);
 	prepared.bind(owner);
 	const profiles = prepared.start();
