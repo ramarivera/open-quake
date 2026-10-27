@@ -529,9 +529,13 @@ export function normalizeWebsiteUrl(
 		[...expanded].some((char) => char.charCodeAt(0) < 32)
 	)
 		return undefined;
-	const url = /^[a-z][a-z\d+.-]*:/i.test(expanded)
-		? expanded
-		: `http://${expanded}`;
+	// A localhost or dotted hostname followed by a numeric port is not a scheme.
+	const hostPort =
+		/^(?:localhost|(?:[a-z\d-]+\.)+[a-z\d-]+):\d+(?:[/?#]|$)/i.test(expanded);
+	const url =
+		!hostPort && /^[a-z][a-z\d+.-]*:/i.test(expanded)
+			? expanded
+			: `http://${expanded}`;
 	return Schema.is(WebsiteUrl)(url) ? url : undefined;
 }
 

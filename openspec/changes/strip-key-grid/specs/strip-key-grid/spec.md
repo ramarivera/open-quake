@@ -433,3 +433,8 @@ Feedback SHALL remain bound to the original activation, and terminal failure ale
 - **WHEN** a device resets after targeted runtime artwork replaced a saved icon
 - **THEN** the reset explicitly clears the icon override through the existing runtime contract and the mounted tile displays its saved icon at the same revision
 - **AND** the runtime snapshot is empty and another device's artwork remains intact
+
+#### Scenario: Runtime artwork replaces the selected alternate icon
+- **WHEN** targeted artwork arrives while a mute or hotkeySwitch key shows its saved alternate visual
+- **THEN** the mounted tile displays the runtime artwork with the alternate title, without mutating saved icons
+- **AND** reset clears the override and restores saved primary artwork at the same revision

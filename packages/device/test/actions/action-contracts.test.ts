@@ -438,3 +438,20 @@ it("MAIN-066: all 76 retained native types have their canonical owner; plugin di
 	expect(retainedActionOwner("assistant")).toBe("voice");
 	expect(retainedActionOwner("clawbot")).toBe("agents");
 });
+
+it.each([
+	["localhost:3000/{title}", "http://localhost:3000/hello"],
+	["example.org:8080/{{title}}", "http://example.org:8080/hello"],
+	["127.0.0.1:8080/path", "http://127.0.0.1:8080/path"],
+	["localhost:65536/path", undefined],
+	["example.org:invalid/path", undefined],
+	["javascript:3000/path", undefined],
+	["data:8080/path", undefined],
+	["file:8080/path", undefined],
+	["https:3000/path", undefined],
+])(
+	"PR127: validates host ports without allowing unsafe schemes %s",
+	(value, expected) => {
+		expect(normalizeWebsiteUrl(value, "hello")).toBe(expected);
+	},
+);

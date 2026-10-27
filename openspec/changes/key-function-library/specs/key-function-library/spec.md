@@ -221,3 +221,13 @@ Native actions SHALL preserve clipboard data on failed setup and interruption, c
 - **WHEN** the profile service imports a website key with a scheme-less URL and title placeholders
 - **THEN** the existing action normalizer runs before validation, the supported key executes the normalized HTTP or HTTPS URL once on activation, and import itself performs no host action
 - **AND** original JSON remains inert compatibility data, while unsafe URL schemes remain unsupported
+
+#### Scenario: Native activation takes ownership of an existing display countdown
+- **WHEN** a positive display countdown precedes activation of a longer saved timer
+- **THEN** activation interrupts and awaits the display writer before starting the native timer, so the old display deadline cannot expire or hide it
+- **AND** revision guards, activation debounce, zero-clear suppression and one completion callback remain in force
+
+#### Scenario: Scheme-less website ports remain supported
+- **WHEN** a website import or sequence contains localhost:3000/path or example.org:8080/path, including title placeholders
+- **THEN** normalization adds HTTP before existing URL validation and the owning adapter dispatches the valid target
+- **AND** unsafe explicit schemes and invalid ports remain rejected before host effects

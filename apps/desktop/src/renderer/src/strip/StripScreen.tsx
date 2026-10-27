@@ -383,30 +383,31 @@ export function StripScreen({
 							: undefined;
 					const translated =
 						titles === "provided" ? key : localizedKey(key, locale);
-					const decorated = validState?.icon
-						? {
-								...translated,
-								config: { ...translated.config, icon: validState.icon },
-							}
-						: translated;
-					return (key.config.type === "hotkeySwitch" ||
-						key.config.type === "mute") &&
+					const selected =
+						(key.config.type === "hotkeySwitch" ||
+							key.config.type === "mute") &&
 						validState?.alternate === 1
+							? {
+									...translated,
+									config: {
+										...translated.config,
+										icon: Option.getOrElse(
+											translated.config.alterIcon,
+											() => translated.config.icon,
+										),
+										title: Option.getOrElse(
+											translated.config.alterTitle,
+											() => translated.config.title,
+										),
+									},
+								}
+							: translated;
+					return validState?.icon
 						? {
-								...decorated,
-								config: {
-									...translated.config,
-									icon: Option.getOrElse(
-										translated.config.alterIcon,
-										() => translated.config.icon,
-									),
-									title: Option.getOrElse(
-										translated.config.alterTitle,
-										() => translated.config.title,
-									),
-								},
+								...selected,
+								config: { ...selected.config, icon: validState.icon },
 							}
-						: decorated;
+						: selected;
 				}),
 			},
 			rows,

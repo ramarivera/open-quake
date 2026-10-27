@@ -1608,3 +1608,96 @@ for (const prior of [
 		},
 	);
 }
+
+it.effect(
+	"PR127: native countdown retires the earlier display writer before taking ownership",
+	() => {
+		let completed = 0;
+		const f = fixture(
+			{
+				type: "timer",
+				actions: [
+					{ type: "time", value: 10000 },
+					{ type: "callback", value: 1 },
+				],
+			},
+			false,
+			0,
+			{
+				timerCompleted: () =>
+					Effect.sync(() => {
+						completed++;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.displayEvent({
+				...displayTarget,
+				type: "countdown",
+				time: 2000,
+			});
+			yield* TestClock.adjust(500);
+			yield* press;
+			yield* TestClock.adjust(0);
+			const nativeStart = f.feedback.length;
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdown: 10000,
+				countdownPhase: "running",
+				endAt: 10500,
+			});
+			yield* TestClock.adjust(2000);
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdown: 8000,
+				countdownPhase: "running",
+				endAt: 10500,
+			});
+			expect(
+				f.feedback
+					.slice(nativeStart)
+					.some(
+						(state) =>
+							state.countdownPhase === "expired" ||
+							(state.countdown !== undefined && state.countdown < 8000),
+					),
+			).toBe(false);
+			expect(completed).toBe(0);
+			yield* TestClock.adjust(8000);
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdownPhase: "expired",
+				timerCompleted: true,
+			});
+			expect(completed).toBe(1);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const host of ["localhost:3000", "example.org:8080"]) {
+	it.effect(
+		`PR127: sequence normalizes scheme-less ${host} before dispatch`,
+		() => {
+			const f = fixture({
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "website",
+							actions: [{ type: "url", value: `${host}/path` }],
+						},
+					},
+				],
+			});
+			return Effect.gen(function* () {
+				yield* press;
+				yield* TestClock.adjust(100);
+				expect(f.calls).toEqual([
+					{
+						type: "website",
+						actions: [{ type: "url", value: `http://${host}/path` }],
+					},
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

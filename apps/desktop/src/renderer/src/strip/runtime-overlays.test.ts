@@ -267,172 +267,208 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 	}
 });
 
-it("SCREEN-038 MGMT-172: targeted artwork is immutable and page indicator follows all ten saved pages", async () => {
-	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-	const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
-	const keys = ["hotkey", "hotkey", "pageNo"].map((type, index) => {
-		const base = createEmptyProfileKey(`1,${index + 1}`);
-		return {
-			...base,
-			childrenName: Option.some(type),
-			config: { ...base.config, type, icon, display: true },
+it.each(["hotkey", "mute", "hotkeySwitch"])(
+	"SCREEN-038 MGMT-172: targeted artwork survives %s alternate visuals, reset and all ten saved pages",
+	async (keyType) => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+		const alternateIcon =
+			'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>';
+		const keys = [keyType, "hotkey", "pageNo"].map((type, index) => {
+			const base = createEmptyProfileKey(`1,${index + 1}`);
+			return {
+				...base,
+				childrenName: Option.some(type),
+				config: {
+					...base.config,
+					type,
+					icon,
+					display: true,
+					title: { ...base.config.title, text: "Primary" },
+					alterTitle: Option.some({ ...base.config.title, text: "Alternate" }),
+					alterIcon: Option.some(alternateIcon),
+				},
+			};
+		});
+		let envelope: ProfileEnvelope = {
+			schemaVersion: 1,
+			manager: Option.none(),
+			activeByDevice: { device: { profileId: "p", pageId: "page-1" } },
+			profiles: [
+				{
+					id: "p",
+					name: "P",
+					revision: 0,
+					compatibility: Option.none(),
+					knob: Option.none(),
+					pages: [
+						{ id: "page-1", compatibility: Option.none(), keys },
+						...Array.from({ length: 9 }, (_, i) => ({
+							id: `page-${i + 2}`,
+							compatibility: Option.none(),
+							keys,
+						})),
+					],
+				},
+			],
 		};
-	});
-	let envelope: ProfileEnvelope = {
-		schemaVersion: 1,
-		manager: Option.none(),
-		activeByDevice: { device: { profileId: "p", pageId: "page-1" } },
-		profiles: [
-			{
-				id: "p",
-				name: "P",
-				revision: 0,
-				compatibility: Option.none(),
-				knob: Option.none(),
-				pages: [
-					{ id: "page-1", compatibility: Option.none(), keys },
-					...Array.from({ length: 9 }, (_, i) => ({
-						id: `page-${i + 2}`,
-						compatibility: Option.none(),
-						keys,
-					})),
-				],
+		let accept: (state: KeyRuntimeState) => void = () => {};
+		window.quakeKeyLibrary = {
+			request: async () => ({ _tag: "success", states: [] }),
+			onPreview: () => () => {},
+			onRuntime: (callback) => {
+				accept = callback;
+				return () => {};
 			},
-		],
-	};
-	let accept: (state: KeyRuntimeState) => void = () => {};
-	window.quakeKeyLibrary = {
-		request: async () => ({ _tag: "success", states: [] }),
-		onPreview: () => () => {},
-		onRuntime: (callback) => {
-			accept = callback;
-			return () => {};
-		},
-	};
-	const runtime = ManagedRuntime.make(
-		KeyRuntime.DefaultWithoutDependencies.pipe(
-			Layer.provide(
-				Layer.succeed(KeyRuntimePort, {
-					read: Effect.sync(() => envelope),
-					execute: () => Effect.void,
-					alarm: () => Effect.void,
-					select: (deviceId, profileId, pageId) =>
-						Effect.sync(() => {
-							envelope = {
-								...envelope,
-								activeByDevice: { [deviceId]: { profileId, pageId } },
-							};
-						}),
-					publish: (state) =>
-						Effect.sync(() =>
-							accept(Schema.decodeUnknownSync(KeyRuntimeState)(state)),
-						),
-				}),
-			),
-			Layer.provideMerge(TestContext.TestContext),
-		),
-	);
-	const render = () =>
-		createElement(StripScreen, {
-			profiles: { _tag: "ready", envelope },
-			showEmptyGridDashedBorder: false,
-			interactive: false,
-			previewSerial: "device",
-		});
-	const view = await mount(render());
-	try {
-		const image = (code: string) =>
-			view.container
-				.querySelector(`[data-key-code="${code}"] img`)
-				?.getAttribute("src");
-		expect(image("1,1")).toBe(icon);
-		const replacement =
-			'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>';
-		const event = {
-			type: "showAnimation",
-			deviceId: "device",
-			profileId: "p",
-			pageId: "page-1",
-			revision: 0,
-			keyCode: "1,1",
-			resourceId: replacement,
 		};
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.displayEvent(event));
-		});
-		expect(image("1,1")).toBe(replacement);
-		for (const resourceId of [
-			"https://external.invalid/image.png",
-			"file:///private/image.png",
-			"data:image/svg+xml," +
-				encodeURIComponent(
-					'<svg xmlns="http://www.w3.org/2000/svg"><image href="https://external.invalid/image.png"/></svg>',
+		const runtime = ManagedRuntime.make(
+			KeyRuntime.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.succeed(KeyRuntimePort, {
+						read: Effect.sync(() => envelope),
+						execute: () => Effect.void,
+						alarm: () => Effect.void,
+						select: (deviceId, profileId, pageId) =>
+							Effect.sync(() => {
+								envelope = {
+									...envelope,
+									activeByDevice: { [deviceId]: { profileId, pageId } },
+								};
+							}),
+						publish: (state) =>
+							Effect.sync(() =>
+								accept(Schema.decodeUnknownSync(KeyRuntimeState)(state)),
+							),
+					}),
 				),
-		]) {
+				Layer.provideMerge(TestContext.TestContext),
+			),
+		);
+		const render = () =>
+			createElement(StripScreen, {
+				profiles: { _tag: "ready", envelope },
+				showEmptyGridDashedBorder: false,
+				interactive: false,
+				previewSerial: "device",
+				titles: "provided",
+			});
+		const view = await mount(render());
+		try {
+			const image = (code: string) =>
+				view.container
+					.querySelector(`[data-key-code="${code}"] img`)
+					?.getAttribute("src");
+			expect(image("1,1")).toBe(icon);
+			const replacement =
+				'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>';
+			const event = {
+				type: "showAnimation",
+				deviceId: "device",
+				profileId: "p",
+				pageId: "page-1",
+				revision: 0,
+				keyCode: "1,1",
+				resourceId: replacement,
+			};
+			if (keyType !== "hotkey") {
+				await act(async () => {
+					accept(
+						Schema.decodeUnknownSync(KeyRuntimeState)({
+							...event,
+							alternate: 1,
+						}),
+					);
+				});
+				expect(image("1,1")).toBe(alternateIcon);
+				expect(
+					view.container.querySelector('[data-key-code="1,1"]')?.textContent,
+				).toContain("Alternate");
+			}
+			await act(async () => {
+				await runtime.runPromise(KeyRuntime.displayEvent(event));
+			});
+			expect(image("1,1")).toBe(replacement);
+			if (keyType !== "hotkey")
+				expect(
+					view.container.querySelector('[data-key-code="1,1"]')?.textContent,
+				).toContain("Alternate");
+			for (const resourceId of [
+				"https://external.invalid/image.png",
+				"file:///private/image.png",
+				"data:image/svg+xml," +
+					encodeURIComponent(
+						'<svg xmlns="http://www.w3.org/2000/svg"><image href="https://external.invalid/image.png"/></svg>',
+					),
+			]) {
+				await act(async () => {
+					await runtime.runPromise(
+						KeyRuntime.displayEvent({ ...event, resourceId }),
+					);
+				});
+				expect(image("1,1") ?? "").toBe("");
+				expect(image("1,2")).toBe(icon);
+			}
+			await act(async () => {
+				await runtime.runPromise(KeyRuntime.displayEvent(event));
+			});
+			expect(image("1,1")).toBe(replacement);
+			expect(image("1,2")).toBe(icon);
+			expect(envelope.profiles[0].pages[0].keys[0]?.config.icon).toBe(icon);
 			await act(async () => {
 				await runtime.runPromise(
-					KeyRuntime.displayEvent({ ...event, resourceId }),
+					KeyRuntime.displayEvent({
+						...event,
+						revision: 1,
+						resourceId: "stale",
+					}),
+				);
+				await runtime.runPromise(
+					KeyRuntime.displayEvent({
+						...event,
+						keyCode: "9,9",
+						resourceId: "unknown",
+					}),
 				);
 			});
-			expect(image("1,1") ?? "").toBe("");
-			expect(image("1,2")).toBe(icon);
-		}
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.displayEvent(event));
-		});
-		expect(image("1,1")).toBe(replacement);
-		expect(image("1,2")).toBe(icon);
-		expect(envelope.profiles[0].pages[0].keys[0]?.config.icon).toBe(icon);
-		await act(async () => {
-			await runtime.runPromise(
-				KeyRuntime.displayEvent({ ...event, revision: 1, resourceId: "stale" }),
-			);
-			await runtime.runPromise(
-				KeyRuntime.displayEvent({
-					...event,
-					keyCode: "9,9",
-					resourceId: "unknown",
-				}),
-			);
-		});
-		expect(image("1,1")).toBe(replacement);
-		// The consumer stays mounted at the same saved revision across reset.
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.reset("other-device"));
-		});
-		expect(image("1,1")).toBe(replacement);
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.reset("device"));
-		});
-		expect(await runtime.runPromise(KeyRuntime.snapshot)).toEqual([]);
-		expect(image("1,1")).toBe(icon);
-		expect(image("1,2")).toBe(icon);
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.refresh("device"));
-		});
-		expect(image("1,1")).toBe(icon);
-		await act(async () => {
-			await runtime.runPromise(KeyRuntime.displayEvent(event));
-		});
-		expect(image("1,1")).toBe(replacement);
-		for (let page = 1; page <= 10; page++) {
+			expect(image("1,1")).toBe(replacement);
+			// The consumer stays mounted at the same saved revision across reset.
 			await act(async () => {
-				await runtime.runPromise(KeyRuntime.navigate("device", 1, page));
+				await runtime.runPromise(KeyRuntime.reset("other-device"));
 			});
+			expect(image("1,1")).toBe(replacement);
+			await act(async () => {
+				await runtime.runPromise(KeyRuntime.reset("device"));
+			});
+			expect(await runtime.runPromise(KeyRuntime.snapshot)).toEqual([]);
+			expect(image("1,1")).toBe(icon);
+			expect(image("1,2")).toBe(icon);
+			await act(async () => {
+				await runtime.runPromise(KeyRuntime.refresh("device"));
+			});
+			expect(image("1,1")).toBe(icon);
+			await act(async () => {
+				await runtime.runPromise(KeyRuntime.displayEvent(event));
+			});
+			expect(image("1,1")).toBe(replacement);
+			for (let page = 1; page <= 10; page++) {
+				await act(async () => {
+					await runtime.runPromise(KeyRuntime.navigate("device", 1, page));
+				});
+				await view.render(render());
+				expect(
+					view.container.querySelector("[data-page-number]")?.textContent,
+				).toBe(String(page));
+			}
+			envelope = {
+				...envelope,
+				profiles: [{ ...envelope.profiles[0], revision: 1 }],
+			};
+			await runtime.runPromise(KeyRuntime.navigate("device", 1, 1));
 			await view.render(render());
-			expect(
-				view.container.querySelector("[data-page-number]")?.textContent,
-			).toBe(String(page));
+			expect(image("1,1")).toBe(icon);
+		} finally {
+			await view.unmount();
+			await runtime.dispose();
 		}
-		envelope = {
-			...envelope,
-			profiles: [{ ...envelope.profiles[0], revision: 1 }],
-		};
-		await runtime.runPromise(KeyRuntime.navigate("device", 1, 1));
-		await view.render(render());
-		expect(image("1,1")).toBe(icon);
-	} finally {
-		await view.unmount();
-		await runtime.dispose();
-	}
-});
+	},
+);

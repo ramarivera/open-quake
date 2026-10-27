@@ -645,6 +645,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						)?.value;
 						if (typeof duration !== "number")
 							return yield* Effect.fail(new InvalidKeyAction("config.actions"));
+						// Join the display writer before the native timer takes ownership.
+						const displayTimer = displayTimers.get(identity);
+						if (displayTimer) {
+							yield* Fiber.interrupt(displayTimer);
+							displayTimers.delete(identity);
+						}
 						work = Effect.gen(function* () {
 							const end = (yield* Clock.currentTimeMillis) + duration;
 							yield* feedback({

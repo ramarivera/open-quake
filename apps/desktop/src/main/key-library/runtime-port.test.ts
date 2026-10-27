@@ -1177,6 +1177,11 @@ it("review: production keyboard catalog permits a supported text media follow-up
 });
 
 it.each([
+	["localhost:3000/{title}", "http://localhost:3000/hello world", false],
+	["example.org:8080/{title}", "http://example.org:8080/hello world", false],
+	["javascript:3000/path", "javascript:3000/path", true],
+	["data:8080/path", "data:8080/path", true],
+	["localhost:65536/path", "localhost:65536/path", true],
 	["example.org/{title}", "http://example.org/hello world", false],
 	[
 		"https://example.org/" + "$" + "{title}",
