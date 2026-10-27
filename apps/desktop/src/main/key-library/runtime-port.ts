@@ -15,6 +15,7 @@ import {
 import {
 	ActionSnapshotFailed,
 	HostActionFailed,
+	InvalidKeyAction,
 	KeyFunctionUnavailable,
 } from "../../../../../packages/device/src/actions/action-errors.js";
 import { executeActionLeaf } from "../../../../../packages/device/src/actions/action-service.js";
@@ -34,6 +35,7 @@ import {
 	type NativeApplicationPort,
 	runApplicationAction,
 } from "../profiles/native-actions";
+import { validateSequenceAudio } from "../soundboard/key-actions";
 import { playKeyAlarm } from "./alarm";
 import {
 	captureScreenshots,
@@ -274,6 +276,12 @@ export const desktopKeyRuntimePort = (
 				}),
 			};
 			return {
+				validateSequenceAudio: (config) =>
+					validateSequenceAudio(config).pipe(
+						Effect.mapError(
+							(cause) => new InvalidKeyAction("config.actions", cause),
+						),
+					),
 				read: profiles.loadProfiles().pipe(
 					Effect.map((r) => r.envelope),
 					Effect.catchTags({

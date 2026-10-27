@@ -418,3 +418,8 @@ Feedback SHALL remain bound to the original activation, and terminal failure ale
 #### Scenario: Failed sequence and untrusted artwork
 - **WHEN** a sequence emits INVALID with completed progress or a display event supplies external artwork
 - **THEN** the alert paints above progress and artwork resolves only through the existing trusted icon owner
+
+#### Scenario: Equal progress in a replacement revision expires independently
+- **WHEN** a new committed revision reports the same progress percentage as retained feedback
+- **THEN** the replacement owns a new 1000 ms completion or 5000 ms inactivity deadline, and the old revision's expiry cannot hide it
+- **AND** repeated equal values within that revision don't extend its deadline

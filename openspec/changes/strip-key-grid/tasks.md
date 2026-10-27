@@ -103,3 +103,7 @@ Key-runtime section 8 evidence: real hidden mock Electron timer zero/clear and t
 ## PR #127 final hosted-validation fix
 
 - [x] Preserve grid-library capacity feedback and save behavior while removing repeated sequence dropdown construction. Bead `open-quake-lih.10.27`; implementation and focused regression evidence are recorded in `key-function-library/tasks.md`. Hosted validation of the new head remains for the lead.
+
+## PR #127 authorized residual continuation
+
+- [x] Include the owning revision when comparing progress so equal percentages in a replacement revision receive their own 1000 ms completion or 5000 ms inactivity expiry. Bead `open-quake-lih.10.28`. Effect-clock regressions preserve the new overlay at the old expiry and clear it at the replacement deadline; same-revision repeats don't extend it. Parent owns current-head CI/review acceptance.

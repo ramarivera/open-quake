@@ -1230,6 +1230,7 @@ it.effect(
 			false,
 			0,
 			{
+				validateSequenceAudio: () => Effect.void,
 				executeOwned: (key) =>
 					Effect.sync(() => {
 						log.push(key.config.type);
@@ -1469,6 +1470,85 @@ it.effect(
 		return Effect.gen(function* () {
 			expect((yield* Effect.either(press))._tag).toBe("Left");
 			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const percent of [33, 100]) {
+	it.effect(
+		`review: same progress in a new revision owns its ${percent < 100 ? 5000 : 1000}ms expiry`,
+		() => {
+			const f = fixture(timerDraft);
+			return Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				yield* runtime.displayEvent({
+					...displayTarget,
+					type: "progress",
+					percent,
+				});
+				yield* TestClock.adjust(500);
+				f.nextRevision();
+				const replacement = {
+					...displayTarget,
+					revision: 1,
+					type: "progress",
+					percent,
+				};
+				yield* runtime.displayEvent(replacement);
+				const lifetime = percent < 100 ? 5000 : 1000;
+				yield* TestClock.adjust(lifetime - 500);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					progress: percent,
+				});
+				// Same-revision repeats don't extend inactivity indefinitely.
+				yield* runtime.displayEvent(replacement);
+				yield* TestClock.adjust(499);
+				expect(f.feedback.at(-1)?.progress).toBe(percent);
+				yield* TestClock.adjust(1);
+				expect(f.feedback.at(-1)).toMatchObject({ revision: 1, progress: -1 });
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"review: missing soundboard preflight rejects before any sequence host effect",
+	() => {
+		const owned: string[] = [];
+		const f = fixture(
+			{
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "text",
+							actions: [{ type: "text", value: "must not paste" }],
+						},
+					},
+					{ config: { type: "stopAudio", actions: [] } },
+				],
+			},
+			false,
+			0,
+			{
+				executeOwned: (key) =>
+					Effect.sync(() => {
+						owned.push(key.config.type);
+						return true;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const result = yield* Effect.either(press);
+			expect(result._tag).toBe("Left");
+			if (result._tag === "Left")
+				expect(result.left).toMatchObject({
+					_tag: "KeyFunctionUnavailable",
+					reason: "owning-runtime",
+				});
+			yield* TestClock.adjust(1000);
+			expect(f.calls).toEqual([]);
+			expect(owned).toEqual([]);
 		}).pipe(Effect.provide(f.layer));
 	},
 );

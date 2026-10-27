@@ -42,3 +42,9 @@ Key-runtime verification on 2026-10-27: 5001 root tests passed, four existing sk
 ## PR #127 final hosted-validation fix
 
 - [x] Reuse immutable sequence dropdown options and a compiled support predicate across rows. Bead `open-quake-lih.10.27`. Preserve the 100-operation capacity, rejection feedback, single-write save and canonical Close draft/value/force behavior. Verification lives in the bead and supplied scratch directory; hosted validation remains for the lead.
+
+## PR #127 authorized residual continuation
+
+- [x] Validate sequence audio through the soundboard owner before host effects, renew equal-percentage progress expiry across revisions, and route optional text media follow-ups through the shared hotkey owner. Bead `open-quake-lih.10.28`. Focused fake regressions cover malformed sound payloads, valid playback/empty stop ordering, absent preflight, both progress lifetimes, supported media commands and failure-before-insertion behavior. Parent owns current-head CI/review acceptance; the bead stays in progress.
+
+Continuation verification: 110 focused device tests and 56 desktop adapter/soundboard tests passed; the new regressions fail against the original source. Device and desktop typechecks, repository lint and desktop build passed. Ordinary validation passes both owning changes with the existing length warnings; strict baseline remains tracked in `open-quake-lih.23.2`. No native input, device, audible playback or provider tests ran. The sequence-editor capacity optimization and assertions are unchanged.

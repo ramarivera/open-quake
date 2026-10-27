@@ -31,7 +31,7 @@ New leaf keys SHALL use the common schema from `profiles-key-grid` and one of th
 | `website` | Exactly `{type:'url',value:string}` containing an absolute http or https URL |
 | `hotkey`, supportKnob false | Exactly `{type:'key',value:chord}` |
 | `hotkey`, supportKnob true | Exactly two `{type:'key',value:chord}` records, interpreted by the focused knob capability, not as a toggle |
-| `text` | `{type:'text',value:string}` with at most 500 Unicode code points, followed optionally by `{type:'key',value:'enter'}`; text must be nonempty to execute |
+| `text` | `{type:'text',value:string}` with at most 500 Unicode code points, followed optionally by a supported keyboard chord or media token in `{type:'key',value:string}`; text must be nonempty to execute |
 | `open` | Exactly `{type:'path',value:string}` containing a nonempty selected application reference or absolute application path supported by the host adapter |
 | `playPause` | Exactly `{type:'key',value:'audio_play'}` |
 | `stopPlay` | Exactly `{type:'key',value:'audio_stop'}` |
@@ -53,6 +53,12 @@ A chord SHALL be a plus-separated sequence of distinct supported modifier names 
 
 - **WHEN** the same text key has an enter action after the text action
 - **THEN** the text inserts first and one enter follows only after insertion succeeds
+
+#### Scenario: Text follow-up uses its owning adapter
+
+- **WHEN** saved text includes an optional supported keyboard chord or media token
+- **THEN** its owning adapter capability is checked before insertion, exact text inserts first, and the follow-up dispatches only after insertion succeeds
+- **AND** an unavailable follow-up prevents insertion without falling back to another command
 
 #### Scenario: Invalid target
 
@@ -161,6 +167,11 @@ MAIN-076, MGMT-163, MGMT-206 and MGMT-210 sequences SHALL accept subActions-only
 - **AND** A typed plugin port SHALL receive the committed parent activation plus plugin id, action and step index.
 - **AND** Until the plugins lane registers a runtime, it SHALL fail with typed KeyFunctionUnavailable, code QUAKE.ACTION.UNAVAILABLE and reason plugin-runtime.
 - **AND** MAIN-066 plugin inventory and MAIN-076 remain partial until that registration lands.
+
+#### Scenario: Audio validation precedes every sequence host effect
+- **WHEN** text precedes malformed playAudioLegacy in a saved sequence
+- **THEN** soundboard-owned configuration validation rejects the sequence before text insertion or playback
+- **AND** valid playback and payload-free stopAudio preserve the sequence order through their existing owner
 
 ### Requirement: Scoped timer completion and feedback
 MAIN-075, MAIN-081, MGMT-138 and MGMT-404 timers SHALL store an absolute endAt scoped to device, profile, page, revision and key.

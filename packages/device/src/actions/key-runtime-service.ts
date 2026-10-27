@@ -23,6 +23,7 @@ import {
 	normalizeSequenceWebsites,
 	normalizeWebsiteUrl,
 	PreviousPageConfig,
+	type SequenceAudioConfig,
 	SwitchProfileConfig,
 	TimerConfig,
 } from "./action-contracts.js";
@@ -76,6 +77,10 @@ export class KeyRuntimePort extends Context.Tag(
 		readonly read: Effect.Effect<ProfileEnvelope, ActionError>;
 		readonly execute: (
 			config: ActionConfig,
+		) => Effect.Effect<void, ActionError>;
+		/** Side-effect-free validation supplied by the soundboard owner. */
+		readonly validateSequenceAudio?: (
+			config: typeof SequenceAudioConfig.Type,
 		) => Effect.Effect<void, ActionError>;
 		/** Host integrations receive only the committed key after activation guards. */
 		readonly executeOwned?: (
@@ -230,7 +235,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					}
 					if (
 						state.progress !== undefined &&
-						state.progress !== previous?.progress
+						(state.revision !== previous?.revision ||
+							state.progress !== previous?.progress)
 					) {
 						const version = {};
 						progressVersions.set(id, version);
@@ -685,17 +691,23 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								new InvalidKeyAction("config.actions", decoded.left),
 							);
 						// Validate the entire sequence before the first host effect.
-						for (const step of decoded.right.subActions)
+						for (const step of decoded.right.subActions) {
+							if (step.isPlugin === true || step.config.type === "delay")
+								continue;
 							if (
-								step.isPlugin !== true &&
-								!["delay", "playAudioLegacy", "stopAudio"].includes(
-									step.config.type,
-								) &&
+								step.config.type === "playAudioLegacy" ||
+								step.config.type === "stopAudio"
+							) {
+								if (!port.validateSequenceAudio)
+									return yield* new KeyFunctionUnavailable("owning-runtime");
+								yield* port.validateSequenceAudio(step.config);
+							} else if (
 								validateAction(step.config.type, step.config)._tag === "Left"
 							)
 								return yield* Effect.fail(
 									new InvalidKeyAction("config.actions"),
 								);
+						}
 						work = Effect.gen(function* () {
 							const steps = decoded.right.subActions;
 							yield* feedback({ ...base, progress: 0, alert: 0 });

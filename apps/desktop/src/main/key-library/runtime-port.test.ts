@@ -11,6 +11,10 @@ import {
 } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
+import {
+	HOTKEY_KEYS,
+	HOTKEY_MODIFIERS,
+} from "../../../../../packages/device/src/actions/action-contracts.js";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
 import { normalizeActionImport } from "../../../../../packages/device/src/actions/action-import.js";
 import {
@@ -981,4 +985,192 @@ it("review: simultaneous same-clock captures never overwrite an earlier image", 
 	};
 	await Promise.all([captureScreenshots(port), captureScreenshots(port)]);
 	expect(images.size).toBe(2);
+});
+
+const sequenceSound = [
+	{ type: "sound", value: "/synthetic/sound.wav" },
+	{ type: "audioAction", value: 0 },
+	{ type: "audioFade", value: "0-0" },
+	{ type: "volume", value: 50 },
+];
+for (const [name, actions] of [
+	["missing payload", []],
+	["missing controls", sequenceSound.slice(0, 1)],
+	[
+		"invalid fade",
+		sequenceSound.map((a) =>
+			a.type === "audioFade" ? { ...a, value: "broken" } : a,
+		),
+	],
+	[
+		"remote file",
+		sequenceSound.map((a) =>
+			a.type === "sound" ? { ...a, value: "https://example.org/sound.wav" } : a,
+		),
+	],
+] as const) {
+	it(`review: soundboard owner rejects ${name} before sequence text insertion`, async () => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const owned = vi.fn(async () => true);
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				const result = yield* Effect.either(
+					runtime.activate("device", "1,1", "press"),
+				);
+				yield* TestClock.adjust(1000);
+				return result;
+			}).pipe(
+				Effect.provide(
+					layer(
+						false,
+						undefined,
+						undefined,
+						{
+							...empty,
+							childrenName: "multiActions",
+							config: {
+								...empty.config,
+								type: "multiActions",
+								subActions: [
+									{
+										config: {
+											type: "text",
+											actions: [{ type: "text", value: "must not paste" }],
+											gap: 0,
+										},
+									},
+									{ config: { type: "playAudioLegacy", actions, gap: 0 } },
+								],
+							},
+						},
+						owned,
+						undefined,
+						{
+							keyboard: {
+								supportedTokens: new Set(["command", "v"]),
+								pressChord: () => Effect.void,
+							},
+						},
+					),
+				),
+				Effect.provide(TestContext.TestContext),
+				Effect.scoped,
+			),
+		);
+		expect(result._tag).toBe("Left");
+		if (result._tag === "Left") {
+			expect(result.left).toMatchObject({
+				_tag: "InvalidKeyAction",
+				code: "QUAKE.ACTION.INVALID",
+				originalCause: { _tag: "SoundboardConfigInvalid" },
+			});
+			expect(JSON.stringify(result.left)).not.toContain("must not paste");
+		}
+		expect(os.writeText).not.toHaveBeenCalled();
+		expect(owned).not.toHaveBeenCalled();
+	});
+}
+it("review: soundboard preflight preserves text, valid playback and empty stopAudio ordering", async () => {
+	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const calls: string[] = [];
+	os.writeText.mockImplementation(() => {
+		calls.push("text");
+	});
+	await Effect.runPromise(
+		Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "press");
+			yield* TestClock.adjust(1000);
+		}).pipe(
+			Effect.provide(
+				layer(
+					false,
+					undefined,
+					undefined,
+					{
+						...empty,
+						childrenName: "multiActions",
+						config: {
+							...empty.config,
+							type: "multiActions",
+							subActions: [
+								{
+									config: {
+										type: "text",
+										actions: [{ type: "text", value: "inserted" }],
+										gap: 0,
+									},
+								},
+								{
+									config: {
+										type: "playAudioLegacy",
+										actions: sequenceSound,
+										gap: 0,
+									},
+								},
+								{ config: { type: "stopAudio", actions: [], gap: 0 } },
+							],
+						},
+					},
+					async (key) => {
+						calls.push(key.config.type);
+						return true;
+					},
+					undefined,
+					{
+						keyboard: {
+							supportedTokens: new Set(["command", "v"]),
+							pressChord: () => Effect.void,
+						},
+					},
+				),
+			),
+			Effect.provide(TestContext.TestContext),
+			Effect.scoped,
+		),
+	);
+	expect(calls).toEqual(["text", "playAudioLegacy", "stopAudio"]);
+});
+
+it("review: production keyboard catalog permits a supported text media follow-up in order", async () => {
+	const calls: string[] = [];
+	os.writeText.mockImplementation(() => {
+		calls.push("text");
+	});
+	const media: MediaActionAdapter = {
+		supportedCommands: new Set(["audio_play"]),
+		sendMedia: (command) =>
+			Effect.sync(() => {
+				calls.push(command);
+			}),
+	};
+	await Effect.runPromise(
+		Effect.gen(function* () {
+			const port = yield* KeyRuntimePort;
+			const work = yield* Effect.fork(
+				port.execute({
+					type: "text",
+					actions: [
+						{ type: "text", value: "inserted" },
+						{ type: "key", value: "audio_play" },
+					],
+				}),
+			);
+			yield* TestClock.adjust(50);
+			yield* Fiber.join(work);
+		}).pipe(
+			Effect.provide(
+				layer(false, undefined, media, undefined, undefined, undefined, {
+					keyboard: {
+						supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),
+						pressChord: () => Effect.void,
+					},
+				}),
+			),
+			Effect.provide(TestContext.TestContext),
+			Effect.scoped,
+		),
+	);
+	expect(calls).toEqual(["text", "audio_play"]);
 });
