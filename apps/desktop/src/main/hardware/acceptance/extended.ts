@@ -10,6 +10,7 @@ import { safeCause } from "../../diagnostics/privacy.js";
 import { sharedLighting } from "../qmk-lighting.js";
 import { restoring } from "./consumer.js";
 import { exactDeviceTransport } from "./exact-device.js";
+import { restoreLightingValue } from "./restore-lighting.js";
 import { probeV3Lighting } from "./v3-lighting.js";
 
 export interface ExtendedCheck {
@@ -235,32 +236,13 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 										changed,
 									);
 								}),
-								// Raw queries remain usable even if a lighting drain fails or is cancelled.
-								session
-									.qmk([
-										{
-											_tag: "set",
-											prefix,
-											values: bytes(original),
-										},
-										{
-											_tag: "get",
-											prefix,
-											length: bytes(original).length,
-										},
-									])
-									.pipe(
-										Effect.tap((values) =>
-											Effect.sync(() =>
-												assert.deepEqual(
-													values[1],
-													bytes(original),
-													"Lighting restoration mismatch",
-												),
-											),
-										),
-										Effect.asVoid,
-									),
+								restoreLightingValue(
+									device,
+									connection,
+									options.serial,
+									prefix,
+									bytes(original),
+								),
 							),
 						);
 					}
@@ -306,7 +288,15 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 				) {
 					const v3 = yield* step(
 						"v3-speed-restoration-and-readonly-state",
-						probeV3Lighting(session, options.mutations).pipe(
+						probeV3Lighting(session, options.mutations, (prefix, values) =>
+							restoreLightingValue(
+								device,
+								connection,
+								options.serial,
+								prefix,
+								values,
+							),
+						).pipe(
 							Effect.tap((rows) =>
 								Effect.sync(() => {
 									lightingQualification = {

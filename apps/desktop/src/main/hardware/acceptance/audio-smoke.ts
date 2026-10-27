@@ -15,6 +15,7 @@ import {
 	createDesktopAudioOutput,
 	createElectronCaptureDriver,
 } from "../../speech/electron-audio.js";
+import { acceptanceDeadline } from "./deadline.js";
 import { ownNativeDevice } from "./native-owner.js";
 import { acceptanceOptions } from "./policy.js";
 
@@ -25,10 +26,7 @@ app.on("before-quit", (event) => {
 	if (!finished) event.preventDefault();
 });
 if (process.platform === "darwin") app.setActivationPolicy("accessory");
-const deadline = setTimeout(() => {
-	console.error("USB microphone acceptance exceeded deadline", stage);
-	app.exit(1);
-}, 20_000);
+let deadline: ReturnType<typeof acceptanceDeadline> | undefined;
 async function run() {
 	const options = acceptanceOptions(process.env);
 	assert.equal(
@@ -38,6 +36,13 @@ async function run() {
 	);
 	const owner = await ownNativeDevice(options.directory);
 	const directory = owner.directory;
+	const bounded = acceptanceDeadline(owner.close, () => {
+		console.error("USB microphone acceptance exceeded deadline", stage);
+		app.exit(1);
+	});
+	deadline = bounded;
+	const execute = <A, E>(effect: Effect.Effect<A, E>) =>
+		Effect.runPromise(effect, { signal: bounded.signal });
 	let report: object;
 	try {
 		await writeFile(
@@ -70,8 +75,11 @@ async function run() {
 		const checks: string[] = [];
 		for (let cycle = 0; cycle < 2; cycle++) {
 			stage = "capture-open";
-			const recorder = await Effect.runPromise(
+			const recorder = await execute(
 				driver.open(`native-usb-capture-${cycle}`),
+			);
+			const removeRecorder = bounded.add(() =>
+				Effect.runPromise(recorder.close),
 			);
 			try {
 				const window = BrowserWindow.getAllWindows()[0];
@@ -88,7 +96,7 @@ async function run() {
 				checks.push(`usb-input-selected-${cycle}`);
 				sequence = 0;
 				const pull = async (tail = false) => {
-					const batch = await Effect.runPromise(recorder.pull);
+					const batch = await execute(recorder.pull);
 					for (const frame of batch.frames) {
 						assert.equal(frame.seq, sequence++);
 						if (tail) {
@@ -119,7 +127,7 @@ async function run() {
 				);
 				checks.push(`native-pcm-framing-${cycle}`);
 				assert(recorder.pause && recorder.resume);
-				await Effect.runPromise(recorder.pause);
+				await execute(recorder.pause);
 				for (let n = 0; n < 100; n++) {
 					if ((await pull()).frames.length === 0) break;
 				}
@@ -130,7 +138,7 @@ async function run() {
 					"Paused capture must not generate frames",
 				);
 				checks.push(`pause-stops-frames-${cycle}`);
-				await Effect.runPromise(recorder.resume);
+				await execute(recorder.resume);
 				await delay(120);
 				assert(
 					(await pull()).frames.length > 0,
@@ -138,16 +146,20 @@ async function run() {
 				);
 				checks.push(`resume-generates-frames-${cycle}`);
 				stage = "capture-stop";
-				await Effect.runPromise(recorder.stop);
+				await execute(recorder.stop);
 				let done = false;
 				for (let n = 0; n < 100 && !done; n++) done = (await pull(true)).done;
 				assert(
 					done,
 					"Stop must release tracks and finish the bounded PCM tail",
 				);
-				checks.push(`stop-drains-tail-${cycle}`);
+				checks.push(`stop-drain-completes-${cycle}`);
 			} finally {
-				await Effect.runPromise(recorder.close);
+				try {
+					await Effect.runPromise(recorder.close);
+				} finally {
+					removeRecorder();
+				}
 			}
 			assert.equal(BrowserWindow.getAllWindows().length, 0);
 			assert.equal(
@@ -158,15 +170,21 @@ async function run() {
 			);
 			checks.push(`worker-cleanup-${cycle}`);
 		}
+		assert(
+			tailFrames > 0,
+			"Partial PCM tail must be observed before claiming drainage coverage",
+		);
+		checks.push("partial-pcm-tail-observed");
 		stage = "native-output";
-		const ownership = await Effect.runPromise(makeAudioOutput);
+		const ownership = await execute(makeAudioOutput);
 		const port = createDesktopAudioOutput(ownership);
-		const output = await Effect.runPromise(port.acquire);
+		const output = await execute(port.acquire);
+		const removeOutput = bounded.add(() => Effect.runPromise(output.stop));
 		try {
-			await Effect.runPromise(output.ready);
+			await execute(output.ready);
 			assert(output.resume && output.contextState);
-			await Effect.runPromise(output.resume);
-			assert.equal(await Effect.runPromise(output.contextState), "running");
+			await execute(output.resume);
+			assert.equal(await execute(output.contextState), "running");
 			const bytes = new Uint8Array(24000 * 2 * 0.25);
 			const view = new DataView(bytes.buffer);
 			for (let index = 0; index < bytes.length / 2; index++)
@@ -176,7 +194,7 @@ async function run() {
 					true,
 				);
 			const start = performance.now();
-			await Effect.runPromise(
+			await execute(
 				output.play({
 					bytes,
 					format: "pcm",
@@ -191,7 +209,11 @@ async function run() {
 			);
 			checks.push("native-speaker-playback-drain");
 		} finally {
-			await Effect.runPromise(output.stop);
+			try {
+				await Effect.runPromise(output.stop);
+			} finally {
+				removeOutput();
+			}
 		}
 		assert.equal(BrowserWindow.getAllWindows().length, 0);
 		checks.push("native-output-worker-cleanup");
@@ -205,7 +227,7 @@ async function run() {
 				(
 					await promisify(execFile)("git", ["status", "--porcelain"])
 				).stdout.trim().length > 0,
-			fixtureSha256: createHash("sha256")
+			fixtureBundleSha256: createHash("sha256")
 				.update(await readFile(new URL(import.meta.url)))
 				.digest("hex"),
 			checks,
@@ -230,12 +252,12 @@ async function run() {
 run().then(
 	() => {
 		finished = true;
-		clearTimeout(deadline);
+		deadline?.finish();
 		app.quit();
 	},
 	(cause) => {
 		finished = true;
-		clearTimeout(deadline);
+		deadline?.finish();
 		console.error(
 			"Real USB microphone acceptance failed",
 			JSON.stringify({ stage, cause: safeCause(Cause.die(cause)) }),

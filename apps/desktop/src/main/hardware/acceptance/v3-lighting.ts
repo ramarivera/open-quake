@@ -12,7 +12,14 @@ export const v3Fields = [
 ] as const;
 
 /** Hardware-qualified speed probe. Other values remain read-only until their mapping is qualified. */
-export const probeV3Lighting = (session: HardwareSession, mutations: boolean) =>
+export const probeV3Lighting = (
+	session: HardwareSession,
+	mutations: boolean,
+	restore?: (
+		prefix: readonly number[],
+		values: readonly number[],
+	) => Effect.Effect<void, unknown, never>,
+) =>
 	Effect.gen(function* () {
 		const originals = yield* session.qmk(
 			v3Fields.map((row) => ({
@@ -58,23 +65,25 @@ export const probeV3Lighting = (session: HardwareSession, mutations: boolean) =>
 							"V3 speed applied readback mismatch",
 						);
 					}),
-					session
-						.qmk([
-							{ _tag: "set", prefix: row.prefix, values: original },
-							{ _tag: "get", prefix: row.prefix, length: row.length },
-						])
-						.pipe(
-							Effect.tap((actual) =>
-								Effect.sync(() =>
-									assert.deepEqual(
-										actual[1],
-										original,
-										"V3 speed restoration mismatch",
+					restore
+						? restore(row.prefix, original)
+						: session
+								.qmk([
+									{ _tag: "set", prefix: row.prefix, values: original },
+									{ _tag: "get", prefix: row.prefix, length: row.length },
+								])
+								.pipe(
+									Effect.tap((actual) =>
+										Effect.sync(() =>
+											assert.deepEqual(
+												actual[1],
+												original,
+												"V3 speed restoration mismatch",
+											),
+										),
 									),
+									Effect.asVoid,
 								),
-							),
-							Effect.asVoid,
-						),
 				);
 			const actual = yield* session.qmk([
 				{ _tag: "get", prefix: row.prefix, length: row.length },

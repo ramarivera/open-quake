@@ -5,8 +5,10 @@ import { QuakeDevice } from "../../../../../../packages/device/src/device-servic
 import { makeFakeHardwareTransport } from "../../../../../../packages/device/src/hardware/hardware-fake.js";
 import { HardwareControls } from "../../../../../../packages/device/src/hardware/hardware-service.js";
 import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
+import { restoring } from "./consumer.js";
 import { runExtendedAcceptance } from "./extended.js";
 import { allowedExtendedWrite } from "./policy.js";
+import { restoreLightingValue } from "./restore-lighting.js";
 import { probeV3Lighting } from "./v3-lighting.js";
 
 vi.mock("node-hid", () => {
@@ -210,3 +212,70 @@ it.each([false, true])(
 		expect(report.handlesClosed).toBe(report.handlesOpened);
 	},
 );
+
+it("restores a changed lighting value after a lost ACK poisons controls and closes the connection", async () => {
+	const fake = await Effect.runPromise(makeFakeHardwareTransport());
+	let dropped = false;
+	const transport = Layer.succeed(HidTransport, {
+		...fake.transport,
+		open: (info) =>
+			fake.transport.open(info).pipe(
+				Effect.map((handle) => ({
+					...handle,
+					reports: handle.reports.pipe(
+						Stream.filter((report) => {
+							if (!dropped && report[0] === 7 && report[1] === 11) {
+								dropped = true;
+								return false;
+							}
+							return true;
+						}),
+					),
+				})),
+			),
+	});
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				const device = yield* QuakeDevice.pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(transport),
+						),
+					),
+				);
+				const connection = yield* device.connect();
+				const controls = yield* HardwareControls.pipe(
+					Effect.provide(HardwareControls.Default),
+				);
+				const session = yield* controls.create(connection, {
+					serial: "mock-quake",
+					session: "failure",
+				});
+				yield* session.refresh();
+				const result = yield* Effect.exit(
+					restoring(
+						session.qmk([{ _tag: "set", prefix: [11], values: [187] }]),
+						restoreLightingValue(device, connection, "mock-quake", [11], [100]),
+					),
+				);
+				expect(Exit.isFailure(result)).toBe(true);
+				expect(
+					(yield* session.qmk([{ _tag: "protocol" }]).pipe(Effect.either))._tag,
+				).toBe("Left");
+				const writes = yield* fake.writes;
+				expect(
+					writes
+						.filter((b) => b[1] === 7)
+						.map((b) => Array.from(b.slice(1, 4))),
+				).toEqual([
+					[7, 11, 187],
+					[7, 11, 100],
+				]);
+				expect(Array.from(writes.at(-1)?.slice(1, 3) ?? [])).toEqual([8, 11]);
+				expect(yield* fake.opens).toBe(2);
+				expect(yield* fake.closes).toBe(2);
+			}),
+		),
+	);
+});
