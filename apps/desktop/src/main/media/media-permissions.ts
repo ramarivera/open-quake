@@ -19,7 +19,7 @@ export function canRequestWallpaper(
 			(typeof input === "object" &&
 				input !== null &&
 				"_tag" in input &&
-				input._tag === "read")
+				(input._tag === "read" || input._tag === "failed"))
 		);
 	} catch {
 		return false;

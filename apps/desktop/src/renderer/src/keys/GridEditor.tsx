@@ -638,6 +638,7 @@ export function GridEditor({
 					data-serial={serial}
 				>
 					<WallpaperSettings
+						embedded
 						key={`${profile.id}:${serial}`}
 						wallpaper={wallpaperController}
 					/>

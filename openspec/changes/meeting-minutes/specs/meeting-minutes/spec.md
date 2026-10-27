@@ -498,6 +498,16 @@ Evidence: AI-266, AI-273, AI-276, AI-278, AI-279. Upload location, expiry, task 
 - **WHEN** the provider returns no speech or a remote deletion fails
 - **THEN** no transcript is fabricated, no-valid-speech is distinct from transport failure, failed remote cleanup remains durable, and another meeting's files cannot be deleted
 
+#### Scenario: Cancellation and file cleanup both fail
+
+- **WHEN** cancellation of a running provider task and deletion of its owned files both fail, then cleanup retries after the adapter restarts
+- **THEN** the private failed-cleanup record retains the task and file identities, retry cancels that task before deleting its files, and a task already cancelled successfully is not cancelled again
+
+#### Scenario: Processing completes during failed deletion
+
+- **WHEN** deletion overlaps processing and the job completes or fails while remote cleanup later fails or times out
+- **THEN** the retained processing record is durably cancelled before remote cleanup, its original recording end time survives, another meeting can start, and deletion can retry without a stale job restoring processing or completion
+
 ### Requirement: Continuous encoded capture and deterministic mixing
 
 Evidence: AI-285, AI-286, AI-288, AI-294. Main and side records SHALL isolate mic_N.webm and system_N.webm under their own UUID directories, use audio/webm;codecs=opus and ten-second slices, and rotate hourly by starting replacement recorders before stopping old ones. Finalization SHALL concatenate numeric segment order, mix usable mic/system tracks at 48 kHz with longest duration and mono MP3 output, and use mic-only output for empty or unusable optional system tracks. Upload SHALL submit the mono artifact, reject failed conversion and clean private temporary files.
@@ -560,3 +570,32 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-269 or AI-270 reports FILE_DOWNLOAD_FAILED inside output.results even when the overall task is SUCCEEDED
 - **THEN** the adapter SHALL clear the terminal task and durably expire the upload before returning failure, so a restarted retry reuploads managed audio with a new URL or reports expired audio when the local recording is missing
+
+### Requirement: Post-review provider lifecycle integrity
+
+The system SHALL let the duration-based ASR deadline bound conversion and recording uploads, keep conversion interruptible with partial-file cleanup, and stop uploading when its socket reader fails. Cleanup SHALL continue after an unsuccessful task cancellation while retaining failed file deletion for retry. Remote cleanup and file requests SHALL run outside the capture transition lock with bounded deadlines. File listing SHALL enumerate all pages while returning only locally owned IDs. Source recognition SHALL remain separate from translated output and generated-output language. Translation speakers SHALL follow source-to-response identity, and unrelated configuration changes SHALL preserve in-flight results. Explicit new ASR attempts SHALL reset internal retries without resetting recovered pending tasks. Renderer errors SHALL keep their message and code paired and provide actionable English feedback. Hourly recorder replacement SHALL start before predecessors stop. Evidence: AI-269-279, AI-285-294, AI-327-338; PR109 comments 4381197743, 4381197987, 4381198019, 4381198051, 4381198108, 4381406130, 4381406145, 4381406159, 4380486754, 4380486762, 4381197836, 4381197895, 4381197978, 4381198035, 4381198072, 4381197800.
+
+#### Scenario: Slow conversion and upload remain cancellable
+
+- **WHEN** a fake recording takes more than 120 seconds to convert or 30 seconds to upload within its duration-based ASR deadline
+- **THEN** processing continues until that deadline, cancellation stops conversion and removes partial files, and a socket reader failure stops further PCM sends
+
+#### Scenario: Cleanup and file listing preserve ownership and capture progress
+
+- **WHEN** a running DashScope task rejects cancellation or owned files occur on later pages
+- **THEN** cleanup still deletes owned files, listing returns every owned file, unrelated capture transitions remain available during provider requests, and file cleanup failures retain local records for retry
+
+#### Scenario: Source and translated identities remain distinct
+
+- **WHEN** generated output uses a different language from speech and the provider emits source recognition plus translated responses
+- **THEN** ASR omits an unspecified source hint, only translated responses enter translation history, speaker labels follow source linkage, and unrelated configuration changes do not discard delivered translations
+
+#### Scenario: Retry and renderer feedback start with current state
+
+- **WHEN** an exhausted ASR attempt is explicitly retried or a coded renderer failure is cleared or replaced
+- **THEN** the new attempt gets a fresh internal retry budget, recovered pending work retains its budget, stale error codes cannot replace new messages, and English failure messages explain the next action
+
+#### Scenario: Recorder rollover assertion detects an audio gap
+
+- **WHEN** hourly capture replaces recorders while main and side capture share microphone and system sources
+- **THEN** at least five recorders remain recording before each predecessor stops, and the regression fails if predecessors stop before replacements start

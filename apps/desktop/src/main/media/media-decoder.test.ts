@@ -38,6 +38,14 @@ const headers = [
 		bytes: Buffer.from([0, 0, 0, 16, ...Buffer.from("ftypqt  ")]),
 	},
 	{ format: "video/webm", bytes: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]) },
+	{
+		format: "video/x-matroska",
+		bytes: Buffer.concat([
+			Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+			Buffer.from("matroska"),
+		]),
+	},
+	{ format: "video/x-msvideo", bytes: Buffer.from("RIFF0000AVI ") },
 ] as const;
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -134,4 +142,25 @@ it("serves cached metadata while an unrelated video probe is pending", async () 
 			expect(native.metadata).toHaveBeenCalledTimes(2);
 		}).pipe(Effect.provide(MediaDecoder.Default)),
 	);
+});
+
+it("WIDGETS-128 accepts a decoded GIF without a video probe and rejects corrupt GIF data", async () => {
+	const bytes = Buffer.from("GIF89a000000000");
+	native.image.mockReturnValueOnce({
+		isEmpty: () => false,
+		getSize: () => ({ width: 320, height: 80 }),
+	});
+	expect(await Effect.runPromise(decode(bytes))).toMatchObject({
+		format: "image/gif",
+		width: 320,
+		height: 80,
+	});
+	expect(native.metadata).not.toHaveBeenCalled();
+	native.image.mockReturnValueOnce({
+		isEmpty: () => true,
+		getSize: () => ({ width: 0, height: 0 }),
+	});
+	expect(
+		await Effect.runPromise(decode(bytes).pipe(Effect.either)),
+	).toMatchObject({ _tag: "Left", left: { _tag: "MediaUnreadable" } });
 });

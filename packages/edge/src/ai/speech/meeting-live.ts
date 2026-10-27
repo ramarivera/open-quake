@@ -43,14 +43,29 @@ export const makeLiveMeetingAdapter = Effect.fn("AiMeetingAdapter.live")(
 						!state.segments &&
 						state.config.asrProvider === "dashscope"
 					) {
-						yield* dashscope.call(
-							state.config,
-							`tasks/${encodeURIComponent(state.task)}/cancel`,
-							{},
-						);
-						yield* options.resources.save(ref, { ...state, task: undefined });
+						yield* dashscope
+							.call(
+								state.config,
+								`tasks/${encodeURIComponent(state.task)}/cancel`,
+								{},
+							)
+							.pipe(
+								Effect.matchEffect({
+									onFailure: (error) =>
+										Effect.logWarning(
+											"Meeting task cancellation skipped",
+											error,
+										),
+									onSuccess: () =>
+										options.resources.save(ref, { ...state, task: undefined }),
+								}),
+							);
 					}
 					yield* files.cleanup(ref);
+					// Full cleanup releases local ownership even for a non-cancellable task.
+					const cleaned = yield* options.resources.load(ref);
+					if (cleaned?.task)
+						yield* options.resources.save(ref, { ...cleaned, task: undefined });
 				}),
 			...translation,
 			submit: (request) =>

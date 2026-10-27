@@ -43,7 +43,17 @@ export class MediaFiles extends Effect.Service<MediaFiles>()("MediaFiles", {
 				InvalidWallpaper | MediaPersistenceFailed
 			> =>
 				Effect.tryPromise({
-					try: () => readFile(settingsPath(serial, backup), "utf8"),
+					try: async () => {
+						try {
+							return await readFile(settingsPath(serial, backup), "utf8");
+						} catch (cause) {
+							if (!absent(cause) || serial.startsWith("ws_")) throw cause;
+							return await readFile(
+								settingsPath(`ws_${serial}`, backup),
+								"utf8",
+							);
+						}
+					},
 					catch: (cause) => new MediaPersistenceFailed(cause),
 				}).pipe(
 					Effect.map(Option.some),
@@ -68,10 +78,12 @@ export class MediaFiles extends Effect.Service<MediaFiles>()("MediaFiles", {
 										),
 									),
 									Effect.filterOrFail(
-										(saved) => saved.serial === serial,
+										(saved) =>
+											saved.serial === serial ||
+											saved.serial === `ws_${serial}`,
 										() => new InvalidWallpaper(undefined),
 									),
-									Effect.map(Option.some),
+									Effect.map((saved) => Option.some({ ...saved, serial })),
 								),
 						}),
 					),
@@ -264,19 +276,22 @@ export class MediaFiles extends Effect.Service<MediaFiles>()("MediaFiles", {
 		const collectAssets = Effect.fn("MediaFiles.collectAssets")(
 			(
 				serial: string,
+				staged: readonly string[] = [],
 			): Effect.Effect<void, InvalidWallpaper | MediaPersistenceFailed> =>
 				Effect.gen(function* () {
 					// Decode both committed revisions first. Uncertain references prevent collection.
 					const current = yield* readSettings(serial);
 					const backup = yield* readSettings(serial, true);
-					if (Option.isNone(current) || Option.isNone(backup)) return;
+
 					const retained = new Set(
-						[current.value, backup.value].flatMap((saved) =>
-							saved.settings.displayMediaList.map((media) =>
-								media.filePath.slice(6),
-							),
+						[...Option.toArray(current), ...Option.toArray(backup)].flatMap(
+							(saved) =>
+								saved.settings.displayMediaList.map((media) =>
+									media.filePath.slice(6),
+								),
 						),
 					);
+					for (const reference of staged) retained.add(reference.slice(6));
 					const directory = join(root, "assets", hash(serial));
 					yield* Effect.tryPromise({
 						try: async () => {

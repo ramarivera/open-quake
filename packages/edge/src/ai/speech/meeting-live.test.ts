@@ -10,7 +10,7 @@ import {
 	Stream,
 	TestClock,
 } from "effect";
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { defaultMeetingConfig } from "../../meetings/meeting-defaults.js";
 import { meetingError } from "../../meetings/meeting-errors.js";
 import { AiProtocolInvalid } from "../ai-errors.js";
@@ -1323,4 +1323,487 @@ it.scoped(
 				yield* live.translate(f.request.config, new Uint8Array(14400)),
 			).toMatchObject([{ id: "1:new", text: "fresh paragraph" }]);
 		}),
+);
+
+it.scoped(
+	"continues owned file cleanup when DashScope rejects cancellation",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				task: "running-task",
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const s = yield* fakeSocket();
+			const adapter = yield* makeLiveMeetingAdapter({
+				...f,
+				socket: s.transport,
+				http: {
+					fetch: async (url, init) =>
+						url.endsWith("/cancel")
+							? Response.json({ code: "UnsupportedOperation" }, { status: 400 })
+							: f.http.fetch(url, init),
+				},
+			});
+			if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+			yield* adapter.cleanup("meeting");
+			expect(
+				f.requests.filter((r) => r.init.method === "DELETE").map((r) => r.url),
+			).toEqual(["http://127.0.0.1:1234/api/v1/files/owned-file"]);
+			expect(f.states.get("meeting")).toMatchObject({
+				task: undefined,
+				remoteFiles: [],
+				cleanupPending: false,
+			});
+		}),
+);
+
+for (const cancelFails of [true, false]) {
+	it.scoped(
+		`retries persisted task cancellation and file deletion after cleanup failure, cancel fails=${cancelFails}`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				f.states.set("meeting", {
+					version: 1,
+					config: f.request.config,
+					task: "running-task",
+					remoteFiles: ["owned-file"],
+					cleanupPending: true,
+				});
+				const operations: string[] = [];
+				let rejectCancellation = cancelFails;
+				const s = yield* fakeSocket();
+				const options = {
+					...f,
+					socket: s.transport,
+					http: {
+						fetch: async (url: string, init: RequestInit) => {
+							if (url.endsWith("/cancel")) {
+								operations.push("cancel:running-task");
+								return rejectCancellation
+									? Response.json(
+											{ code: "UnsupportedOperation" },
+											{ status: 400 },
+										)
+									: Response.json({});
+							}
+							if (init.method === "DELETE")
+								operations.push("delete:owned-file");
+							return f.http.fetch(url, init);
+						},
+					},
+				};
+				const adapter = yield* makeLiveMeetingAdapter(options);
+				if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+				f.fail();
+				const failed = yield* adapter.cleanup("meeting").pipe(Effect.either);
+				expect(Either.isLeft(failed) && failed.left.code).toBe(
+					"QUAKE.MEETING.TRANSCRIPTION_FAILED",
+				);
+				expect(f.states.get("meeting")).toMatchObject({
+					task: cancelFails ? "running-task" : undefined,
+					remoteFiles: ["owned-file"],
+					cleanupPending: true,
+				});
+				f.fail(false);
+				rejectCancellation = false;
+				// Rebuild the consumer to prove retry uses durable resource state.
+				const retry = yield* makeLiveMeetingAdapter(options);
+				if (!retry.cleanup) throw new Error("Missing cleanup operation");
+				yield* retry.cleanup("meeting");
+				expect(operations).toEqual([
+					"cancel:running-task",
+					"delete:owned-file",
+					...(cancelFails ? ["cancel:running-task"] : []),
+					"delete:owned-file",
+				]);
+				expect(f.states.get("meeting")).toMatchObject({
+					task: undefined,
+					remoteFiles: [],
+					cleanupPending: false,
+				});
+			}),
+	);
+}
+
+it.scoped("omits output language from OpenAI source transcription hints", () =>
+	Effect.gen(function* () {
+		const f = fixture();
+		const s = yield* fakeSocket();
+		const adapter = yield* makeLiveMeetingAdapter({
+			...f,
+			socket: s.transport,
+		});
+		const task = yield* adapter
+			.submit({
+				...f.request,
+				config: {
+					...f.request.config,
+					asrProvider: "openai",
+					asrModel: "gpt-realtime-mini",
+					outputLanguage: "yue",
+				},
+			})
+			.pipe(Effect.fork);
+		yield* TestClock.adjust(700);
+		yield* Fiber.join(task);
+		const audio = object(object(s.events[0]?.session).audio);
+		expect(object(object(audio.input).transcription)).toEqual({
+			model: "gpt-4o-transcribe",
+		});
+	}),
+);
+
+it.scoped(
+	"keeps source recognition out of translations and links speaker identity",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			for (const event of [
+				{
+					type: "input_audio_buffer.speech_started",
+					item_id: "source",
+					speaker_id: 2,
+				},
+				{
+					type: "conversation.item.input_audio_transcription.text",
+					item_id: "source",
+					text: "Guten Morgen",
+				},
+				{
+					type: "conversation.item.input_audio_transcription.completed",
+					item_id: "source",
+					transcript: "Guten Morgen",
+				},
+				{
+					type: "conversation.item.created",
+					previous_item_id: "source",
+					item: { id: "translated" },
+				},
+				{ type: "response.text.delta", item_id: "translated", delta: "Good " },
+				{
+					type: "response.text.done",
+					item_id: "translated",
+					text: "Good morning",
+				},
+			])
+				yield* Queue.offer(s.queue, event);
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([
+				{ id: "0:translated", text: "Good morning", speaker: "2", final: true },
+			]);
+		}),
+);
+
+it.scoped(
+	"does not let source ASR consume translation history under a long source stream",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			for (let i = 0; i < 205; i++)
+				yield* Queue.offer(s.queue, {
+					type: "conversation.item.input_audio_transcription.completed",
+					item_id: `source-${i}`,
+					transcript: "source words",
+				});
+			yield* Queue.offer(s.queue, {
+				type: "response.text.done",
+				item_id: "target",
+				text: "translated words",
+			});
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([{ id: "0:target", text: "translated words" }]);
+		}),
+);
+
+it.scoped(
+	"deletes owned files after explicit cancellation leaves a non-cancellable task",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				task: "running",
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const adapter = yield* makeLiveMeetingAdapter({
+				...f,
+				socket: s.transport,
+				http: {
+					fetch: async (url, init) =>
+						url.endsWith("/cancel")
+							? Response.json({ code: "UnsupportedOperation" }, { status: 400 })
+							: f.http.fetch(url, init),
+				},
+			});
+			yield* adapter.cancel("meeting");
+			expect(f.states.get("meeting")?.task).toBe("running");
+			if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+			yield* adapter.cleanup("meeting");
+			expect(f.states.get("meeting")?.remoteFiles).toEqual([]);
+			expect(f.states.get("meeting")?.task).toBeUndefined();
+		}),
+);
+
+it.effect(
+	"follows provider file cursors and filters ownership on later pages",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const urls: string[] = [];
+			const files = meetingFileHygiene(
+				{
+					fetch: async (url) => {
+						urls.push(url);
+						return Response.json(
+							url.includes("after=")
+								? {
+										data: [{ id: "owned-file" }, { id: "unowned-two" }],
+										has_more: false,
+									}
+								: {
+										data: [{ id: "unowned-one" }],
+										has_more: true,
+										last_id: "unowned-one",
+									},
+						);
+					},
+				},
+				f.resources,
+				f.resolve,
+			);
+			expect(yield* files.list("meeting")).toEqual([{ id: "owned-file" }]);
+			expect(
+				new URL(urls[1] ?? "http://missing").searchParams.get("after"),
+			).toBe("unowned-one");
+		}),
+);
+
+it("allows a size-appropriate slow recording upload beyond thirty seconds", async () => {
+	vi.useFakeTimers();
+	vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(), ms);
+		return controller.signal;
+	});
+	const f = fixture();
+	const resources: MeetingResources = {
+		...f.resources,
+		audio: () =>
+			Effect.succeed({
+				blob: new Blob([new Uint8Array(30_000_000)]),
+				release: Effect.void,
+			}),
+	};
+	let entered: () => void = () => {};
+	const uploading = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const http: typeof SpeechHttp.Service = {
+		fetch: (url, init) => {
+			if (!url.endsWith("/oss")) return f.http.fetch(url, init);
+			entered();
+			return new Promise<Response>((resolve, reject) => {
+				const timer = setTimeout(() => resolve(new Response("")), 45000);
+				init.signal?.addEventListener(
+					"abort",
+					() => {
+						clearTimeout(timer);
+						reject(new Error("upload aborted"));
+					},
+					{ once: true },
+				);
+			});
+		},
+	};
+	try {
+		const result = Effect.runPromise(
+			dashscopeFiletrans({ ...f, resources, http })
+				.submit(f.request)
+				.pipe(Effect.either),
+		);
+		await uploading;
+		await vi.advanceTimersByTimeAsync(45000);
+		expect(Either.isRight(await result)).toBe(true);
+		expect(f.states.get("meeting")?.task).toBeDefined();
+	} finally {
+		vi.restoreAllMocks();
+		vi.useRealTimers();
+	}
+});
+
+for (const provider of ["openai", "dashscope"] as const)
+	it.scoped(
+		`interrupts blocked ${provider} conversion and cleans partial resources`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				const s = yield* fakeSocket();
+				const entered = yield* Deferred.make<void>();
+				const unblock = yield* Deferred.make<void>();
+				let partial = false;
+				const blocked = Effect.sync(() => {
+					partial = true;
+				}).pipe(
+					Effect.zipRight(Deferred.succeed(entered, undefined)),
+					Effect.zipRight(Deferred.await(unblock)),
+					Effect.zipRight(Effect.fail(meetingError("CaptureFailed"))),
+					Effect.ensuring(
+						Effect.sync(() => {
+							partial = false;
+						}),
+					),
+				);
+				const adapter = yield* makeLiveMeetingAdapter({
+					...f,
+					socket: s.transport,
+					resources: {
+						...f.resources,
+						pcm: () => blocked,
+						audio: () => blocked,
+					},
+				});
+				const job = yield* adapter
+					.submit({
+						...f.request,
+						config: {
+							...f.request.config,
+							asrProvider: provider,
+							asrModel:
+								provider === "openai" ? "gpt-realtime-mini" : FILETRANS_MODEL,
+						},
+					})
+					.pipe(Effect.fork);
+				yield* Deferred.await(entered);
+				yield* Fiber.interruptFork(job);
+				yield* TestClock.adjust(101);
+				const result = yield* Fiber.poll(job);
+				yield* Deferred.succeed(unblock, undefined);
+				yield* Fiber.interrupt(job);
+				expect(Option.isSome(result)).toBe(true);
+				expect(partial).toBe(false);
+			}),
+	);
+
+it.effect(
+	"gives a new DashScope attempt a fresh internal retry budget but preserves recovery",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const provider = dashscopeFiletrans(f);
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: [],
+				cleanupPending: false,
+				internalRetries: 3,
+				upload: { url: "oss://private/recording.mp3", expiresAt: 48 * 3600000 },
+			});
+			yield* provider.submit(f.request);
+			f.internalFailures(1);
+			const poll = yield* provider
+				.poll("meeting")
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(2001);
+			const result = yield* Fiber.join(poll);
+			expect(Either.isRight(result) && result.right.status).toBe("pending");
+			expect(f.states.get("meeting")?.internalRetries).toBe(1);
+			const task = f.states.get("meeting")?.task;
+			yield* provider.submit(f.request);
+			expect(f.states.get("meeting")?.internalRetries).toBe(1);
+			expect(f.states.get("meeting")?.task).toBe(task);
+		}),
+);
+
+it.scoped("stops paced PCM immediately when the OpenAI reader fails", () =>
+	Effect.gen(function* () {
+		const f = fixture();
+		const s = yield* fakeSocket();
+		let appended = 0;
+		const transport: typeof SpeechWebSocket.Service = {
+			connect: () =>
+				Effect.succeed({
+					...s.socket,
+					send: (raw) =>
+						Effect.gen(function* () {
+							const event = object(JSON.parse(String(raw)));
+							yield* s.socket.send(raw);
+							if (
+								event.type === "input_audio_buffer.append" &&
+								++appended === 1
+							)
+								yield* Queue.offer(s.queue, {
+									type: "error",
+									error: { code: "invalid_request_error" },
+								});
+						}),
+				}),
+		};
+		const adapter = yield* makeLiveMeetingAdapter({
+			...f,
+			socket: transport,
+			resources: {
+				...f.resources,
+				pcm: () =>
+					Effect.succeed({
+						frames: Stream.fromIterable(
+							Array.from({ length: 100 }, () => new Uint8Array(4800)),
+						),
+						release: Effect.void,
+					}),
+			},
+		});
+		let failure: unknown;
+		const job = yield* adapter
+			.submit({
+				...f.request,
+				config: {
+					...f.request.config,
+					asrProvider: "openai",
+					asrModel: "gpt-realtime-mini",
+				},
+			})
+			.pipe(
+				Effect.tapError((error) =>
+					Effect.sync(() => {
+						failure = error;
+					}),
+				),
+				Effect.either,
+				Effect.fork,
+			);
+		yield* TestClock.adjust(1000);
+		const finished = yield* Fiber.poll(job);
+		yield* Fiber.interrupt(job);
+		expect(appended).toBe(1);
+		expect(Option.isSome(finished)).toBe(true);
+		expect(failure).toMatchObject({
+			_tag: "MeetingTranscriptionFailed",
+			originalCause: expect.any(AiProtocolInvalid),
+		});
+		expect(s.closed()).toBe(1);
+	}),
 );
