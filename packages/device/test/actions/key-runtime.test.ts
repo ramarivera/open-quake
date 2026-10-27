@@ -22,6 +22,7 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
+import { inspectProfileImport } from "../../src/profiles/profile-import.js";
 import { managerState } from "../../src/profiles/profile-manager-invariants.js";
 
 function fixture(
@@ -1701,3 +1702,370 @@ for (const host of ["localhost:3000", "example.org:8080"]) {
 		},
 	);
 }
+
+it.effect(
+	"MGMT-297 dispatches saved Next Profile with wrap and explicit profile/page",
+	() => {
+		const next = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		});
+		next.switch();
+		const explicit = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "p" },
+				{ type: "page", value: 2 },
+			],
+		});
+		return Effect.gen(function* () {
+			yield* press.pipe(Effect.provide(next.layer));
+			expect(next.selection()).toEqual({ profileId: "p", pageId: "one" });
+			yield* press.pipe(Effect.provide(explicit.layer));
+			expect(explicit.selection()).toEqual({ profileId: "p", pageId: "two" });
+		});
+	},
+);
+it.effect(
+	"MGMT-297 rejects missing profile/page and hidden destinations without selection changes",
+	() =>
+		Effect.gen(function* () {
+			for (const [profile, page] of [
+				["missing", 1],
+				["p", 9],
+			] as const) {
+				const f = fixture({
+					type: "switchProfile",
+					actions: [
+						{ type: "profile", value: profile },
+						{ type: "page", value: page },
+					],
+				});
+				const rejected = yield* press.pipe(
+					Effect.provide(f.layer),
+					Effect.either,
+				);
+				expect(rejected._tag).toBe("Left");
+				if (rejected._tag === "Left")
+					expect(rejected.left.code).toBe("QUAKE.ACTION.INVALID");
+				expect(f.selection()).toEqual({ profileId: "p", pageId: "one" });
+			}
+			const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+			const env = Schema.decodeUnknownSync(ProfileEnvelope)({
+				schemaVersion: 1,
+				manager: {
+					revision: 0,
+					installed: true,
+					userHasSetDefault: false,
+					approvedCommands: [],
+					hidden: ["hidden"],
+					links: [],
+				},
+				profiles: [
+					{
+						id: "p",
+						name: "P",
+						revision: 0,
+						pages: [
+							{
+								id: "one",
+								keys: [
+									{
+										...base,
+										childrenName: "switchProfile",
+										config: {
+											...base.config,
+											type: "switchProfile",
+											actions: [
+												{ type: "profile", value: "hidden" },
+												{ type: "page", value: 1 },
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+					{
+						id: "hidden",
+						name: "Hidden",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+				],
+				activeByDevice: { device: { profileId: "p", pageId: "one" } },
+			});
+			let selected = false;
+			const f = fixture(
+				{ type: "hotkey", actions: [{ type: "key", value: "control+a" }] },
+				false,
+				0,
+				{
+					read: Effect.succeed(env),
+					select: () =>
+						Effect.sync(() => {
+							selected = true;
+						}),
+				},
+			);
+			const rejected = yield* press.pipe(
+				Effect.provide(f.layer),
+				Effect.either,
+			);
+			expect(rejected._tag).toBe("Left");
+			if (rejected._tag === "Left")
+				expect(rejected.left.code).toBe("QUAKE.ACTION.INVALID");
+			expect(selected).toBe(false);
+		}),
+);
+for (const sentinel of [-1, -2])
+	it.effect(`MGMT-401 executes imported legacy page action ${sentinel}`, () => {
+		const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const imported = inspectProfileImport([
+			{
+				...base,
+				childrenName: "page",
+				config: {
+					...base.config,
+					type: "page",
+					actions: [{ type: "page", value: sentinel }],
+				},
+			},
+		]);
+		const config = imported.profile?.pages[0].keys[0]?.config;
+		if (!config) return Effect.die("missing imported page key");
+		expect(config.type).toBe(sentinel === -1 ? "previousPage" : "nextPage");
+		const f = fixture(config);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.pageId).toBe("two");
+		}).pipe(Effect.provide(f.layer));
+	});
+
+it.effect(
+	"MGMT-297 Next includes visible empty local profiles and skips hidden ones",
+	() => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const env = Schema.decodeUnknownSync(ProfileEnvelope)({
+			schemaVersion: 1,
+			manager: {
+				revision: 0,
+				installed: true,
+				userHasSetDefault: false,
+				approvedCommands: [],
+				hidden: ["hidden"],
+				links: [],
+			},
+			profiles: [
+				{
+					id: "p",
+					name: "P",
+					revision: 0,
+					pages: [
+						{
+							id: "one",
+							keys: [
+								{
+									...empty,
+									childrenName: "switchProfile",
+									config: {
+										...empty.config,
+										type: "switchProfile",
+										actions: [
+											{ type: "profile", value: "-1" },
+											{ type: "page", value: 1 },
+										],
+									},
+								},
+							],
+						},
+					],
+				},
+				{
+					id: "hidden",
+					name: "Hidden",
+					revision: 0,
+					pages: [{ id: "one", keys: [] }],
+				},
+				{
+					id: "local-profile",
+					name: "Local",
+					revision: 0,
+					pages: [{ id: "empty", keys: [] }],
+				},
+			],
+			activeByDevice: { device: { profileId: "p", pageId: "one" } },
+		});
+		const selected: string[] = [];
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				read: Effect.succeed(env),
+				select: (_device, profile, page) =>
+					Effect.sync(() => {
+						selected.push(`${profile}:${page}`);
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(selected).toEqual(["local-profile:empty"]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"integration: switch-profile retains PR130 destinations beyond page ten",
+	() => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const env = Schema.decodeUnknownSync(ProfileEnvelope)({
+			schemaVersion: 1,
+			profiles: [
+				{
+					id: "p",
+					name: "P",
+					revision: 0,
+					pages: Array.from({ length: 11 }, (_, i) => ({
+						id: `page-${i + 1}`,
+						keys: [
+							{
+								...empty,
+								childrenName: "switchProfile",
+								config: {
+									...empty.config,
+									type: "switchProfile",
+									actions: [
+										{ type: "profile", value: "p" },
+										{ type: "page", value: 11 },
+									],
+								},
+							},
+						],
+					})),
+				},
+			],
+			activeByDevice: { device: { profileId: "p", pageId: "page-1" } },
+		});
+		const selected: string[] = [];
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				read: Effect.succeed(env),
+				select: (_device, profile, page) =>
+					Effect.sync(() => {
+						selected.push(`${profile}:${page}`);
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(selected).toEqual(["p:page-11"]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"review: saved Next and Previous are inverse in stored profile order",
+	() => {
+		const config = {
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		};
+		const f = fixture(config);
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		const make = (id: string, name: string, direction: string) => ({
+			...raw.profiles[0],
+			id,
+			name,
+			pages: [
+				{
+					id: "one",
+					keys: raw.profiles[0].pages[0].keys.map((key) => ({
+						...key,
+						config: {
+							...key.config,
+							actions: [
+								{ type: "profile", value: direction },
+								{ type: "page", value: 1 },
+							],
+						},
+					})),
+				},
+			],
+		});
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				profiles: [
+					make("p", "30", "-1"),
+					make("q", "20", "-2"),
+					make("r", "10", "-1"),
+				],
+			}),
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.profileId).toBe("q");
+			yield* press;
+			expect(f.selection()?.profileId).toBe("p");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: saved Previous includes empty visible profiles and skips hidden ones",
+	() => {
+		const f = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-2" },
+				{ type: "page", value: 1 },
+			],
+		});
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				manager: {
+					...Schema.encodeSync(ProfileEnvelope)(f.read()).manager,
+					revision: 0,
+					installed: true,
+					userHasSetDefault: false,
+					approvedCommands: [],
+					hidden: ["hidden"],
+					links: [],
+				},
+				profiles: [
+					raw.profiles[0],
+					{
+						id: "empty",
+						name: "Empty",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+					{
+						id: "hidden",
+						name: "Hidden",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+					raw.profiles[1],
+				],
+				activeByDevice: { device: { profileId: "q", pageId: "one" } },
+			}),
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.profileId).toBe("empty");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

@@ -79,19 +79,23 @@ export function initialChoices(
 	};
 }
 
-/** Saved profile IDs that still exist, else the profile active for the display. */
+/** Current manager visibility wins over an older wizard draft on entry/replay. */
 export function profileDefaults(
 	saved: ReadonlyArray<string>,
 	choices: ProfileChoices,
-	display: WizardDisplay | null,
+	_display: WizardDisplay | null,
 ): ReadonlyArray<string> {
 	if (choices.state !== "ready") return saved;
 	const known = new Set(choices.profiles.map((profile) => profile.id));
 	const kept = saved.filter((id) => known.has(id));
-	if (kept.length > 0) return kept;
-	const key = display?._tag === "quake" ? display.deviceId : "desktop-preview";
-	const active = choices.active[key] ?? choices.active["desktop-preview"];
-	return active && known.has(active) ? [active] : [];
+	if (
+		choices.profiles.every((profile) => profile.enabled === undefined) &&
+		kept.length > 0
+	)
+		return kept;
+	return choices.profiles
+		.filter((profile) => profile.enabled !== false)
+		.map((profile) => profile.id);
 }
 
 export function displayUsable(

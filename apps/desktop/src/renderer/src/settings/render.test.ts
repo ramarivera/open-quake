@@ -198,16 +198,20 @@ describe("setup review fixes", () => {
 		expect(profiles({ state: "unavailable" })).not.toContain("Try again");
 	});
 
-	it("says choosing a profile doesn't change the active one", () => {
+	it("explains persisted visibility and retry after a setup-draft failure", () => {
 		const ready = {
 			state: "ready",
 			profiles: [{ id: "a", name: "Default" }],
 			active: { "desktop-preview": "a" },
 		} as const;
 		const en = profiles(ready);
-		expect(en).toContain("doesn’t create profiles or change the active one");
+		expect(en).toContain(
+			"Continue saves which default profiles appear in the knob menu",
+		);
 		expect(en).toMatch(/aria-describedby="[^"]*-note [^"]*-count"/);
-		expect(profiles(ready, "de")).toContain("ändert das aktive Profil nicht");
+		expect(profiles(ready, "de")).toContain(
+			"Weiter speichert die sichtbaren Standardprofile",
+		);
 	});
 
 	it("reads orientation copy through the settings feature translator", () => {

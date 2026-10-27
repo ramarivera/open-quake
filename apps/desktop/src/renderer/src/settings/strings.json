@@ -67,7 +67,7 @@
 			"profiles": {
 				"heading": "Profiles",
 				"body": "Choose at least one knob profile you plan to use.",
-				"note": "Setup only records this choice. It doesn’t create profiles or change the active one; you switch and edit profiles in Knob profiles.",
+				"note": "Continue saves which default profiles appear in the knob menu. Keep at least one enabled. If saving setup progress fails, retry here; the menu choice stays saved.",
 				"loading": "Loading profiles…",
 				"failed": "Profiles couldn’t be loaded.",
 				"unavailable": "Profiles aren’t available in this window.",
@@ -116,7 +116,8 @@
 				"incomplete": "Some choices are no longer valid, for example a disconnected QUAKE or a removed profile. Review them and try again.",
 				"read": "The saved setup progress couldn’t be read.",
 				"unknown": "The settings service didn’t respond. Try again.",
-				"notComplete": "Setup isn’t marked complete."
+				"notComplete": "Setup isn’t marked complete.",
+				"profileProgress": "Profile visibility was saved, but setup progress could not be saved. Continue to retry."
 			},
 			"resume": {
 				"label": "Resume setup",
@@ -378,7 +379,7 @@
 			"profiles": {
 				"heading": "Profile",
 				"body": "Wähle mindestens ein Drehknopf-Profil, das du nutzen möchtest.",
-				"note": "Die Einrichtung merkt sich nur diese Auswahl. Sie erstellt keine Profile und ändert das aktive Profil nicht; Profile wechselst und bearbeitest du unter Drehknopf-Profile.",
+				"note": "Weiter speichert die sichtbaren Standardprofile im Drehknopf-Menü. Mindestens eines bleibt aktiv. Falls der Fortschritt nicht gespeichert wird, versuche es hier erneut; die Menüauswahl bleibt gespeichert.",
 				"loading": "Profile werden geladen…",
 				"failed": "Die Profile konnten nicht geladen werden.",
 				"unavailable": "Profile sind in diesem Fenster nicht verfügbar.",
@@ -427,7 +428,8 @@
 				"incomplete": "Einige Entscheidungen sind nicht mehr gültig, etwa ein getrennter QUAKE oder ein entferntes Profil. Prüfe sie und versuche es erneut.",
 				"read": "Der gespeicherte Einrichtungsfortschritt konnte nicht gelesen werden.",
 				"unknown": "Der Einstellungsdienst hat nicht geantwortet. Versuche es erneut.",
-				"notComplete": "Die Einrichtung ist nicht als abgeschlossen markiert."
+				"notComplete": "Die Einrichtung ist nicht als abgeschlossen markiert.",
+				"profileProgress": "Die Profilsichtbarkeit wurde gespeichert, der Einrichtungsfortschritt jedoch nicht. Mit Weiter erneut versuchen."
 			},
 			"resume": {
 				"label": "Einrichtung fortsetzen",

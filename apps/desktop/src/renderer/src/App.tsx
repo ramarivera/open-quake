@@ -125,6 +125,11 @@ function ManagementSurface({
 			if (item) {
 				navigated.current = true;
 				setPage(item);
+				if (
+					item === "keys" &&
+					document.activeElement?.closest(".profiles-manager")
+				)
+					setGuideDestination(item);
 				if (item === "meetings")
 					setMeetingActivation((sequence) => sequence + 1);
 				if (next?.agentTab) {

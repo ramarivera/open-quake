@@ -34,6 +34,7 @@ import type { IntegrationsBridge } from "../../../shared/integrations";
 import type { KeyReply, KeyRequest } from "../../../shared/key-library";
 import type { AppLocaleBridge, LocaleSnapshot } from "../../../shared/locale";
 import type {
+	ProfileForegroundGuidance,
 	ProfileReply,
 	ProfileView,
 } from "../../../shared/profile-manager";
@@ -80,6 +81,7 @@ async function fixture(
 			},
 		},
 	});
+	let failWrite = false;
 	const runtime = ManagedRuntime.make(
 		Layer.mergeAll(
 			ProfileManager.DefaultWithoutDependencies,
@@ -92,6 +94,7 @@ async function fixture(
 						profileStorageLayer({
 							read: async () => saved,
 							write: async (e) => {
+								if (failWrite) throw new Error("synthetic storage failure");
 								saved = e;
 							},
 						}),
@@ -117,7 +120,12 @@ async function fixture(
 	const controller = await runtime.runPromise(
 		makeProfileController({
 			installedApps: async () => [
-				{ name: "Editor", path: "/apps/editor", identifier: "editor.app" },
+				{
+					name: "Editor",
+					path: "/apps/editor",
+					identifier: "editor.app",
+					icon: "data:image/png;base64,YQ==",
+				},
 			],
 			confirm: async () => true,
 			execute: async () => {},
@@ -140,12 +148,19 @@ async function fixture(
 				: { _tag: "rejected", reason: result.left.code };
 		},
 	);
+	let guidance: ((value: ProfileForegroundGuidance) => void) | undefined;
 	window.quakeProfileManager = {
 		request,
 		onSnapshot: (cb) => {
 			snapshot = cb;
 			return () => {
 				snapshot = undefined;
+			};
+		},
+		onForegroundGuidance: (callback) => {
+			guidance = callback;
+			return () => {
+				guidance = undefined;
 			};
 		},
 		onProgress: () => () => {},
@@ -255,6 +270,12 @@ async function fixture(
 		request,
 		capture,
 		saved: () => saved,
+		guidance: async (value: ProfileForegroundGuidance) => {
+			await act(async () => guidance?.(value));
+		},
+		failWrite: (value: boolean) => {
+			failWrite = value;
+		},
 		choose: (path?: string) => {
 			chosen = Option.fromNullable(path);
 		},
@@ -588,3 +609,68 @@ it("MGMT-118 reaches actual emoji package and shortcut creation workflows from K
 		),
 	);
 });
+
+it("MGMT-326/329 searches installed identities, shows their icon and preserves properties on a failed scoped link write", async () => {
+	const f = await fixture();
+	const search = query(
+		f.host,
+		".profile-settings input[type=search]",
+		HTMLInputElement,
+	);
+	const selects = f.host.querySelectorAll<HTMLSelectElement>(
+		".profile-settings select",
+	);
+	const app = selects[1];
+	if (!app) throw new Error("missing app select");
+	await input(search, "unmatched");
+	expect(
+		[...app.options].some((option) => option.value === "/apps/editor"),
+	).toBe(false);
+	await input(search, "EDITOR.APP");
+	expect(
+		[...app.options].some((option) => option.value === "/apps/editor"),
+	).toBe(true);
+	await input(app, "/apps/editor");
+	expect(
+		f.host.querySelector(".profile-settings img")?.getAttribute("src"),
+	).toBe("data:image/png;base64,YQ==");
+	const before = f.saved();
+	f.failWrite(true);
+	await input(app, "");
+	expect(f.saved()).toBe(before);
+	expect(app.value).toBe("/apps/editor");
+});
+it("MGMT-314 closes the manager through its keyboard-accessible return control and preserves selected identity", async () => {
+	const f = await fixture("linux", true);
+	await click(button(f.host, "Knob profiles"));
+	const close = query(
+		f.host,
+		'button[aria-label="Close and return to Keys"]',
+		HTMLButtonElement,
+	);
+	close.focus();
+	expect(document.activeElement).toBe(close);
+	await click(close);
+	await settle(() =>
+		expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+			"custom",
+		),
+	);
+	expect(document.activeElement?.classList.contains("content")).toBe(true);
+});
+
+for (const locale of ["en", "de"] as const) {
+	it(`MAIN-084 displays permission guidance in ${locale} and clears it after recovery`, async () => {
+		const f = await fixture("darwin");
+		if (locale === "de")
+			await input(query(f.host, "header select", HTMLSelectElement), locale);
+		await f.guidance("accessibility-denied");
+		expect(f.host.querySelector("[role=alert]")?.textContent).toContain(
+			locale === "de" ? "Bedienungshilfen" : "Accessibility",
+		);
+		await f.publish();
+		expect(f.host.querySelector("[role=alert]")).not.toBeNull();
+		await f.guidance("available");
+		expect(f.host.querySelector("[role=alert]")).toBeNull();
+	});
+}

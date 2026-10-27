@@ -1,11 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { InvalidKeyAction } from "../actions/action-errors.js";
+import { KeyRuntime, KeyRuntimePort } from "../actions/key-runtime-service.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
 import { editKeyTitle } from "./key-editing-invariants.js";
 import { KeyEditing } from "./key-editing-service.js";
+import { builtinProfiles } from "./profile-catalog.js";
 import {
 	createEmptyProfileKey,
 	encodeProfileEnvelope,
+	Profile,
 	ProfileEnvelope,
 	ProfileKey,
 } from "./profile-contracts.js";
@@ -329,7 +333,12 @@ describe("page and diagnosed import scenarios", () => {
 				expect(
 					dispatch.profiles[0].pages[0].keys.map((k) => k.keyCode),
 				).toEqual(["1,2"]);
-				expect(envelope.profiles[0].pages[0].keys).toHaveLength(2);
+				expect(envelope.profiles[0].pages[0].keys).toHaveLength(16);
+				expect(
+					envelope.profiles[0].pages[0].keys.filter(
+						(key) => key.config.type !== "",
+					),
+				).toHaveLength(2);
 			}).pipe(
 				Effect.provide(
 					profileFunctionContractsLayer(actionProfileFunctionContracts),
@@ -607,5 +616,190 @@ it("retains source indices after null slots and imports canonical profiles", () 
 	expect(imported.profile?.knob).toEqual(
 		Option.isSome(canonical.knob) ? canonical.knob.value : undefined,
 	);
-	expect(imported.profile?.pages[0].keys.length).toBe(2);
+	expect(imported.profile?.pages[0].keys.length).toBe(16);
+	expect(
+		imported.profile?.pages[0].keys.filter((key) => key.config.type !== ""),
+	).toHaveLength(2);
 });
+
+it.effect(
+	"MGMT-090 creates a folder and locked Back in one save, then dispatches folder/Back while retaining parent menu identity",
+	() => {
+		const f = fixture();
+		const folder = {
+			...encodedKey("1,1", {
+				type: "createFolder",
+				actions: [{ type: "folder", value: "nested" }],
+			}),
+			childrenName: "createFolder",
+		};
+		const program = Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			expect((yield* editor.preview(target, folder))._tag).toBe("ready");
+			yield* editor.save(target.token);
+			const saved = f.stored();
+			expect(saved.profiles[0].pages.map((p) => p.id)).toEqual([
+				"one",
+				"nested",
+			]);
+			const back = saved.profiles[0].pages[1]?.keys[0];
+			expect(back?.config).toMatchObject({
+				type: "back",
+				icon: "0-5",
+				actions: [{ type: "parentFolder", value: "one" }],
+			});
+			expect(
+				Option.getOrThrow(back?.config.basicEditableItems ?? Option.none()),
+			).toMatchObject({ grid: false, allowDelete: false, allowDrag: false });
+			expect(f.writes()).toBe(1);
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("a", "1,1", "press");
+			expect(f.stored().activeByDevice.a).toEqual({
+				profileId: "p",
+				pageId: "nested",
+			});
+			yield* runtime.activate("a", "1,1", "release");
+			yield* runtime.activate("a", "1,1", "press");
+			expect(f.stored().activeByDevice.a).toEqual({
+				profileId: "p",
+				pageId: "one",
+			});
+		});
+		const port = Layer.effect(
+			KeyRuntimePort,
+			Effect.gen(function* () {
+				const service = yield* ProfileService;
+				return KeyRuntimePort.of({
+					read: Effect.sync(f.stored),
+					execute: () => Effect.void,
+					publish: () => Effect.void,
+					alarm: () => Effect.void,
+					select: (deviceId, profileId, pageId) =>
+						service.selectProfile({ deviceId, profileId, pageId }).pipe(
+							Effect.asVoid,
+							Effect.mapError(
+								(cause) => new InvalidKeyAction("activation", cause),
+							),
+						),
+				});
+			}),
+		).pipe(Layer.provide(f.layer));
+		return program.pipe(
+			Effect.provide(
+				KeyRuntime.DefaultWithoutDependencies.pipe(
+					Layer.provide(port),
+					Layer.provideMerge(f.layer),
+				),
+			),
+		);
+	},
+);
+
+it.effect(
+	"MGMT-385 saves and selects a commented 2x6 device preset without adding shipped defaults",
+	() => {
+		const f = fixture();
+		const legacy = Array.from({ length: 12 }, (_, index) => ({
+			...Schema.encodeSync(ProfileKey)(
+				createEmptyProfileKey(
+					`${Math.floor(index / 6) + 1},${(index % 6) + 1}`,
+				),
+			),
+			...(index === 0
+				? {
+						childrenName: "luminance",
+						config: {
+							...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"))
+								.config,
+							type: "luminance",
+							supportKnob: true,
+							actions: [
+								{ type: "level", value: 1 },
+								{ type: "level", value: 0 },
+							],
+						},
+					}
+				: {}),
+		}));
+		return Effect.gen(function* () {
+			const service = yield* ProfileService;
+			yield* service.importProfile(JSON.stringify(legacy), "legacy-device");
+			const saved = yield* service.getProfile("legacy-device");
+			yield* service.selectProfile({
+				deviceId: "a",
+				profileId: "legacy-device",
+				pageId: saved.pages[0].id,
+			});
+			expect(saved.pages[0].keys).toHaveLength(16);
+			expect(
+				Option.getOrThrow(
+					saved.pages[0].keys[0]?.compatibility ?? Option.none(),
+				).source,
+			).toMatchObject({ childrenName: "luminance" });
+			expect(f.stored().activeByDevice.a?.profileId).toBe("legacy-device");
+			expect(f.stored().profiles).toHaveLength(2);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MGMT-352 saves and reloads the exact DK Claw knob route and animations",
+	() => {
+		const f = fixture();
+		const preset = builtinProfiles("linux").find(
+			(profile) => profile.id === "1-8",
+		);
+		if (!preset) return Effect.die("missing DK Claw preset");
+		const encoded = Schema.encodeSync(Profile)(preset);
+		return Effect.gen(function* () {
+			const service = yield* ProfileService;
+			yield* service.importProfile(JSON.stringify(encoded), "dkclaw-import");
+			const imported = yield* service.getProfile("dkclaw-import");
+			const { revision: _revision, ...draft } =
+				Schema.encodeSync(Profile)(imported);
+			yield* service.saveProfile({
+				expectedRevision: imported.revision,
+				profile: { ...draft, name: "Saved Claw" },
+			});
+			const saved = yield* service.getProfile("dkclaw-import");
+			expect(Schema.encodeSync(Profile)(saved).knob).toEqual(encoded.knob);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MGMT-385 imports and selects the commented AI meeting preset while retaining its unsupported payload inert",
+	() => {
+		const f = fixture();
+		// DefaultProfileData.js:1757-1783, commented DEFAULT_AI_FUNCTION_CONFIG.
+		const key = {
+			...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")),
+			childrenName: "meetingMinutes",
+			config: {
+				...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config,
+				type: "meetingMinutes",
+				size: [2, 2],
+				icon: "0-61",
+				actions: [{ type: "generateReport", value: true }],
+			},
+		};
+		return Effect.gen(function* () {
+			const service = yield* ProfileService;
+			yield* service.importProfile(JSON.stringify([key]), "legacy-ai");
+			const saved = yield* service.getProfile("legacy-ai");
+			yield* service.selectProfile({
+				deviceId: "a",
+				profileId: "legacy-ai",
+				pageId: saved.pages[0].id,
+			});
+			expect(saved.pages[0].keys).toHaveLength(13);
+			expect(
+				Option.getOrThrow(
+					saved.pages[0].keys[0]?.compatibility ?? Option.none(),
+				),
+			).toMatchObject({ unsupported: true, source: key });
+			expect(new Set(saved.pages[0].keys.flatMap(occupiedCells)).size).toBe(16);
+			expect(f.stored().activeByDevice.a?.profileId).toBe("legacy-ai");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

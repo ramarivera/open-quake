@@ -57,6 +57,10 @@ export const nativeForegroundApp = async (
 		? Option.some({ id, path: await readlink(`/proc/${pid}/exe`) })
 		: Option.none();
 };
+export interface ForegroundAccess {
+	readonly trusted: () => boolean;
+	readonly denied: () => void;
+}
 export interface ForegroundProbe {
 	(): Effect.Effect<Option.Option<ForegroundApp>, ProfileForegroundFailed>;
 	readonly dispose: () => Promise<void>;
@@ -68,11 +72,13 @@ export interface ForegroundProbe {
 export const makeForegroundProbe = (
 	platform: ProfilePlatform,
 	native?: typeof nativeForegroundApp,
+	access?: ForegroundAccess,
 ): ForegroundProbe => {
 	const helper =
 		platform === "win32" && !native ? makeWindowsForeground() : undefined;
 	const read = native ?? (helper ? () => helper.probe() : nativeForegroundApp);
 	let disposed = false;
+	let permissionDenied = false;
 	let disposal: Promise<void> | undefined;
 	let cached: Option.Option<ForegroundApp> = Option.none();
 	let at = Number.NEGATIVE_INFINITY;
@@ -86,6 +92,20 @@ export const makeForegroundProbe = (
 			return yield* ProfileForegroundFailed.fromCause(
 				new Error("Foreground probe disposed"),
 			);
+		if (platform === "darwin" && access && !access.trusted()) {
+			cached = Option.none();
+			at = Number.NEGATIVE_INFINITY;
+			if (!permissionDenied) {
+				permissionDenied = true;
+				yield* Effect.sync(access.denied);
+			}
+			return yield* ProfileForegroundFailed.fromCause(
+				new Error(
+					"Enable Accessibility for open-quake in System Settings > Privacy & Security > Accessibility",
+				),
+			);
+		}
+		permissionDenied = false;
 		const now = yield* Clock.currentTimeMillis;
 		const cacheHit = now - at <= 500;
 		yield* Effect.annotateCurrentSpan({ platform, cacheHit });
@@ -131,9 +151,10 @@ export const makeScopedForegroundProbe = Effect.fn("ForegroundApp.acquire")(
 	(
 		platform: ProfilePlatform,
 		native?: typeof nativeForegroundApp,
+		access?: ForegroundAccess,
 	): Effect.Effect<ForegroundProbe, never, Scope.Scope> =>
 		Effect.acquireRelease(
-			Effect.sync(() => makeForegroundProbe(platform, native)),
+			Effect.sync(() => makeForegroundProbe(platform, native, access)),
 			(probe) =>
 				Effect.promise(() => probe.dispose()).pipe(
 					Effect.withSpan("ForegroundApp.dispose"),

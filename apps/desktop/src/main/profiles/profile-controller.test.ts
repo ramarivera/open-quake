@@ -4,6 +4,7 @@ import {
 	Array as EffectArray,
 	Fiber,
 	Layer,
+	Logger,
 	Option,
 	Schema,
 	TestClock,
@@ -46,6 +47,7 @@ const layer = (
 		serial: string,
 		profile: Profile,
 	) => Effect.Effect<void, ProfileDeliveryFailed> = () => Effect.void,
+	failWrite: () => boolean = () => false,
 ) => {
 	let saved: unknown = encodeProfileEnvelope(
 		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
@@ -60,6 +62,7 @@ const layer = (
 					profileStorageLayer({
 						read: async () => saved,
 						write: async (e) => {
+							if (failWrite()) throw new Error("synthetic storage failure");
 							saved = e;
 						},
 					}),
@@ -85,6 +88,72 @@ const port = (): ProfileDesktopPort => ({
 	progress: () => {},
 });
 describe("real profile desktop controller", () => {
+	it.effect(
+		"drops deleted profiles from failed style recaptures without repeated warnings",
+		() =>
+			Effect.gen(function* () {
+				let fail = false;
+				const warnings: unknown[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async () => {
+						if (fail) throw new Error("Capture failed");
+						return "data:image/png;base64,capture";
+					},
+				});
+				const manager = yield* ProfileManager;
+				const created = yield* manager.command({ type: "create" });
+				if (created._tag !== "updated")
+					return yield* Effect.die("Create fixture failed");
+				const custom = created.envelope.profiles.find((p) =>
+					p.id.startsWith("custom-"),
+				);
+				if (!custom) return yield* Effect.die("Missing custom");
+				yield* controller.request({
+					type: "thumbnail",
+					id: custom.id,
+					locale: "en",
+				});
+				fail = true;
+				yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				yield* manager.command({
+					type: "delete",
+					id: custom.id,
+					confirmed: true,
+				});
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				expect(warnings).toEqual([]);
+			}).pipe(Effect.provide(layer())),
+	);
+
 	it.effect(
 		"continues after a style recapture fails and retries only failures on the same preference",
 		() =>
@@ -689,3 +758,93 @@ for (const nested of [false, true]) {
 		},
 	);
 }
+
+it.effect(
+	"SETTINGS-059 sends the wizard's committed visible selection to connected mock devices and rolls back storage failures",
+	() => {
+		let fail = false;
+		const pushes: string[] = [];
+		return Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const manager = yield* ProfileManager;
+			yield* switching.connect("mock-a", "1-1");
+			yield* switching.connect("mock-b", "1-1");
+			pushes.length = 0;
+			const before = yield* manager.read();
+			fail = true;
+			const failed = yield* controller
+				.request({
+					type: "manage",
+					command: { type: "default-visibility", ids: ["1-2"] },
+				})
+				.pipe(Effect.either);
+			expect(failed._tag).toBe("Left");
+			expect(yield* manager.read()).toBe(before);
+			fail = false;
+			const reply = yield* controller.request({
+				type: "manage",
+				command: { type: "default-visibility", ids: ["1-2"] },
+			});
+			expect(reply._tag).toBe("success");
+			const after = yield* manager.read();
+			expect(after.activeByDevice["mock-a"]?.profileId).toBe("1-2");
+			expect(after.activeByDevice["mock-b"]?.profileId).toBe("1-2");
+			expect(managerState(after).hidden).toContain("1-1");
+			expect(pushes.slice(-2)).toEqual(["mock-a:1-2", "mock-b:1-2"]);
+		}).pipe(
+			Effect.provide(
+				layer(
+					(serial, profile) =>
+						Effect.sync(() => {
+							pushes.push(`${serial}:${profile.id}`);
+						}),
+					() => fail,
+				),
+			),
+		);
+	},
+);
+
+it.effect(
+	"SETTINGS-059 repeated visibility saves preserve connected second pages and folders",
+	() =>
+		Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const repository = yield* ProfileRepository;
+			yield* switching.connect("mock", "1-1");
+			for (const pageId of ["second", "folder"]) {
+				yield* repository.transact((current) =>
+					Effect.succeed({
+						...current,
+						profiles: EffectArray.map(current.profiles, (p) =>
+							p.id !== "1-1"
+								? p
+								: {
+										...p,
+										pages: EffectArray.append(
+											p.pages.filter((page) => page.id !== pageId),
+											{ ...p.pages[0], id: pageId },
+										),
+									},
+						),
+						activeByDevice: {
+							...current.activeByDevice,
+							mock: { profileId: "1-1", pageId },
+						},
+					}),
+				);
+				for (let attempt = 0; attempt < 2; attempt++) {
+					const reply = yield* controller.request({
+						type: "manage",
+						command: { type: "default-visibility", ids: ["1-1"] },
+					});
+					expect(reply._tag).toBe("success");
+					expect(
+						(yield* repository.load()).envelope.activeByDevice.mock,
+					).toEqual({ profileId: "1-1", pageId });
+				}
+			}
+		}).pipe(Effect.provide(layer())),
+);

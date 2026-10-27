@@ -13,9 +13,12 @@ import { selectedManagerProfile, subscribeManagerView } from "./manager-view";
 describe("manager view lifetime", () => {
 	it("ignores obsolete success and failure replies while preserving current subscriptions", async () => {
 		const replies: ((reply: ProfileReply) => void)[] = [];
+		const offGuidance = vi.fn();
+		const guidance = vi.fn();
 		const offSnapshot = vi.fn(),
 			offProgress = vi.fn();
 		const bridge: ProfileBridge = {
+			onForegroundGuidance: vi.fn(() => offGuidance),
 			request: () => new Promise((resolve) => replies.push(resolve)),
 			onSnapshot: vi.fn(() => offSnapshot),
 			onProgress: vi.fn(() => offProgress),
@@ -30,6 +33,7 @@ describe("manager view lifetime", () => {
 			view,
 			progress,
 			status,
+			guidance,
 		);
 		offEnglish();
 		const offGerman = subscribeManagerView(
@@ -38,6 +42,7 @@ describe("manager view lifetime", () => {
 			view,
 			progress,
 			status,
+			guidance,
 		);
 		replies[1]?.({ _tag: "rejected", reason: "current failure" });
 		replies[0]?.({ _tag: "rejected", reason: "stale failure" });
@@ -50,6 +55,7 @@ describe("manager view lifetime", () => {
 			view,
 			progress,
 			status,
+			guidance,
 		);
 		offFrench();
 		replies[2]?.({
@@ -68,6 +74,7 @@ describe("manager view lifetime", () => {
 		expect(bridge.onProgress).toHaveBeenCalledWith(progress);
 		expect(offSnapshot).toHaveBeenCalledTimes(3);
 		expect(offProgress).toHaveBeenCalledTimes(3);
+		expect(offGuidance).toHaveBeenCalledTimes(3);
 	});
 	it("shows a visible profile when an old macOS preview selection points to hidden Discord", () => {
 		const envelope = installProfileCatalog(

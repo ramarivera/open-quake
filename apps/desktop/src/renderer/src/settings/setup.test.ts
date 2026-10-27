@@ -383,14 +383,15 @@ describe("setup model", () => {
 		).toBe(true);
 	});
 
-	it("preselects existing saved profiles, else the display's active profile", () => {
+	it("preselects saved choices, else every enabled default profile", () => {
 		expect(profileDefaults(["b", "gone"], profiles, null)).toEqual(["b"]);
 		expect(profileDefaults([], profiles, { _tag: "desktop-preview" })).toEqual([
 			"a",
+			"b",
 		]);
 		expect(
 			profileDefaults([], profiles, { _tag: "quake", deviceId: "QK-1" }),
-		).toEqual(["b"]);
+		).toEqual(["a", "b"]);
 		expect(profileDefaults(["x"], { state: "failed" }, null)).toEqual(["x"]);
 	});
 });
@@ -435,7 +436,8 @@ describe("owner reads", () => {
 		expect(await readDisplay(undefined)).toEqual({ state: "unavailable" });
 	});
 
-	it("reads profiles as a preview with the manager's visibility rule", async () => {
+	it("reads eligible defaults including hidden choices without changing their visibility", async () => {
+		vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
 		const [first, ...rest] = builtinProfiles("darwin");
 		assert(first);
 		// The real catalog install hides 1-0 on macOS.

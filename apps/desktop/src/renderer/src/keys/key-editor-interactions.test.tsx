@@ -1824,8 +1824,11 @@ it("remaps imported folder, emoji and page links before mounted editor navigatio
 		"imported-page-2",
 		"imported-page-3",
 	]);
+	expect(imported?.pages[0].keys).toHaveLength(16);
 	expect(
-		imported?.pages[0].keys.map((k) => k.config.actions?.[0]?.value),
+		imported?.pages[0].keys
+			.filter((k) => k.config.type !== "")
+			.map((k) => k.config.actions?.[0]?.value),
 	).toEqual(["imported-page-2", "imported-page-3", "imported-page-3", 2]);
 	expect(
 		imported?.pages.slice(1).map((p) => p.keys[0]?.config.actions?.[0]?.value),
@@ -2600,3 +2603,123 @@ it("review: mounted Close sequence draft edits path, retains force and saves", a
 		},
 	});
 });
+
+it("MGMT-401 uses only typed profile/page selects for switch-profile keys", async () => {
+	const f = await fixture({
+		configure: (envelope) => ({
+			...envelope,
+			profiles: EffectArray.map(envelope.profiles, (profile) => ({
+				...profile,
+				pages: EffectArray.map(profile.pages, (page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.keyCode === "1,1"
+							? {
+									...key,
+									childrenName: "switchProfile",
+									config: {
+										...key.config,
+										type: "switchProfile",
+										actions: [
+											{ type: "profile", value: "p" },
+											{ type: "page", value: 1 },
+										],
+									},
+								}
+							: key,
+					),
+				})),
+			})),
+		}),
+	});
+	await f.select();
+	expect(f.host.querySelector('[aria-label="Switch profile"]')).not.toBeNull();
+	expect(
+		f.host.querySelector('[aria-label="Switch profile page"]'),
+	).not.toBeNull();
+	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
+	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
+		"Next Profile",
+	);
+});
+
+for (const state of ["hidden", "deleted"] as const) {
+	it(`review: switch-profile editor displays its saved ${state} destination`, async () => {
+		const f = await fixture({
+			configure: (envelope) =>
+				Schema.encodeSync(ProfileEnvelope)(
+					Schema.decodeUnknownSync(ProfileEnvelope)({
+						...envelope,
+						manager: {
+							revision: 0,
+							installed: true,
+							userHasSetDefault: false,
+							approvedCommands: [],
+							hidden: state === "hidden" ? ["destination"] : [],
+							links: [],
+						},
+						profiles: [
+							...envelope.profiles.map((profile) => ({
+								...profile,
+								pages: profile.pages.map((page) => ({
+									...page,
+									keys: page.keys.map((key) =>
+										key.keyCode === "1,1"
+											? {
+													...key,
+													childrenName: "switchProfile",
+													config: {
+														...key.config,
+														type: "switchProfile",
+														actions: [
+															{ type: "profile", value: "destination" },
+															{ type: "page", value: 1 },
+														],
+													},
+												}
+											: key,
+									),
+								})),
+							})),
+							...(state === "hidden"
+								? [
+										{
+											id: "destination",
+											name: "Hidden destination",
+											revision: 0,
+											pages: [{ id: "one", keys: [] }],
+										},
+									]
+								: []),
+						],
+					}),
+				),
+		});
+		await f.select();
+		const select = query(
+			f.host,
+			'[aria-label="Switch profile"]',
+			HTMLSelectElement,
+		);
+		expect(select.value).toBe("destination");
+		const saved = select.selectedOptions[0];
+		expect(saved?.disabled).toBe(true);
+		expect(saved?.textContent).toBe(
+			state === "hidden" ? "Hidden destination" : "destination",
+		);
+		expect(
+			query(f.host, '[aria-label="Switch profile page"]', HTMLSelectElement)
+				.disabled,
+		).toBe(true);
+		expect(select.querySelector('option[value="-1"]')?.textContent).toBe(
+			"Next Profile",
+		);
+		expect(
+			select.querySelector<HTMLOptionElement>('option[value="p"]')?.disabled,
+		).toBe(false);
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual([
+			{ type: "profile", value: "destination" },
+			{ type: "page", value: 1 },
+		]);
+	});
+}

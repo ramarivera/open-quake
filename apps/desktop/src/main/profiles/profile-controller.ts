@@ -15,6 +15,7 @@ import {
 	ProfileCommandFailed,
 	ProfileDeliveryFailed,
 	type ProfileDesktopError,
+	ProfileNotFound,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 	ProfileWriteFailed,
@@ -44,6 +45,7 @@ export interface ProfileDesktopPort {
 			readonly name: string;
 			readonly path: string;
 			readonly identifier: string;
+			readonly icon?: string;
 		}[]
 	>;
 	readonly confirm: (message: string, detail: string) => Promise<boolean>;
@@ -154,7 +156,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		): Effect.fn.Return<void, ProfileDesktopError> {
 			const envelope = yield* manager.read();
 			const p = envelope.profiles.find((p) => p.id === id);
-			if (!p) return;
+			if (!p) return yield* ProfileNotFound.fromCause(undefined);
 			const border = showEmptyGridDashedBorder;
 			const data = yield* thumbnail(() =>
 				port.capture(
@@ -191,6 +193,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						failed: progress.failed + (result._tag === "Left" ? 1 : 0),
 					};
 					yield* Effect.sync(() => port.progress(progress));
+					yield* publish();
 				}
 				progress = { ...progress, running: false };
 				yield* Effect.sync(() => port.progress(progress));
@@ -327,7 +330,11 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						}
 						for (const id of [...pendingStyleCaptures]) {
 							const result = yield* capture(id, locale).pipe(Effect.either);
-							if (result._tag === "Right") pendingStyleCaptures.delete(id);
+							if (
+								result._tag === "Right" ||
+								result.left._tag === "ProfileNotFound"
+							)
+								pendingStyleCaptures.delete(id);
 							else
 								yield* Effect.logWarning(
 									"profiles.thumbnail.style.failed",
@@ -348,7 +355,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						input.command.type === "create" ||
 						input.command.type === "duplicate" ||
 						input.command.type === "delete" ||
-						input.command.type === "visibility";
+						input.command.type === "visibility" ||
+						input.command.type === "default-visibility";
 					const result = yield* manager.command(
 						input.command,
 						(envelope) =>
@@ -371,7 +379,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 									yield* ensureCurrent;
 									const target =
 										input.command.type === "delete" ||
-										input.command.type === "visibility"
+										input.command.type === "visibility" ||
+										input.command.type === "default-visibility"
 											? envelope.activeByDevice[serial]
 											: selected;
 									const profile = envelope.profiles.find(
@@ -384,7 +393,13 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 											...selections,
 											[serial]: {
 												profileId: profile.id,
-												pageId: profile.pages[0].id,
+												pageId:
+													target &&
+													profile.pages.some(
+														(page) => page.id === target?.pageId,
+													)
+														? target.pageId
+														: profile.pages[0].id,
 											},
 										};
 									}

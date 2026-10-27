@@ -359,7 +359,7 @@ export const SwitchProfileConfig = Schema.Struct({
 		Schema.Struct({ type: Schema.Literal("profile"), value: Nonblank }),
 		Schema.Struct({
 			type: Schema.Literal("page"),
-			value: Schema.Int.pipe(Schema.between(1, 10)),
+			value: Schema.Int.pipe(Schema.positive()),
 		}),
 	),
 });

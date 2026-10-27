@@ -1,7 +1,13 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	ipcMain,
+	systemPreferences,
+} from "electron";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
 import { ActionPermissionDenied } from "../../../../../packages/device/src/actions/action-errors.js";
 import {
@@ -45,6 +51,7 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-switching-service.js";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
 	PROFILE_PROGRESS,
 	PROFILE_REQUEST,
 	PROFILE_SELECTION,
@@ -80,6 +87,13 @@ import {
 import { registerProfiles as registerProfileSnapshots } from "./profile-ipc";
 import { profileRequestAllowed } from "./profile-permissions";
 import { createProfileThumbnailStore } from "./profile-thumbnails";
+import {
+	stableThumbnailFrame,
+	thumbnailCaptureMode,
+	thumbnailDeadline,
+	thumbnailInitialSweep,
+	waitForThumbnailMedia,
+} from "./thumbnail-capture";
 export function prepareProfiles(
 	management: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
@@ -173,7 +187,19 @@ export function prepareProfiles(
 					const foreground =
 						process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
 							? () => Effect.succeed(Option.none())
-							: yield* makeScopedForegroundProbe(platform);
+							: yield* makeScopedForegroundProbe(platform, undefined, {
+									trusted: () => {
+										const trusted =
+											platform !== "darwin" ||
+											systemPreferences.isTrustedAccessibilityClient(false);
+										broadcast(
+											PROFILE_FOREGROUND_GUIDANCE,
+											trusted ? "available" : "accessibility-denied",
+										);
+										return trusted;
+									},
+									denied: () => {},
+								});
 					return {
 						platform,
 						foreground,
@@ -256,11 +282,15 @@ export function prepareProfiles(
 				showEmptyGridDashedBorder = initialized?.currentThumbnailBorder() ??
 					true,
 			): Promise<string> => {
-				signal = signal
-					? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-					: AbortSignal.timeout(10000);
+				signal ??= new AbortController().signal;
 				signal.throwIfAborted();
 				if (disposed) throw new Error("Profile manager disposed");
+				const mode = thumbnailCaptureMode(
+					platform,
+					process.env.QUAKE_LINUX_PREVIEW_CAPTURE,
+				);
+				if (mode === "unsupported")
+					throw ProfileThumbnailUnsupported.fromCause(undefined);
 				const window = new BrowserWindow({
 					show: false,
 					width: 960,
@@ -271,6 +301,8 @@ export function prepareProfiles(
 						sandbox: false,
 						contextIsolation: true,
 						nodeIntegration: false,
+						offscreen: mode === "offscreen",
+						backgroundThrottling: false,
 					},
 				});
 				const abort = () => {
@@ -288,15 +320,55 @@ export function prepareProfiles(
 						"emptyBorders",
 						String(showEmptyGridDashedBorder),
 					);
-					await window.loadURL(url.href);
-					signal.throwIfAborted();
-					await window.webContents.executeJavaScript(
-						`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");const emojis=Array.from(preview?.querySelectorAll("[data-emoji-asset-state]")??[]);const emojiReady=emojis.length===${profile.pages[0].keys.filter((key) => key.config.type === "emoji" && key.config.display).length}&&emojis.every(el=>el.dataset.emojiAssetState==="empty"||(el.dataset.emojiAssetState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0)));const artwork=Array.from(preview?.querySelectorAll("[data-tile-artwork-state]")??[]);const artworkReady=artwork.every(el=>el.dataset.tileArtworkState==="empty"||(el.dataset.tileArtworkState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0)));if(preview&&stage&&emojiReady&&artworkReady&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-Math.min(preview.clientWidth,preview.clientHeight*4))<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
+					await thumbnailDeadline(
+						() => window.loadURL(url.href),
+						30_000,
+						signal,
+						abort,
 					);
-					const image = await window.webContents.capturePage();
-					if (image.isEmpty())
-						throw ProfileThumbnailUnsupported.fromCause(undefined);
-					const png = image.toPNG();
+					signal.throwIfAborted();
+					await thumbnailDeadline(
+						() =>
+							window.webContents.executeJavaScript(
+								`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");const emojis=Array.from(preview?.querySelectorAll("[data-emoji-asset-state]")??[]);const emojiReady=emojis.length===${profile.pages[0].keys.filter((key) => key.config.type === "emoji" && key.config.display).length}&&emojis.every(el=>el.dataset.emojiAssetState==="empty"||(el.dataset.emojiAssetState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0)));const artwork=Array.from(preview?.querySelectorAll("[data-tile-artwork-state]")??[]);const artworkReady=artwork.every(el=>el.dataset.tileArtworkState==="empty"||(el.dataset.tileArtworkState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0)));if(preview&&stage&&emojiReady&&artworkReady&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-Math.min(preview.clientWidth,preview.clientHeight*4))<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
+							),
+						5_000,
+						signal,
+						abort,
+					);
+					await thumbnailDeadline(
+						() =>
+							window.webContents.executeJavaScript(
+								`(${waitForThumbnailMedia.toString()})()`,
+							),
+						5_000,
+						signal,
+						abort,
+					);
+					const png = await stableThumbnailFrame(
+						async () => {
+							const image = await thumbnailDeadline(
+								() => window.webContents.capturePage(),
+								8_000,
+								signal,
+								abort,
+							);
+							if (image.isEmpty())
+								throw ProfileThumbnailUnsupported.fromCause(undefined);
+							return image.resize({ width: 960, height: 240 }).toPNG();
+						},
+						() =>
+							thumbnailDeadline(
+								() =>
+									window.webContents.executeJavaScript(
+										"new Promise(resolve => requestAnimationFrame(() => resolve()))",
+									),
+								5_000,
+								signal,
+								abort,
+							),
+						signal,
+					);
 					signal?.throwIfAborted();
 					return await thumbnails.write(
 						profile,
@@ -324,7 +396,21 @@ export function prepareProfiles(
 						installed ??=
 							process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
 								? Promise.resolve([])
-								: loadInstalledProfileApps(platform).catch(() => []);
+								: loadInstalledProfileApps(platform)
+										.then((apps) =>
+											Promise.all(
+												apps.map(async (entry) => ({
+													...entry,
+													icon: await app
+														.getFileIcon(entry.path, { size: "small" })
+														.then(
+															(icon) => icon.toDataURL(),
+															() => "",
+														),
+												})),
+											),
+										)
+										.catch(() => []);
 						return installed;
 					},
 					confirm: async (message, detail) =>
@@ -388,6 +474,31 @@ export function prepareProfiles(
 					yield* controller.pipe(Effect.retry(Schedule.spaced(2000)));
 					yield* (yield* ProfileSwitching).poll;
 				}),
+			);
+			const startupSweep = runtime.runFork(
+				Effect.gen(function* () {
+					if (
+						process.env.OPEN_QUAKE_MOCK_DEVICE === "1" &&
+						process.env.QUAKE_THUMBNAIL_INITIAL_SWEEP !== "on"
+					)
+						return;
+					if (
+						!thumbnailInitialSweep(
+							platform,
+							process.env.QUAKE_THUMBNAIL_INITIAL_SWEEP,
+						)
+					)
+						return;
+					yield* Effect.sleep(8_000);
+					const service = yield* controller;
+					yield* service.request({ type: "thumbnails" });
+				}).pipe(
+					Effect.catchAll((error) =>
+						Effect.logWarning("profiles.thumbnail.initial.failed", {
+							code: error.code,
+						}),
+					),
+				),
 			);
 			const managerUpdates = runtime.runFork(
 				Effect.gen(function* () {
@@ -454,6 +565,18 @@ export function prepareProfiles(
 						)
 					)
 						return { _tag: "rejected", reason: "unauthorized" };
+					// Replay current permission on mount, even if the one-shot denial
+					// occurred before this renderer subscribed. This never prompts.
+					if (decoded.right.type === "read" && !decoded.right.preview) {
+						const denied =
+							process.env.OPEN_QUAKE_MOCK_DEVICE !== "1" &&
+							platform === "darwin" &&
+							!systemPreferences.isTrustedAccessibilityClient(false);
+						event.sender.send(
+							PROFILE_FOREGROUND_GUIDANCE,
+							denied ? "accessibility-denied" : "available",
+						);
+					}
 					const operation = runtime.runPromise(
 						controller.pipe(
 							Effect.flatMap((service) => service.request(decoded.right)),
@@ -594,6 +717,7 @@ export function prepareProfiles(
 					await snapshots.dispose();
 					await runtime.runPromise(Fiber.interrupt(monitor));
 					await runtime.runPromise(Fiber.interrupt(managerUpdates));
+					await runtime.runPromise(Fiber.interrupt(startupSweep));
 					await runtime.dispose();
 				},
 			};

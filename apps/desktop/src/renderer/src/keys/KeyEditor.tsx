@@ -544,6 +544,26 @@ export function KeyEditor({
 		},
 	};
 	const key = selection?.key;
+	const savedSwitchProfile =
+		key?.config.type === "switchProfile"
+			? String(
+					key.config.actions.find((action) => action.type === "profile")
+						?.value ?? "-1",
+				)
+			: undefined;
+	const switchProfiles = envelope.profiles.filter(
+		(profile) =>
+			!(Option.getOrUndefined(envelope.manager)?.hidden ?? []).includes(
+				profile.id,
+			),
+	);
+	const unavailableSwitchProfile =
+		savedSwitchProfile !== undefined &&
+		savedSwitchProfile !== "-1" &&
+		!switchProfiles.some((profile) => profile.id === savedSwitchProfile);
+	const savedSwitchTarget = envelope.profiles.find(
+		(profile) => profile.id === savedSwitchProfile,
+	);
 	const selectedTile = stripLayout(
 		previewProfile,
 		previewProfile.pages.find((p) => p.id === page.id) ?? page,
@@ -930,6 +950,80 @@ export function KeyEditor({
 							locale={locale}
 							onChange={(next) => void update(next)}
 						/>
+						{key.config.type === "switchProfile" && (
+							<Row label="Profile">
+								<select
+									aria-label="Switch profile"
+									value={savedSwitchProfile}
+									onChange={(event) => {
+										void update({
+											...key,
+											config: {
+												...key.config,
+												actions: [
+													{ type: "profile", value: event.target.value },
+													{ type: "page", value: 1 },
+												],
+											},
+										});
+									}}
+								>
+									<option value="-1">{keyText("nextProfile", locale)}</option>
+									{unavailableSwitchProfile && (
+										<option value={savedSwitchProfile} disabled>
+											{savedSwitchTarget?.name ?? savedSwitchProfile}
+										</option>
+									)}
+									{switchProfiles.map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.name}
+										</option>
+									))}
+								</select>
+							</Row>
+						)}
+						{key.config.type === "switchProfile" &&
+							key.config.actions.find((action) => action.type === "profile")
+								?.value !== "-1" && (
+								<Row label={keyText("pageNumber", locale)}>
+									<select
+										aria-label="Switch profile page"
+										disabled={unavailableSwitchProfile}
+										value={String(
+											key.config.actions.find(
+												(action) => action.type === "page",
+											)?.value ?? 1,
+										)}
+										onChange={(event) =>
+											void update({
+												...key,
+												config: {
+													...key.config,
+													actions: key.config.actions.map((action) =>
+														action.type === "page"
+															? { ...action, value: Number(event.target.value) }
+															: action,
+													),
+												},
+											})
+										}
+									>
+										{envelope?.profiles
+											.find(
+												(profile) =>
+													profile.id ===
+													key.config.actions.find(
+														(action) => action.type === "profile",
+													)?.value,
+											)
+											?.pages.map((page, index) => (
+												<option key={page.id} value={index + 1}>
+													{index + 1}
+												</option>
+											))}
+									</select>
+								</Row>
+							)}
 						{key.config.type === "clawbot" && (
 							<AgentKeyFields
 								value={key}
@@ -949,6 +1043,7 @@ export function KeyEditor({
 									key.config.type !== "dkDesktopClock" &&
 									key.config.type !== "clawbot" &&
 									key.config.type !== "gameMode" &&
+									key.config.type !== "switchProfile" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)
