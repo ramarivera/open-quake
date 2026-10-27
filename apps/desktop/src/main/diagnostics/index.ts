@@ -18,9 +18,14 @@ import {
 } from "../speech/capture-metrics";
 import {
 	createDiagnosticStorage,
-	type DiagnosticStatus,
 	type DiagnosticStorageOptions,
+	type DiagnosticStatus as StorageStatus,
 } from "./persistence.js";
+import {
+	createPinoOutput,
+	type DiagnosticOutputOptions,
+	type DiagnosticOutputStatus,
+} from "./pino.js";
 import {
 	type DiagnosticOperation,
 	safeCause,
@@ -30,10 +35,8 @@ import {
 	safeTouchLog,
 } from "./privacy.js";
 
-export type {
-	DiagnosticStatus,
-	DiagnosticStorageOptions,
-} from "./persistence.js";
+export type { DiagnosticStorageOptions } from "./persistence.js";
+export type DiagnosticStatus = StorageStatus & DiagnosticOutputStatus;
 export type { DiagnosticOperation } from "./privacy.js";
 
 export interface DesktopDiagnostics {
@@ -56,9 +59,14 @@ export interface DesktopDiagnostics {
 
 /** One instance per process; its layer is shared by all desktop runtimes. No network transport. */
 export function createDesktopDiagnostics(
-	options: DiagnosticStorageOptions,
+	options: DiagnosticStorageOptions & DiagnosticOutputOptions,
 ): DesktopDiagnostics {
 	const storage = createDiagnosticStorage(options);
+	const output = createPinoOutput(storage.write, options);
+	const status = (): DiagnosticStatus => ({
+		...storage.status(),
+		...output.status(),
+	});
 	const sessionId = randomUUID();
 	const requestId = FiberRef.unsafeMake<Option.Option<string>>(Option.none());
 	const asyncContext = new AsyncLocalStorage<{
@@ -83,7 +91,7 @@ export function createDesktopDiagnostics(
 	const requestBySpan = new WeakMap<Tracer.AnySpan, string>();
 	let sequence = 0;
 	const emit = (record: object) =>
-		storage.emit({
+		output.emit({
 			schema: 1,
 			session_id: sessionId,
 			sequence: ++sequence,
@@ -110,7 +118,7 @@ export function createDesktopDiagnostics(
 		...(Option.isSome(request) ? { request_id: request.value } : {}),
 	});
 	const logger = Logger.make<unknown, void>(
-		({ logLevel, message, cause, context }) => {
+		({ logLevel, message, cause, context, date }) => {
 			const span = Context.getOption(
 				FiberRefs.getOrDefault(context, FiberRef.currentContext),
 				Tracer.ParentSpan,
@@ -122,7 +130,7 @@ export function createDesktopDiagnostics(
 					.slice(0, 8)
 					.filter((value) => value instanceof Error)
 					.map((error) => safeError(error));
-				emit({
+				const record = {
 					type: "log",
 					level: logLevel.label,
 					event: safeLogEvent(messages),
@@ -130,7 +138,15 @@ export function createDesktopDiagnostics(
 					...correlation(span, FiberRefs.getOrDefault(context, requestId)),
 					...(errors.length ? { errors } : {}),
 					...(!Cause.isEmpty(cause) ? { cause: safeCause(cause) } : {}),
-				});
+				};
+				emit(record);
+				if (Option.isSome(span) && span.value._tag === "Span") {
+					span.value.event(
+						record.event,
+						BigInt(date.getTime()) * 1_000_000n,
+						record,
+					);
+				}
 			} catch {
 				emit({
 					type: "log",
@@ -143,16 +159,24 @@ export function createDesktopDiagnostics(
 	const installedTracers = new WeakSet<object>();
 	const tracerLayer = Layer.unwrapEffect(
 		Effect.map(Effect.tracer, (native) => {
-			if (installedTracers.has(native)) return Layer.empty;
+			if (installedTracers.has(native)) return Layer.setTracer(native);
 			const tracer = Tracer.make({
-				context: (f, fiber) =>
-					asyncContext.run(
+				context: (f, fiber) => {
+					const active = Context.getOption(
+						fiber.currentContext,
+						Tracer.ParentSpan,
+					);
+					const request = fiber.getFiberRef(requestId);
+					if (Option.isSome(active) && Option.isSome(request))
+						requestBySpan.set(active.value, request.value);
+					return asyncContext.run(
 						{
 							span: Context.getOption(fiber.currentContext, Tracer.ParentSpan),
 							requestId: fiber.getFiberRef(requestId),
 						},
 						() => native.context(f, fiber),
-					),
+					);
+				},
 				span: (name, parent, context, links, startTime, kind, spanOptions) => {
 					const span = native.span(
 						name,
@@ -180,7 +204,10 @@ export function createDesktopDiagnostics(
 						ended = true;
 						emit({
 							type: "span",
-							...correlation(Option.some(span), Option.fromNullable(id)),
+							...correlation(
+								Option.some(span),
+								Option.fromNullable(requestBySpan.get(span) ?? id),
+							),
 							...(Option.isSome(parent) &&
 							/^[0-9a-f]{16}$/.test(parent.value.spanId)
 								? { parent_span_id: parent.value.spanId }
@@ -202,17 +229,21 @@ export function createDesktopDiagnostics(
 		}),
 	);
 	const layer = Layer.mergeAll(
+		// Preserve application loggers, replacing the console and raw tracer fanout.
 		Logger.replace(Logger.defaultLogger, logger),
+		Logger.remove(Logger.tracerLogger),
 		tracerLayer,
 	);
 	const instrument: DesktopDiagnostics["instrument"] = (effect, operation) => {
 		// Capture at the Promise boundary, before another runtime starts its own fiber.
 		const inherited = capture();
 		return Effect.gen(function* () {
-			const active = yield* Effect.currentSpan.pipe(Effect.option);
+			const active = yield* Effect.currentParentSpan.pipe(Effect.option);
 			const currentRequest = yield* FiberRef.get(requestId);
 			const id = Option.getOrElse(currentRequest, () =>
-				Option.getOrElse(inherited?.requestId ?? Option.none(), randomUUID),
+				Option.isSome(active)
+					? (requestBySpan.get(active.value) ?? randomUUID())
+					: Option.getOrElse(inherited?.requestId ?? Option.none(), randomUUID),
 			);
 			let work = effect.pipe(
 				Effect.withSpan(safeSpanName(operation), { captureStackTrace: false }),
@@ -223,26 +254,43 @@ export function createDesktopDiagnostics(
 		});
 	};
 	const bind: DesktopDiagnostics["bind"] = (callback) => {
-		const captured = capture();
-		return (...args) =>
-			captured
-				? asyncContext.run(captured, () => callback(...args))
-				: callback(...args);
+		const captured = capture() ?? {
+			span: Option.none(),
+			requestId: Option.none(),
+		};
+		return (...args) => asyncContext.run(captured, () => callback(...args));
+	};
+	const flush = async (): Promise<DiagnosticStatus> => {
+		await output.drain();
+		await storage.flush();
+		return status();
 	};
 	let closing: Promise<DiagnosticStatus> | undefined;
 	const close = (): Promise<DiagnosticStatus> => {
 		if (closing) return closing;
 		closing = (async () => {
-			const health = await storage.flush();
+			// Stop stdout admission and observe its final drain result before retaining health.
+			await output.close();
+			await storage.flush();
+			const health = status();
 			emit({
 				type: "health",
 				event: "diagnostics.shutdown",
 				written: health.written,
 				dropped: health.dropped,
 				storageFailures: health.storageFailures,
+				pinoFailures: health.pinoFailures,
+				stdoutFailures: health.stdoutFailures,
+				stdoutDropped: health.stdoutDropped,
+				stdoutTimedOut: health.stdoutTimedOut,
+				stdoutPendingBytes: health.stdoutPendingBytes,
+				...(health.lastOutputFailure
+					? { lastOutputFailure: health.lastOutputFailure }
+					: {}),
 				...(health.lastFailure ? { lastFailure: health.lastFailure } : {}),
 			});
-			return storage.close();
+			await storage.close();
+			return status();
 		})();
 		return closing;
 	};
@@ -254,8 +302,8 @@ export function createDesktopDiagnostics(
 		layer,
 		bind,
 		instrument,
-		flush: storage.flush,
+		flush,
 		close,
-		status: storage.status,
+		status,
 	};
 }

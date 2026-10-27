@@ -2,12 +2,16 @@
 
 Create one `createDesktopDiagnostics({ directory })` in Electron main after
 `app.getPath("userData")` becomes available. Use a dedicated `diagnostics`
-subdirectory. This module extends the existing Effect logger and native tracer;
-it requires no new dependencies or remote telemetry credentials.
+subdirectory. This module bridges Effect 3.22.1 logs and native tracer completions through
+Pino 10.4.0. Pino serializes only the existing privacy projection, once, into
+stdout and the bounded private file writer. It requires no remote credentials.
+Domain services keep using `Effect.log` and named spans.
 
-Provide `diagnostics.layer` with `Layer.provideMerge` to every runtime's root
-layer. That placement covers acquisition logs and finalizers as well as later
-requests. Also provide it to bare `Effect.runPromise` effects at the root.
+Use `makeDesktopRuntime(applicationLayer, diagnostics)` for runtime roots. It
+provides diagnostics during acquisition, then wraps the final application tracer
+with a fresh layer pass so application-supplied tracers and loggers survive. It
+records each span once. For bare `Effect.runPromise` boundaries, provide the shared
+`diagnostics.layer` directly.
 
 Wrap boundary effects with `diagnostics.instrument(effect, "voice.request")`
 before `catch`, `match`, or `exit`, so failed span exits survive recovery.
@@ -24,9 +28,29 @@ Dispose background subscriptions and all runtimes before calling
 `await diagnostics.close()`. Close drains accepted records, fsyncs the current
 file, and closes the handle. It's idempotent. Check the returned status for
 `storageFailures` and `dropped`; both mean the trace may be incomplete. `flush()`
-provides an inspection barrier during a running session. Close also persists a health record with drop and storage failure counts when
-the destination is writable. Storage errors never
-replace the application's failure or throw through the logger.
+provides an inspection barrier during a running session. Close stops stdout
+admission, waits for accepted stdout write callbacks, then retains a final health
+record in the file and closes the file writer. The health record is local-only,
+so its stdout failure/timeout fields describe the completed stdout drain attempt.
+File sync/close errors remain visible in the returned status even if they occur
+after that record. `closed` means admission ended, not that delivery succeeded.
+Storage and stdout failures never replace the application's failure.
+
+Stdout uses the same projected Pino lines as the file, excluding the final local
+health record. It defaults to a 512 KiB pending-byte cap, with a hard 2 MiB cap,
+and drops new stdout copies when full or failed. The file queue remains independent.
+`stdout: false` disables the copy for isolated consumers. `stdoutDrainMs` defaults
+to 1000 ms and is bounded to 1 through 5000 ms. A timed-out callback remains counted
+in `stdoutPendingBytes`; `stdoutTimedOut` never claims successful delivery. The
+shared stdout stream stays open. A late-error guard remains attached after failure
+or timeout so delayed stream errors cannot crash the application.
+
+Check `pinoFailures`, `stdoutFailures`, `stdoutDropped`, `stdoutPendingBytes` and
+`stdoutTimedOut` as well as file status. `lastOutputFailure` contains only the
+existing safe error projection. Pino has no worker or hidden transport queue here.
+A synchronous Pino serialization/destination failure attempts a safe local JSON
+fallback and increments `pinoFailures`. Stdout callback completion proves acceptance
+by the local stream, not delivery to a terminal, file collector or remote service.
 
 ## Find and export a physical test's records
 
@@ -37,7 +61,9 @@ The files are private to the user, with directory mode `0700` and file mode
 `0600`.
 
 `diagnostics.0.ndjson` is newest. Read larger numbered files first for
-chronological rotation order. Each line is JSON. Filter by `session_id` for an
+chronological rotation order. Each line is JSON. Schema 1 and existing field names stay compatible. The additive
+`pino_level` field is numeric Pino severity; logs retain their Effect string `level`,
+and `time` stays ISO 8601. No `pid`, hostname, raw `msg` or raw `err` is added. Filter by `session_id` for an
 application launch, `request_id` for an IPC or physical-input operation, and
 `trace_id` for its nested work. A span's `parent_span_id` references the parent;
 logs carry the active `span_id`. `sequence` reveals dropped or rotated records
@@ -63,7 +89,14 @@ Existing files over the configured size limit are discarded on acquisition.
 The writer receives only a projected record. It never serializes arbitrary
 messages, annotations, span attributes, events, links, request bodies, prompts,
 transcripts, PCM, headers, credentials, provider URLs, exception messages or
-full stacks. Static application event and span names come from `known-names.ts`.
+full stacks. The root replaces Effect's console logger and removes the raw tracer logger,
+while preserving explicitly supplied application loggers.
+The active native span receives only the same projected log event, with raw log
+annotations omitted. Native span IDs and parent relationships remain unchanged;
+this is local Effect tracing, not OTLP export or vendor ingestion. Re-providing
+the shared layer retains the installed tracer rather than returning `Layer.empty`.
+Explicit external parent spans take precedence over context captured when an
+Effect was constructed. Static application event and span names come from `known-names.ts`.
 Unknown names become `effect.log` or `redacted.span`. Allowlisted native filesystem/network codes and numeric HTTP status also
 survive projection. Foreign stack frames are omitted. Named operation spans identify the failing local operation without trusting provider-supplied source locations.
 Catalog codes and tags are allowlisted. Error projections traverse private
@@ -76,7 +109,11 @@ and ensure new catalog identities are recognized in `privacy.ts`. Don't allow
 arbitrary strings merely because they resemble a code or filename.
 
 Run the focused integration suite with
-`pnpm --filter @open-quake/desktop test src/main/diagnostics/diagnostics.test.ts`.
+`pnpm --filter @open-quake/desktop test src/main/diagnostics`.
+`pino.test.ts` compares real Pino stdout/file lines against captured native Effect
+spans and their parent chains through an application-supplied tracer at the
+production runtime root, including concurrent requests, reusable Effects,
+deferred callbacks, repeated layer provision, finalizers and broken destinations.
 It uses fake transport and voice ports, real Effect consumers, and private
 scratch directories. It never opens a window, microphone, hardware device or
 live provider connection.
