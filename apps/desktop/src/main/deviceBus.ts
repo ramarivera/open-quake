@@ -223,11 +223,13 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 					yield* hardware.refresh().pipe(
 						Effect.matchEffect({
 							onSuccess: () => Effect.void,
-							onFailure: (error) => Effect.logWarning(error.code),
+							onFailure: (error) =>
+								Effect.logWarning("hardware.request.failed", error),
 						}),
 						Effect.forkScoped,
 					);
-				} else yield* Effect.logWarning(attached.left.code);
+				} else
+					yield* Effect.logWarning("hardware.request.failed", attached.left);
 				yield* Effect.addFinalizer(() =>
 					Effect.sync(() => {
 						hardware = undefined;

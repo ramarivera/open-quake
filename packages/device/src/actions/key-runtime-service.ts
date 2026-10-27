@@ -1,4 +1,5 @@
 import {
+	Cause,
 	Clock,
 	Context,
 	Effect,
@@ -830,6 +831,19 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						Effect.yieldNow()
 							.pipe(Effect.zipRight(work))
 							.pipe(
+								Effect.tapErrorCause((cause) =>
+									Cause.isInterruptedOnly(cause)
+										? Effect.void
+										: Effect.logError(
+												type === "timer"
+													? "key.timer.failed"
+													: "key.sequence.failed",
+												cause,
+											),
+								),
+								Effect.withSpan(
+									type === "timer" ? "KeyRuntime.timer" : "KeyRuntime.sequence",
+								),
 								Effect.catchTags({
 									InvalidKeyAction: () =>
 										feedback({ ...base, alert: 1, progress: 100 }),
@@ -881,6 +895,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									? Effect.void
 									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
 							),
+							Effect.tapErrorCause((cause) =>
+								Cause.isInterruptedOnly(cause)
+									? Effect.void
+									: Effect.logError("key.input.failed", cause),
+							),
+							Effect.withSpan("KeyRuntime.ownedAction"),
 							Effect.ensuring(
 								Effect.sync(() => {
 									owned.delete(fiber);
@@ -1115,6 +1135,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									? Effect.void
 									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
 							),
+							Effect.tapErrorCause((cause) =>
+								Cause.isInterruptedOnly(cause)
+									? Effect.void
+									: Effect.logError("key.input.failed", cause),
+							),
+							Effect.withSpan("KeyRuntime.ownedAction"),
 							Effect.ensuring(
 								Effect.sync(() => {
 									owned.delete(fiber);
@@ -1191,28 +1217,46 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						alternates.delete(key);
 				if (releaseError) return yield* Effect.fail(releaseError);
 			});
-			const prepareActivation = (...args: Parameters<typeof activate>) =>
-				Effect.gen(function* () {
-					// Physical callers omit expected. Capture their owner while input is
-					// locked, before any deferred work can outlive the selected page.
-					const env = yield* port.read;
-					const { profile, page } = current(env, args[0]);
-					const target = args[3] ??
-						contacts.get(JSON.stringify([args[0], args[1]]))?.activation ?? {
-							profileId: profile.id,
-							pageId: page.id,
-							revision: profile.revision,
-						};
-					const report = (_error: ActionError) =>
-						feedback({
-							deviceId: args[0],
-							...target,
-							keyCode: args[1],
-							alert: 1,
-						});
-					const work = yield* activate(...args).pipe(Effect.tapError(report));
-					return (work ?? Effect.void).pipe(Effect.tapError(report));
-				}).pipe(lock.withPermits(1));
+			const prepareActivation = Effect.fn("KeyRuntime.prepareActivation")(
+				(
+					...args: Parameters<typeof activate>
+				): Effect.Effect<Effect.Effect<void, ActionError>, ActionError> =>
+					Effect.gen(function* () {
+						// Physical callers omit expected. Capture their owner while input is
+						// locked, before any deferred work can outlive the selected page.
+						const env = yield* port.read;
+						const { profile, page } = current(env, args[0]);
+						const target = args[3] ??
+							contacts.get(JSON.stringify([args[0], args[1]]))?.activation ?? {
+								profileId: profile.id,
+								pageId: page.id,
+								revision: profile.revision,
+							};
+						const report = () =>
+							feedback({
+								deviceId: args[0],
+								...target,
+								keyCode: args[1],
+								alert: 1,
+							});
+						const parent = yield* Effect.option(Effect.currentSpan);
+						const work = yield* activate(...args).pipe(
+							Effect.tapError((error) =>
+								Effect.logError("key.input.failed", error).pipe(
+									Effect.zipRight(report()),
+								),
+							),
+						);
+						// Deferred owned work logs before this join, even if nobody awaits it.
+						const completion = (work ?? Effect.void).pipe(
+							Effect.tapError(report),
+							Effect.withSpan("KeyRuntime.completeActivation"),
+						);
+						return Option.isSome(parent)
+							? completion.pipe(Effect.withParentSpan(parent.value))
+							: completion;
+					}).pipe(lock.withPermits(1)),
+			);
 
 			yield* Effect.addFinalizer(() =>
 				reset().pipe(

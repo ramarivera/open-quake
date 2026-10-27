@@ -221,86 +221,97 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					Effect.forkScoped,
 				);
 				// Every set consumes its ack. Otherwise an LED/buzzer ack could confirm a later mic toggle.
-				const exchange = (
-					command: HardwareCommand,
-				): Effect.Effect<HardwareReply, HardwareError> =>
-					wireLock.withPermits(1)(
-						Effect.gen(function* () {
-							yield* ensureActive();
-							const valid = Schema.decodeUnknownEither(CommandSchema)(command);
-							if (Either.isLeft(valid))
-								return yield* new HardwareUnavailable(valid.left);
-							const result = yield* Deferred.make<
-								HardwareReply,
-								HardwareError
-							>();
-							const matches = (reply: HardwareReply): boolean =>
-								command._tag !== "Query"
-									? reply._tag === "Ack"
-									: reply._tag ===
-										{
-											mic: "MicState",
-											knobLed: "KnobLedState",
-											luminance: "LuminanceState",
-											version: "FirmwareVersion",
-										}[command.feature];
-							pending = Option.some({ matches, result });
-							return yield* Effect.gen(function* () {
-								yield* rawWrite(command);
-								// A connection-scoped timer can fail the deferred even when the
-								// caller masks interruption to commit an atomic lock transition.
-								const timeout = yield* (
-									command._tag === "Query" && command.feature === "version"
-										? Effect.gen(function* () {
-												for (let attempt = 1; attempt < 10; attempt++) {
-													yield* Effect.sleep(300);
-													if (yield* Deferred.isDone(result)) return;
-													yield* rawWrite(command);
-												}
-												yield* Effect.sleep(300);
-											}).pipe(
-												Effect.catchTag("HardwareUnavailable", (error) =>
-													Deferred.fail(result, error),
-												),
-											)
-										: Effect.sleep(3000)
-								).pipe(
-									Effect.zipRight(
-										Deferred.fail(result, new HardwareReplyTimeout()),
-									),
-									Effect.interruptible,
-									Effect.ensuring(
-										Deferred.fail(result, new HardwareUnavailable()),
-									),
-									Effect.forkIn(scope),
-								);
-								const reply = yield* Deferred.await(result).pipe(
-									Effect.ensuring(Fiber.interrupt(timeout)),
-								);
-								if (reply._tag === "Ack" && reply.status !== 0x90)
-									return yield* new HardwareCommandRejected(reply.status);
-								return reply;
-							}).pipe(
-								Effect.onExit((exit) =>
-									Effect.sync(() => {
-										pending = Option.none();
-										if (
-											Exit.isFailure(exit) &&
-											!Option.exists(
-												Cause.failureOption(exit.cause),
-												(error) =>
-													error._tag === "HardwareCommandRejected" ||
-													(command._tag === "Query" &&
-														command.feature === "version" &&
-														error._tag === "HardwareReplyTimeout"),
-											)
-										)
-											poisoned = true;
-									}),
+				const exchange = Effect.fn("HardwareControls.exchange")(
+					(
+						command: HardwareCommand,
+					): Effect.Effect<HardwareReply, HardwareError> =>
+						wireLock
+							.withPermits(1)(
+								Effect.gen(function* () {
+									yield* ensureActive();
+									const valid =
+										Schema.decodeUnknownEither(CommandSchema)(command);
+									if (Either.isLeft(valid))
+										return yield* new HardwareUnavailable(valid.left);
+									const result = yield* Deferred.make<
+										HardwareReply,
+										HardwareError
+									>();
+									const matches = (reply: HardwareReply): boolean =>
+										command._tag !== "Query"
+											? reply._tag === "Ack"
+											: reply._tag ===
+												{
+													mic: "MicState",
+													knobLed: "KnobLedState",
+													luminance: "LuminanceState",
+													version: "FirmwareVersion",
+												}[command.feature];
+									pending = Option.some({ matches, result });
+									return yield* Effect.gen(function* () {
+										yield* rawWrite(command);
+										// A connection-scoped timer can fail the deferred even when the
+										// caller masks interruption to commit an atomic lock transition.
+										const timeout = yield* (
+											command._tag === "Query" && command.feature === "version"
+												? Effect.gen(function* () {
+														for (let attempt = 1; attempt < 10; attempt++) {
+															yield* Effect.sleep(300);
+															if (yield* Deferred.isDone(result)) return;
+															yield* rawWrite(command);
+														}
+														yield* Effect.sleep(300);
+													}).pipe(
+														Effect.catchTag("HardwareUnavailable", (error) =>
+															Deferred.fail(result, error),
+														),
+													)
+												: Effect.sleep(3000)
+										).pipe(
+											Effect.zipRight(
+												Deferred.fail(result, new HardwareReplyTimeout()),
+											),
+											Effect.interruptible,
+											Effect.ensuring(
+												Deferred.fail(result, new HardwareUnavailable()),
+											),
+											Effect.forkIn(scope),
+										);
+										const reply = yield* Deferred.await(result).pipe(
+											Effect.ensuring(Fiber.interrupt(timeout)),
+										);
+										if (reply._tag === "Ack" && reply.status !== 0x90)
+											return yield* new HardwareCommandRejected(reply.status);
+										return reply;
+									}).pipe(
+										Effect.onExit((exit) =>
+											Effect.sync(() => {
+												pending = Option.none();
+												if (
+													Exit.isFailure(exit) &&
+													!Option.exists(
+														Cause.failureOption(exit.cause),
+														(error) =>
+															error._tag === "HardwareCommandRejected" ||
+															(command._tag === "Query" &&
+																command.feature === "version" &&
+																error._tag === "HardwareReplyTimeout"),
+													)
+												)
+													poisoned = true;
+											}),
+										),
+									);
+								}),
+							)
+							.pipe(
+								Effect.tapErrorCause((cause) =>
+									Cause.isInterruptedOnly(cause)
+										? Effect.void
+										: Effect.logError("hardware.exchange.failed", cause),
 								),
-							);
-						}),
-					);
+							),
+				);
 				const send = Effect.fn("HardwareControls.send")(
 					(command: HardwareCommand): Effect.Effect<void, HardwareError> =>
 						(command._tag === "Dfu"
@@ -320,7 +331,16 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 						action: 0;
 					},
 				): Effect.Effect<void, HardwareError> =>
-					Effect.suspend(() => (poisoned ? rawWrite(command) : send(command)));
+					Effect.suspend(() =>
+						poisoned ? rawWrite(command) : send(command),
+					).pipe(
+						Effect.tapErrorCause((cause) =>
+							Cause.isInterruptedOnly(cause)
+								? Effect.void
+								: Effect.logError("hardware.keyboardRelease.failed", cause),
+						),
+						Effect.withSpan("HardwareControls.releaseKeyboard"),
+					);
 				const holdChord = Effect.fn("HardwareControls.holdChord")(function* (
 					chord: string,
 				): Effect.fn.Return<Effect.Effect<void, HardwareError>, HardwareError> {
@@ -346,7 +366,15 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					poisoned
 						? rawWrite({ _tag: "Buzzer", level: 0 })
 						: send({ _tag: "Buzzer", level: 0 }),
-				).pipe(Effect.ignore);
+				).pipe(
+					Effect.tapErrorCause((cause) =>
+						Cause.isInterruptedOnly(cause)
+							? Effect.void
+							: Effect.logError("hardware.silence.failed", cause),
+					),
+					Effect.withSpan("HardwareControls.silence"),
+					Effect.ignore,
+				);
 				const playSequence = Effect.fn("HardwareControls.playSequence")(
 					(input: unknown): Effect.Effect<void, HardwareError> =>
 						Effect.gen(function* () {
@@ -463,6 +491,15 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 															)
 														: Deferred.succeed(started, undefined),
 												),
+												Effect.tapErrorCause((cause) =>
+													Cause.isInterruptedOnly(cause)
+														? Effect.void
+														: Effect.logError(
+																"hardware.longTone.failed",
+																cause,
+															),
+												),
+												Effect.withSpan("HardwareControls.longToneWorker"),
 												Effect.ignore,
 												Effect.interruptible,
 												Effect.forkIn(scope),
@@ -509,6 +546,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					saving = Option.some(
 						yield* Effect.sleep(500).pipe(
 							Effect.zipRight(flush()),
+							Effect.tapErrorCause((cause) =>
+								Cause.isInterruptedOnly(cause)
+									? Effect.void
+									: Effect.logError("hardware.preferences.failed", cause),
+							),
+							Effect.withSpan("HardwareControls.saveDeferred"),
 							Effect.catchTag("HardwarePreferencesFailed", (error) =>
 								Effect.sync(() => {
 									backgroundError = Option.some(error);
@@ -536,7 +579,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 						if (Option.isSome(saving)) yield* Fiber.interrupt(saving.value);
 						yield* flush().pipe(
 							Effect.catchTag("HardwarePreferencesFailed", (error) =>
-								Effect.logError(error.code),
+								Effect.logError("hardware.preferences.failed", error),
 							),
 						);
 						active = false;
@@ -806,6 +849,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										preview = Option.some(
 											yield* Effect.sleep(300).pipe(
 												Effect.zipRight(playTone("preview")),
+												Effect.tapErrorCause((cause) =>
+													Cause.isInterruptedOnly(cause)
+														? Effect.void
+														: Effect.logError("hardware.preview.failed", cause),
+												),
+												Effect.withSpan("HardwareControls.preview"),
 												Effect.catchTags({
 													HardwareUnavailable: (error) =>
 														Effect.sync(() => {

@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, ManagedRuntime, Schema } from "effect";
+import { Cause, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { dialog, ipcMain, powerMonitor } from "electron";
 import { LightingService } from "../../../../../packages/device/src/lighting/lighting-service";
 import {
@@ -27,13 +27,17 @@ export function registerHardware(
 	},
 	panelSerial?: (sender: Electron.WebContents) => string | undefined,
 ): () => Promise<void> {
-	const observe = <A, E>(work: Effect.Effect<A, E>) =>
+	const observe = <A, E, R>(work: Effect.Effect<A, E, R>) =>
 		diagnostics
 			? diagnostics
 					.instrument(work, "voice.device")
 					.pipe(Effect.provide(diagnostics.layer))
 			: work;
-	const lighting = ManagedRuntime.make(sharedLighting(sessions));
+	const lighting = ManagedRuntime.make(
+		sharedLighting(sessions).pipe(
+			Layer.provideMerge(diagnostics?.layer ?? Layer.empty),
+		),
+	);
 	ipcMain.handle(HARDWARE_REQUEST, (event, input: unknown) => {
 		const command = HardwareRequest.pipe(Schema.decodeUnknownEither)(input);
 		const owner = panelSerial?.(event.sender);
@@ -84,30 +88,38 @@ export function registerHardware(
 						return yield* Effect.tryPromise({
 							try: () =>
 								lighting.runPromise(
-									Effect.gen(function* () {
-										const service = yield* LightingService;
-										const state =
-											request.action._tag === "select"
-												? yield* service.select(request)
-												: request.action._tag === "save"
-													? yield* service.save(request)
-													: yield* service
-															.setDesired(request, request.action.change)
-															.pipe(Effect.zipRight(service.flush(request)));
-										return {
-											_tag: "lighting" as const,
-											session: request.session,
-											status: state.status,
-											fields: state.capabilities.fields,
-											values: state.applied,
-											saveStatus: state.saveStatus,
-										};
-									}).pipe(
-										Effect.catchAll((error) =>
-											Effect.succeed({
-												_tag: "failure" as const,
-												code: error.code,
-											}),
+									observe(
+										Effect.gen(function* () {
+											const service = yield* LightingService;
+											const state =
+												request.action._tag === "select"
+													? yield* service.select(request)
+													: request.action._tag === "save"
+														? yield* service.save(request)
+														: yield* service
+																.setDesired(request, request.action.change)
+																.pipe(Effect.zipRight(service.flush(request)));
+											return {
+												_tag: "lighting" as const,
+												session: request.session,
+												status: state.status,
+												fields: state.capabilities.fields,
+												values: state.applied,
+												saveStatus: state.saveStatus,
+											};
+										}).pipe(
+											Effect.tapErrorCause((cause) =>
+												Cause.isInterruptedOnly(cause)
+													? Effect.void
+													: Effect.logError("hardware.request.failed", cause),
+											),
+											Effect.withSpan("DesktopHardware.lighting"),
+											Effect.catchAll((error) =>
+												Effect.succeed({
+													_tag: "failure" as const,
+													code: error.code,
+												}),
+											),
 										),
 									),
 								),
@@ -118,19 +130,23 @@ export function registerHardware(
 						}).pipe(Effect.catchAll(Effect.succeed));
 					}
 					return yield* hardwareRequest(input, target, mock);
-				}),
+				}).pipe(Effect.withSpan("DesktopHardware.ipc")),
 			),
 		);
 	});
 	const setLocked = (locked: boolean): void => {
 		for (const session of sessions())
 			void Effect.runPromise(
-				observe(session.setLocked(locked)).pipe(
-					Effect.matchEffect({
-						onSuccess: () => Effect.void,
-						onFailure: (error) => observe(Effect.logWarning(error)),
-					}),
-				),
+				observe(
+					session.setLocked(locked).pipe(
+						Effect.tapErrorCause((cause) =>
+							Cause.isInterruptedOnly(cause)
+								? Effect.void
+								: Effect.logWarning("hardware.lock.failed", cause),
+						),
+						Effect.withSpan("DesktopHardware.lock"),
+					),
+				).pipe(Effect.catchAll(() => Effect.void)),
 			);
 	};
 	const lock = () => setLocked(true);

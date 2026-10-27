@@ -1,5 +1,14 @@
 import { platform } from "node:os";
-import { Cause, Effect, Exit, Layer, Option, Queue, Schema } from "effect";
+import {
+	Cause,
+	Effect,
+	Exit,
+	Layer,
+	Option,
+	Queue,
+	Runtime,
+	Schema,
+} from "effect";
 import { clipboard, shell } from "electron";
 import type {
 	ActionHostAdapters,
@@ -487,13 +496,25 @@ export const desktopKeyRuntimePort = (
 						);
 					}),
 				executeOwned: (key, activation) =>
-					mock || !executeOwned
+					(mock || !executeOwned
 						? Effect.succeed(false)
 						: Effect.tryPromise({
 								try: (signal) => executeOwned(key, signal, activation),
-								catch: (cause) =>
-									isActionError(cause) ? cause : new HostActionFailed(cause),
-							}),
+								catch: (cause) => {
+									// A runtime rejects with FiberFailure, not the catalog leaf.
+									const failure = Runtime.isFiberFailure(cause)
+										? Option.getOrElse(
+												Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
+												() => cause,
+											)
+										: cause;
+									const original = Cause.originalError(failure);
+									return isActionError(original)
+										? original
+										: new HostActionFailed(original);
+								},
+							})
+					).pipe(Effect.withSpan("DesktopKeys.executeOwned")),
 				resetOwned: (deviceId) =>
 					resetOwned ? Effect.promise(() => resetOwned(deviceId)) : Effect.void,
 				publish: (state) => Effect.sync(() => publish(state)),

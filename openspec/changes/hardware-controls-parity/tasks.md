@@ -69,3 +69,9 @@ Integration verification, 2026-10-27: before the approved expectation update, th
 - [x] 9.1 Cancel the startup caller's scoped worker on interruption while preserving a later replacement owner. Bead `open-quake-i3j.5`, PR129 review 4390151564.
 
 Verification, 2026-10-27: two regressions fail against `db031f8b`, reproducing a cancelled queued tone sounding later and a cancelled in-flight start remaining audible. A third regression retains a concurrent replacement. All 40 owning tone/consumer tests pass, including earlier overlapping start/stop and master-disable cases. Device typecheck and scoped Biome pass. No physical device or audible test ran. New-head hosted checks and bot review remain pending.
+
+
+## Pre-hardware diagnostics candidate, open-quake-fmx.1
+
+- [x] Retain named IPC dispatch, QMK, lighting-runtime, deferred-save and tone-worker failure evidence before recovery through the existing local writer. Add reviewed operation/event names and preserve catalog/source cause chains without private values.
+- [x] Exercise actual IPC with fake HID and inspect retained NDJSON for failures, correlation and privacy. Software candidate only. Physical acceptance and parent integration remain owned by `openspec/changes/pre-hardware-observability/` in the parent planning worktree.
