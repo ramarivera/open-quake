@@ -81,3 +81,26 @@ Bead `open-quake-lih.11.18` owns this final-round scope.
 - [x] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
 
 Device lane validation: current main `4aa4a9f1` merged. Root test command with SSD TMPDIR passed 4,137 tests with four existing skips. Lint, six-package typecheck, build, bundle smoke, 47 strict OpenSpec items and hidden muted native media smoke passed. EN/DE screenshots and per-row evidence are in the lane scratch directory; hardware stays unverified. Beads remain open for the lead.
+
+## 11. PR #112 post-merge device follow-ups
+
+Bead `open-quake-lih.11.24` stays in progress until the lead accepts the PR.
+
+- [x] 11.1 Derive successful matrix release edges on empty frames and key changes, retain held contacts on repeated frames, and route emoji through the full handler. Prove ordinary execution, held hotkeys, A-to-B and emoji with mounted production components and KeyRuntime. Finding 4380831182; MAIN-008/028, SCREEN-144.
+- [x] 11.2 Migrate legacy colon-serial hardware preferences on normalized reads without replacing a canonical save or losing the legacy record. Prove fake-store migration, concurrent saves and failure retention. Finding 4380831192; MAIN-018, SETTINGS-075.
+- [ ] 11.3 Run typecheck, zero-error Biome, root two-worker tests, strict OpenSpec, build, both bundle modes, hidden mock and media smokes. Open a PR to main, record its link in the bead, remove generated build output and retain the worktree.
+
+Follow-up verification: 35 focused tests passed, including mounted matrix/runtime contacts, legacy preference migration, concurrent-save protection, corruption retention and write ordering. Typecheck 6/6, Biome 1419 files with zero errors, strict OpenSpec 47/47, build, both mocked bundle modes, hidden conversation smoke 126 scenarios and media smoke with 26 screenshots passed. Full root two-worker testing remains incomplete because unchanged main/profile tests hit hook/test deadlines under host load; isolated selection-lifecycle passes 7/7. The final exact root attempt passed 4,154 tests with three timeouts in the unchanged selection-lifecycle file and four existing skips. Exact attempts and PR handoff are recorded in bead open-quake-lih.11.24 and SSD scratch burndown/fix-device-followups. No hardware, microphone, paid provider or audible playback was used.
+
+
+## 12. PR #120 review fixes
+
+Bead `open-quake-lih.11.24` remains in progress for lead acceptance.
+
+- [x] 12.1 Serialize matrix replacement edges per device across delayed down acknowledgements. Mounted StripPanel plus production KeyRuntime/TestClock regression fails before the fix. Finding 4381194049; MAIN-008/028, SCREEN-144; owning contract in two-layer-sdk.
+- [x] 12.2 Isolate unrelated unreadable legacy preference candidates while preserving canonical-file failures. Finding 4381207876; MAIN-018, SETTINGS-075.
+- [x] 12.3 Emit matrix tile taps through the native knob-focus path and prove mounted knob focus follows matrix contacts. Finding 4381208066; MAIN-008/028, SCREEN-144.
+- [x] 12.4 Run full review gates, commit/push/reply per finding, inspect unanswered threads, and remove this round's output/worktree without touching the original lane.
+
+
+PR #120 review-round verification: all three findings have before-failing regressions, separate commits/pushes and attributed replies; all threads remain unresolved. The preference regression now injects EACCES through the existing filesystem mock so Windows receives the same failure as macOS. Final focused results are 29 strip tests and 9 preference/order tests. Six-package typecheck and the final desktop typecheck pass. Biome checks 1,442 files with zero errors, 15 inherited warnings and one info; strict OpenSpec passes 47 items; build passes. The exact root loose-env two-worker run passed 4,224 tests with seven unchanged timing failures and four existing skips. Registration initially timed out alone, then passed 2/2; selection-lifecycle passed 7/7 alone and live-locale passed 2/2 alone. No deadlines or assertions changed; open-quake-lih.9.10 owns the timing class. Default/mock bundle modes pass on the final rerun after two default shutdown timeouts. Hidden mock smoke passes 126 scenarios with two EN/DE screenshots, and media smoke passes with 26 screenshots and successful disposal/exit. GraphQL finds three answered unresolved threads and zero unanswered. Evidence and exact attempts remain under SSD scratch burndown/fix-device-followups/fix1, with the cleanup result in bead open-quake-lih.11.24. The original lane is untouched. No real HID, DK-Suite, microphone, provider or audible playback was used. Hosted CI and current-head review remain parent-owned; the exact full root run itself remains a recorded gate deviation.

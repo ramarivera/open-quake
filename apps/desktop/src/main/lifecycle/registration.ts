@@ -49,6 +49,18 @@ export function registerLifecycle(
 				Effect.gen(function* () {
 					const lifecycle = yield* DeviceLifecycle;
 					switch (input.action) {
+						case "bind-all":
+						case "restart":
+							if (
+								!(yield* lifecycle.rebind(
+									input.action === "restart" ? input.serial : undefined,
+								))
+							)
+								return {
+									ok: false,
+									code: "DESKTOP.LIFECYCLE.INVALID",
+								} satisfies LifecycleReply;
+							break;
 						case "redetect":
 							yield* lifecycle.redetect();
 							break;

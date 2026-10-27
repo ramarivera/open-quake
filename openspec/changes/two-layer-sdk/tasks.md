@@ -141,3 +141,7 @@ Root graph delivery, 2026-10-26: PR73 squash merged as f147032 after current-hea
 - [x] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
 
 Device lane validation: current main `4aa4a9f1` merged. Root test command with SSD TMPDIR passed 4,137 tests with four existing skips. Lint, six-package typecheck, build, bundle smoke, 47 strict OpenSpec items and hidden muted native media smoke passed. EN/DE screenshots and per-row evidence are in the lane scratch directory; hardware stays unverified. Beads remain open for the lead.
+
+## PR #112 post-merge matrix follow-up
+
+- [x] Restore state-derived panel matrix releases, ordinary KeyRuntime execution and held-hotkey/emoji routing. Bead `open-quake-lih.11.24`; shared delivery and gates in `../device-lifecycle/tasks.md` section 11. Finding 4380831182.

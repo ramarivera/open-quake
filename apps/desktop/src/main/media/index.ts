@@ -11,7 +11,9 @@ import {
 	WALLPAPER_SNAPSHOT,
 	WallpaperAudioCommand,
 	type WallpaperReply,
+	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { WallpaperSender } from "../../shared/wallpaper-transfer";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { type MediaController, makeMediaController } from "./media-controller";
 import { MediaRoot } from "./media-files";
@@ -52,8 +54,10 @@ export function registerMedia(
 	) => Promise<AudioOutputLease | undefined> = async () => undefined,
 	panelSerial: (sender: Electron.WebContents) => string | undefined = () =>
 		undefined,
+	applyBackground: (snapshot: WallpaperSnapshot) => void = () => {},
 ): { dispose: () => Promise<void>; selectionSerial: () => Promise<string> } {
 	const audio = wallpaperAudioSession(acquireSound);
+	const transfers = new WeakMap<Electron.WebContents, WallpaperSender>();
 	let audioEpoch = 0;
 	let audioKey = "";
 	let audioSender: Electron.WebContents | undefined;
@@ -124,31 +128,40 @@ export function registerMedia(
 	const scopedControllers = new Map<string, Promise<MediaController>>();
 	const scopedClocks = new Map<string, Fiber.RuntimeFiber<void>>();
 	const panelReaders = new Map<Electron.WebContents, string>();
+	const chooseImages = Effect.tryPromise({
+		try: () =>
+			dialog.showOpenDialog({
+				title: "Choose wallpaper",
+				properties: ["openFile", "multiSelections"],
+				filters: [
+					{
+						name: "Wallpaper media",
+						extensions: [
+							"jpg",
+							"jpeg",
+							"png",
+							"gif",
+							"mp4",
+							"mov",
+							"mkv",
+							"webm",
+							"avi",
+						],
+					},
+				],
+			}),
+		catch: (cause) => new MediaUnreadable(cause),
+	}).pipe(Effect.map((result) => (result.canceled ? [] : result.filePaths)));
 	const makeController = (serial?: string) =>
 		runtime.runPromise(
 			makeMediaController({
-				chooseImage: Effect.tryPromise({
-					try: () =>
-						dialog.showOpenDialog({
-							title: "Choose wallpaper",
-							properties: ["openFile"],
-							filters: [
-								{
-									name: "Wallpaper media",
-									extensions: ["jpg", "jpeg", "png", "mp4", "mov", "webm"],
-								},
-							],
-						}),
-					catch: (cause) => new MediaUnreadable(cause),
-				}).pipe(
-					Effect.map((result) =>
-						result.canceled
-							? Option.none()
-							: Option.fromNullable(result.filePaths[0]),
-					),
+				chooseImages,
+				chooseImage: chooseImages.pipe(
+					Effect.map((paths) => Option.fromNullable(paths[0])),
 				),
 				publish: (snapshot) =>
 					Effect.gen(function* () {
+						yield* Effect.sync(() => applyBackground(snapshot));
 						const key = JSON.stringify([
 							snapshot.saved.serial,
 							snapshot.saved.revision,
@@ -169,11 +182,25 @@ export function registerMedia(
 							audioEpoch++;
 							yield* Effect.promise(() => audio.stop());
 						}
-						yield* broadcast(
-							WALLPAPER_SNAPSHOT,
-							snapshot,
-							(window) => panelSerial(window.webContents) === serial,
-						);
+						yield* Effect.sync(() => {
+							for (const window of BrowserWindow.getAllWindows()) {
+								if (
+									window.isDestroyed() ||
+									window.webContents.isDestroyed() ||
+									panelSerial(window.webContents) !== serial
+								)
+									continue;
+								let sender = transfers.get(window.webContents);
+								if (!sender) {
+									sender = new WallpaperSender();
+									transfers.set(window.webContents, sender);
+								}
+								window.webContents.send(
+									WALLPAPER_SNAPSHOT,
+									sender.encode(snapshot),
+								);
+							}
+						});
 					}),
 				publishClock: (clock) =>
 					broadcast(
@@ -244,6 +271,8 @@ export function registerMedia(
 	const removeVisibilityListeners = new Set<() => void>();
 	const trackWindow = (window: BrowserWindow): void => {
 		const contents = window.webContents;
+		const resetTransfers = () => transfers.delete(contents);
+		contents.on("did-start-loading", resetTransfers);
 		const deactivate = (): void => {
 			if (audioSender === contents || window === panelWindow()) {
 				audioEpoch++;
@@ -254,6 +283,8 @@ export function registerMedia(
 			}
 		};
 		const remove = (): void => {
+			contents.removeListener("did-start-loading", resetTransfers);
+			transfers.delete(contents);
 			window.removeListener("hide", deactivate);
 			window.removeListener("closed", onClosed);
 			removeVisibilityListeners.delete(remove);
@@ -305,6 +336,22 @@ export function registerMedia(
 					message: "Wallpaper request was rejected",
 				};
 			const serial = panelSerial(event.sender);
+
+			if (
+				typeof input === "object" &&
+				input !== null &&
+				"_tag" in input &&
+				input._tag === "failed" &&
+				event.sender !== managementWindow()?.webContents &&
+				(serial === undefined ||
+					!("serial" in input) ||
+					input.serial !== serial)
+			)
+				return {
+					_tag: "failure",
+					code: "QUAKE.DISPLAY.INVALID_WALLPAPER",
+					message: "Wallpaper request was rejected",
+				};
 			if (serial !== undefined) panelReaders.set(event.sender, serial);
 			const service = await controllerFor(serial);
 			return runtime.runPromise(

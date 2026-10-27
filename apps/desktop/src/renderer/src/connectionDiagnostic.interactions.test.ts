@@ -97,3 +97,28 @@ it("MGMT-028/033/035/036/040 drives channel transitions, details and cleanup thr
 	await view.unmount();
 	expect(off).toHaveBeenCalledOnce();
 });
+
+it("MAIN-149 exposes confirmed multi-screen rebinding through the lifecycle bridge", async () => {
+	const status: ConnectionDiagnostic = {
+		...failed,
+		usb: "pass",
+		alert: { alertType: "multi-screen", deviceSNs: ["A", "B"] },
+	};
+	const request = vi.fn<LifecycleBridge["request"]>(async () => ({
+		ok: true,
+		status,
+	}));
+	Object.defineProperty(window, "quakeLifecycle", {
+		configurable: true,
+		value: { request, onStatus: () => () => {} },
+	});
+	const view = await mount(createElement(ConnectionCheck));
+	try {
+		const bind = element<HTMLButtonElement>('[data-action="bind-all"]');
+		expect(bind.textContent).toContain("Bind");
+		await click(bind);
+		expect(request).toHaveBeenLastCalledWith({ action: "bind-all" });
+	} finally {
+		await view.unmount();
+	}
+});

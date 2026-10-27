@@ -19,12 +19,18 @@ export const DisplayMedia = Schema.Union(
 	Schema.Struct({
 		...MediaFields,
 		type: Schema.Literal("image"),
-		format: Schema.Literal("image/jpeg", "image/png"),
+		format: Schema.Literal("image/jpeg", "image/png", "image/gif"),
 	}),
 	Schema.Struct({
 		...MediaFields,
 		type: Schema.Literal("video"),
-		format: Schema.Literal("video/mp4", "video/webm", "video/quicktime"),
+		format: Schema.Literal(
+			"video/mp4",
+			"video/webm",
+			"video/quicktime",
+			"video/x-matroska",
+			"video/x-msvideo",
+		),
 		duration: Duration.pipe(Schema.greaterThanOrEqualTo(2000)),
 	}),
 );
@@ -94,7 +100,6 @@ export const SavedWallpaper = Schema.Struct({
 	settings: WallpaperSettings.pipe(
 		Schema.filter(
 			(s) =>
-				!s.isTransparent &&
 				s.displayMediaList.length <= 128 &&
 				new Set(s.displayMediaList.map((m) => m.filePath)).size ===
 					s.displayMediaList.length,
