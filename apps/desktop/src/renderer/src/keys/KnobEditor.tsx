@@ -73,7 +73,9 @@ export function KnobEditor({
 	const slot = draft.config.subActions[KNOB_SLOT_INDEX[slotName]];
 	const value = (type: string) =>
 		slot.config.actions.find((a) => a.type === type)?.value;
-	const route = value("voiceRoute");
+	const haKeys = profile.pages.flatMap(page => page.keys.filter(key => key.config.type === "homeAssistant" && key.config.actions.some(a => a.type === "configData" && typeof a.value === "string")).map(key => ({ id: `${page.id}/${key.keyCode}`, key })));
+ const haConfig = value("configData");
+ const route = value("voiceRoute");
 	const provider = value("directProvider");
 	const model = value("directModel");
 	const selected = models.find((m) => m.id === provider && m.model === model);
@@ -211,7 +213,7 @@ export function KnobEditor({
 					>
 						<option value="">None</option>
 						{slotName === "center" && (
-							<option value="assistant">Knob press-and-hold voice</option>
+							<><option value="assistant">Knob press-and-hold voice</option><option value="homeAssistant">Home Assistant</option></>
 						)}
 						<option value="panelBrightness">Panel brightness</option>
 						<option value="previousPage">Previous page</option>
@@ -219,6 +221,17 @@ export function KnobEditor({
 						<option value="goToPage">Go to page</option>
 					</select>
 				</Row>
+        {slot.config.type === "homeAssistant" && <Row label="Home Assistant key" htmlFor="knob-ha-key">
+          <select id="knob-ha-key" value={haKeys.find(({key}) => key.config.actions.find(a => a.type === "configData")?.value === haConfig)?.id ?? ""} onChange={e => {
+            const selectedKey = haKeys.find(k => k.id === e.target.value)?.key;
+            const action = selectedKey?.config.actions.find(a => a.type === "configData");
+            if (action && typeof action.value === "string") replace({ childrenName: "homeAssistant", config: { type: "homeAssistant", icon: "0-55", actions: [{ type: "configData", value: action.value }] } });
+          }}>
+            <option value="">{haConfig ? "Saved Home Assistant configuration" : "Select a saved Home Assistant key"}</option>
+            {haKeys.map(({id,key}) => <option key={id} value={id}>{key.config.title.text || id}</option>)}
+          </select>
+          {!haKeys.length && <span role="status">Save a Home Assistant key in this profile first.</span>}
+        </Row>}
 				{slot.config.type === "assistant" && (
 					<>
 						<Row label="Voice route:" htmlFor="knob-route">
@@ -256,7 +269,6 @@ export function KnobEditor({
 								<option value="legacyAssistant">Legacy assistant</option>
 								<option value="dkclaw">DK Claw (OpenClaw)</option>
 								<option value="direct">Direct chat</option>
-								<option value="dkclaw">DK Claw (OpenClaw)</option>
 							</select>
 						</Row>
 						<KnobAssistantSettings

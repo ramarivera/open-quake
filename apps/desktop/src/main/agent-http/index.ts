@@ -33,7 +33,11 @@ import {
 	createAgentHttpVoiceAdapter,
 } from "./voice-adapter";
 
+import { pinAgentKnob, type KnobAgentState } from "./knob-route";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
+import type { KnobCaptureSnapshot, PinnedAgentRoute } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 export interface AgentHttpOptions {
+  readonly localAgents?: () => Promise<KnobAgentState>;
 	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
@@ -171,7 +175,23 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 				),
 			),
 		);
+  const validateAgentRoute = (route: PinnedAgentRoute) => Effect.gen(function* () {
+    const current = yield* selected();
+    const status = yield* registry?.read() ?? Effect.succeed(undefined);
+    const local = yield* Effect.tryPromise(() => options.localAgents?.() ?? Promise.resolve(undefined));
+    return route.generation === generation && current?.connectionId === route.connectionId && status?.generation === route.registryGeneration && status?.status === "connected" && local?.status === "ready" && local.agentIds.includes(route.agentId ?? "main");
+  }).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  const pinKnobRoute = (snapshot: KnobCaptureSnapshot) => Effect.gen(function* () {
+    const state = yield* Effect.tryPromise({ try: () => options.localAgents?.() ?? Promise.resolve({ status: "stopped" as const, agentIds: [] }), catch: cause => new VoiceKnobRejected("GatewayNotReady", cause) });
+    const selection = yield* selected().pipe(Effect.mapError(cause => new VoiceKnobRejected("GatewayNotReady", cause)));
+    const status = yield* registry?.read() ?? Effect.succeed({ generation: 0, status: "disconnected" as const });
+    const pinned = yield* pinAgentKnob(snapshot, state, selection, status, resources.discover, generation);
+    if (!(yield* validateAgentRoute(pinned))) return yield* new VoiceKnobRejected("GatewayNotReady");
+    return pinned;
+  });
+
 	const voiceOptions = {
+    validateAgentRoute,
 		selected,
 		stream: (...args: Parameters<typeof ConversationService.Service.stream>) =>
 			service ? service.stream(...args) : Stream.fail(new RuntimeUnavailable()),
@@ -323,6 +343,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 		...prepared,
 		backend,
 		drafting,
+    pinKnobRoute,
 		createVoiceAdapter: (
 			fallback: Parameters<typeof createAgentHttpVoiceAdapter>[1],
 			fallbackTranscript?: Parameters<typeof createAgentHttpVoiceAdapter>[2],

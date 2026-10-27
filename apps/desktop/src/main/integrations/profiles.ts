@@ -24,7 +24,7 @@ import type { ShortcutLibrary } from "../../../../../packages/edge/src/shortcuts
 import { executableChord } from "../../../../../packages/edge/src/shortcuts/shortcut-invariants";
 import type { KeyTarget } from "../../shared/integrations";
 import type { DesktopRuntime } from "../diagnostics/module";
-export const keyHaConfig = (key: ProfileKey): HaKey | null => {
+export const keyHaConfig = (key: { readonly config: { readonly type: string; readonly actions: readonly { readonly type: string; readonly value: unknown }[] } }): HaKey | null => {
 	if (key.config.type !== "homeAssistant") return null;
 	const action = key.config.actions.find(
 		(a) =>

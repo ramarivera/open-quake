@@ -85,3 +85,25 @@ The hold-start consumer SHALL read committed profile data and pass its ID, revis
 #### Scenario: Stalled cleanup
 - **WHEN** same-device cleanup has not finished after two seconds
 - **THEN** the next hold fails VOICE.KNOB.BUSY and no successor microphone opens
+
+
+### Requirement: Saved agent routing before capture
+KNOB-032 and KNOB-041 SHALL resolve the committed dkclaw agent/model before microphone permission. Empty model SHALL mean the selected agent default. Unknown saved model options SHALL remain visible without silently selecting a replacement. Stopped, starting and disconnected runtime phases SHALL refuse capture with localized phase feedback and one busy tone. Ready capture SHALL pin its selected agent/model independently of mutable UI selection and refuse unavailable agents without direct fallback.
+
+#### Scenario: Phase gates and pinned dispatch
+- **WHEN** a saved agent knob is held in stopped, starting, disconnected or ready phase
+- **THEN** only ready acquires the microphone, uses the saved agent and explicit/default model, and subsequent route edits cannot rewrite that capture
+
+### Requirement: Short recognition terminal
+KNOB-046 SHALL classify the historical too-short final recognition separately from permission/server failures. Fewer than two Unicode characters, or two characters ending in a period or Chinese full stop, SHALL return idle/empty with exactly one end tone and no chat submission.
+
+#### Scenario: Short speech ends without inference
+- **WHEN** a provider returns a short final utterance
+- **THEN** capture returns idle/empty, emits one end tone, and submits no chat
+
+### Requirement: Home Assistant knob slot execution
+MGMT-213 SHALL preserve the center Home Assistant slot configData through save/import and execute a committed press through the existing validated Home Assistant executor. The unconfigured empty slot SHALL refuse safely. Assistant-routed equipment outcomes SHALL be retained in the response, with no repeated dispatch if later generation fails. Existing admission, identity rechecks and cancellation SHALL remain in force.
+
+#### Scenario: Saved HA press and successful equipment result
+- **WHEN** a configured HA center slot is pressed or an admitted assistant turn operates allowed equipment
+- **THEN** the saved action executes once and its result remains visible even if response generation is unavailable, while invalid, cancelled or stale work never executes

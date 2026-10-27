@@ -1,3 +1,4 @@
+import { previewLegacyAssistant } from "../../../../../../packages/device/src/profiles/assistant-legacy";
 import { Either, Schema } from "effect";
 import { useEffect, useId, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
+import { loadSystemPrompts } from "../../../../../../packages/edge/src/ai/legacy-prompt-catalog";
 import { ROLE_PRESETS } from "../../../../../../packages/edge/src/ai/ai-role-presets";
 import { providerSamplingValid } from "../../../../../../packages/edge/src/ai/ai-sampling";
 import {
@@ -68,11 +70,13 @@ export function AssistantControls({
 	onChange,
 	rows,
 	disabled = false,
+  promptLibrary = false,
 }: {
 	readonly value: AssistantSettings;
 	readonly onChange: (value: AssistantSettings) => void;
 	readonly rows: readonly PublicModelRow[];
 	readonly disabled?: boolean;
+  readonly promptLibrary?: boolean;
 }) {
 	const t = useAssistantText();
 	const id = useId();
@@ -264,13 +268,21 @@ export function AssistantControls({
 					onChange={(e) => patch({ chatHistoryCount: e.target.valueAsNumber })}
 				/>
 			</Row>
-			<Row label={t("Custom Role")} htmlFor={`${id}-custom`}>
+			{promptLibrary && <Row label={t("Prompt library")} htmlFor={`${id}-library`}>
+          <select id={`${id}-library`} value={loadSystemPrompts(locale).find(p => p.prompt === value.rolePrompt)?.id ?? "default"} onChange={e => {
+            const selected = loadSystemPrompts(locale).find(p => p.id === e.target.value);
+            if (selected) patch({ roleId: 0, customPrompt: "", rolePrompt: selected.prompt });
+          }}>
+            {loadSystemPrompts(locale).map(p => <option key={p.id} value={p.id}>{p.role}</option>)}
+          </select>
+        </Row>}
+      <Row label={t("Custom Role")} htmlFor={`${id}-custom`}>
 				<input
 					id={`${id}-custom`}
 					type="checkbox"
 					checked={value.roleId === -1}
 					onChange={(e) =>
-						patch({ roleId: e.target.checked ? -1 : 0, customPrompt: "" })
+						patch({ roleId: e.target.checked ? -1 : 0, customPrompt: "", rolePrompt: "" })
 					}
 				/>
 			</Row>
@@ -300,7 +312,7 @@ export function AssistantControls({
 							id={`${id}-role`}
 							value={value.roleId}
 							onChange={(e) =>
-								patch({ roleId: Number(e.target.value), customPrompt: "" })
+								patch({ roleId: Number(e.target.value), customPrompt: "", rolePrompt: "" })
 							}
 						>
 							{ROLE_PRESETS.filter(
@@ -472,6 +484,16 @@ export function AssistantEditor({
 		keyValue.config.assistantSettings ??
 		assistantSettingsFromActions(keyValue.config.actions);
 	const [invalid, setInvalid] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  if (keyValue.config.aiConfigData && !keyValue.config.assistantSettings) return <section aria-label={t("Assistant settings")}>
+    <p>{t("Legacy assistant is preserved and won't execute. Review and save a replacement to enable capture.")}</p>
+    <button type="button" disabled={disabled} onClick={() => setReviewing(true)}>{t("Preview migration")}</button>
+    {reviewing && <section aria-label="Migration preview">
+      <pre>{JSON.stringify(previewLegacyAssistant(keyValue.config.aiConfigData), null, 2)}</pre>
+      <button type="button" onClick={() => onChange({ ...keyValue, config: { ...keyValue.config, assistantSettings: previewLegacyAssistant(keyValue.config.aiConfigData) } })}>{t("Use reviewed replacement")}</button>
+      <button type="button" onClick={() => setReviewing(false)}>{t("Cancel migration")}</button>
+    </section>}
+  </section>;
 	const selected = rows.find((r) => r.role === "default");
 	return (
 		<section aria-label={t("Assistant settings")}>

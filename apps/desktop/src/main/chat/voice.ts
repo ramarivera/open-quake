@@ -73,7 +73,11 @@ export const createDirectChatVoice = (
 			lock.withPermits(1)(
 				Effect.uninterruptibleMask((restore) =>
 					Effect.gen(function* () {
-						if (request.knob && !request.directModel)
+						if (
+							request.knob &&
+							request.knob.route === "direct" &&
+							!request.directModel
+						)
 							return yield* new VoiceRuntimeUnavailable(
 								new VoiceKnobRejected("RouteIncomplete"),
 							);
@@ -81,9 +85,8 @@ export const createDirectChatVoice = (
 						const route = JSON.stringify([
 							request.serial,
 							request.keyCode,
-							request.agentId,
-							request.knob,
-							request.directModel?.profile.id,
+							request.agentId || "main",
+							request.knob?.profileId,
 						]);
 						let sessionId = sessions.get(route)?.sessionId;
 						if (!sessionId) {
@@ -99,17 +102,27 @@ export const createDirectChatVoice = (
 							}
 						}
 						const turnId = Schema.decodeUnknownSync(TurnId)(randomUUID());
-						const settings = request.knob
-							? request.knob.assistantSettings
-							: yield* Effect.tryPromise({
-									try: () =>
-										host.runtime.runPromise(
-											host.keySettings(request.serial, request.keyCode),
-										),
-									catch: (cause) => new VoiceRuntimeUnavailable(cause),
-								});
+						const settings =
+							request.assistantSettings ??
+							(request.knob
+								? request.knob.assistantSettings
+								: yield* Effect.tryPromise({
+										try: () =>
+											host.runtime.runPromise(
+												host.keySettings(request.serial, request.keyCode),
+											),
+										catch: (cause) => new VoiceRuntimeUnavailable(cause),
+									}));
 						if (source === "voice" && settings && !settings.enableVoiceInput)
 							return yield* new VoiceRuntimeUnavailable();
+						if (source === "voice" && settings && (settings.enableWakeTalkWindow || (yield* Effect.promise(() => host.runtime.runPromise(host.assistantVisible()))))) {
+							yield* Effect.promise(() =>
+								host.runtime.runPromise(
+									host.selectAssistant(sessionId, settings, request.message),
+								),
+							);
+							if (settings.enableWakeTalkWindow) { yield* wakeChatWindow; return; }
+						}
 						const token = Symbol("assistant-session");
 						identities.set(request.serial, { keyCode: request.keyCode, token });
 						const accepted = yield* Effect.tryPromise({
@@ -126,7 +139,13 @@ export const createDirectChatVoice = (
 								),
 							catch: (cause) => new VoiceRuntimeUnavailable(cause),
 						}).pipe(
-							Effect.onError(() => invalidate(request.serial, request.keyCode)),
+							Effect.onError(() =>
+                invalidate(request.serial, request.keyCode).pipe(
+                  Effect.zipRight(source === "voice" && settings
+                    ? Effect.promise(() => host.runtime.runPromise(host.selectAssistant(sessionId, settings, request.message)))
+                    : Effect.void),
+                ),
+              ),
 						);
 						const captureId = `direct/${turnId}`;
 						yield* surface.publish({
@@ -271,7 +290,16 @@ export const createDirectChatVoice = (
 												}).pipe(
 													Effect.flatMap((settings) =>
 														settings?.enableWakeTalkWindow
-															? wakeChatWindow
+															? Effect.gen(function* () {
+                                  const route = JSON.stringify([serial, keyCode, agentId._tag === "Some" ? agentId.value : "main", undefined]);
+                                  let session = sessions.get(route);
+                                  if (!session) {
+                                    session = { sessionId: Schema.decodeUnknownSync(SessionId)(randomUUID()), serial, keyCode };
+                                    sessions.set(route, session);
+                                  }
+                                  yield* Effect.promise(() => host.runtime.runPromise(host.selectAssistant(session.sessionId, settings)));
+                                  yield* wakeChatWindow;
+                                })
 															: Effect.void,
 													),
 													Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
@@ -295,3 +323,15 @@ export const createDirectChatVoice = (
 			}),
 		};
 	});
+
+/** Called inside the capture owner, so release/cancel interrupts preflight before microphone IO. */
+export const assistantCapturePreparer = (host: DirectChat) => (request: import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").CaptureRequest) => Effect.tryPromise({
+  try: (signal) => host.runtime.runPromise(Effect.gen(function* () {
+    const settings = yield* host.keySettings(request.serial, request.keyCode);
+    if (!settings || !settings.enableVoiceInput) return yield* new VoiceRuntimeUnavailable();
+    yield* host.preflight();
+    const directModel = yield* host.pinKnobModel(settings.modelRowId, settings.modelId, settings);
+    return { assistantSettings: settings, directModel };
+  }), { signal }),
+  catch: cause => new VoiceRuntimeUnavailable(cause),
+});

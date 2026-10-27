@@ -1,6 +1,7 @@
 import { Either, Option, Schema } from "effect";
 import {
 	type KnobFunction,
+ KnobJson,
 	KnobNavigationActions,
 	type KnobSlotName,
 	KnobVoiceActions,
@@ -47,8 +48,18 @@ const validateOwned = (
 		? Either.right(undefined)
 		: Either.left(InvalidKnobConfig.fromCause("function-actions"));
 };
+/** Assignment validation preserves configData verbatim. The HA executor validates HaKey before IO. */
+const validateHa = (assignment: KnobFunction): Either.Either<void, InvalidKnobConfig> => {
+ const actions = assignment.config.actions;
+ const action = actions[0];
+ if (assignment.childrenName !== "homeAssistant" || assignment.config.type !== "homeAssistant" || actions.length !== 1 || action?.type !== "configData" || typeof action.value !== "string") return Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
+ const decoded = Schema.decodeUnknownEither(Schema.parseJson(KnobJson))(action.value);
+ return Either.isRight(decoded) && typeof decoded.right === "object" && decoded.right !== null && !Array.isArray(decoded.right)
+  ? Either.right(undefined) : Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
+};
 /** Runtime availability is separate; these declarations do not enable adapters. */
 export const KNOB_OWNED_CAPABILITIES: KnobRegistry = [
+ { id: "homeAssistant", rotation: false, press: true, hold: false, validate: validateHa },
 	{
 		id: "previousPage",
 		rotation: true,

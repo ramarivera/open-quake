@@ -24,6 +24,7 @@ import {
 	selectModelProvider,
 	selectQwenGeneration,
 } from "./model-drafts";
+import { PersonaSettings } from "./PersonaSettings";
 import type { AgentRequest } from "./useAgents";
 
 function ModelTable({
@@ -624,6 +625,7 @@ export function ModelsPanel({
 				</button>
 			</nav>
 			<div hidden={tab !== "default"}>
+        <PersonaSettings rows={view.models.default ?? []} />
 				<ModelTable
 					key="default"
 					scope="default"

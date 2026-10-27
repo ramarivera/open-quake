@@ -17,6 +17,7 @@ import type {
 	PublicModelRow,
 } from "../../../shared/agents";
 import { button, click, input, mount, query, settle } from "../../test/dom";
+import { PersonaSettings } from "../management/agents/PersonaSettings";
 import { AssistantProviderSettings } from "../maintenance/AssistantProviderSettings";
 import { AssistantControls, AssistantEditor } from "./AssistantEditor";
 import { AssistantLink } from "./AssistantLink";
@@ -733,4 +734,61 @@ it("followed General provider changes reconcile checked controls and cross-provi
 	await f.render(<AssistantEditor keyValue={key} onChange={() => {}} />);
 	expect(field(f.host, "Enable Thinking").checked).toBe(false);
 	expect(field(f.host, "Web Search").checked).toBe(false);
+});
+
+
+it("AI-228/229/230 updates preset/custom persona and slider endpoints, then reloads the saved selection", async () => {
+  let saved = { ...defaultAssistantSettings(), useAgent: false };
+  const updates: typeof saved[] = [];
+  vi.stubGlobal("quakeChat", { persona: {
+    read: async () => saved,
+    update: async (next: typeof saved) => { saved = next; updates.push(next); return next; },
+  } });
+  const f = await mount(<PersonaSettings rows={rows} />);
+  closes.push(f.close);
+  await settle(() => expect(f.host.querySelector('input[type="range"]')).not.toBeNull());
+  const personality = field(f.host, "Personality");
+  const quality = field(f.host, "Reply Quality");
+  expect([personality.min, personality.max, personality.step, personality.value]).toEqual(["0", "1", "0.05", "0.7"]);
+  expect([quality.min, quality.max, quality.step, quality.value]).toEqual(["0", "2", "0.05", "1"]);
+  for (const text of ["Fastidious", "Flexible", "Conservative", "Gibberish"]) expect(f.host.textContent).toContain(text);
+  await input(query(f.host, 'select[id$="-role"]', HTMLSelectElement), "128");
+  await input(personality, "0");
+  await input(quality, "2");
+  await click(button(f.host, "Update"));
+  expect(saved).toMatchObject({ roleId: 128, topP: 0, temperature: 2 });
+  await click(field(f.host, "Custom Role"));
+  await input(query(f.host, "textarea", HTMLTextAreaElement), "Saved custom persona");
+  await input(personality, "0.05");
+  await input(quality, "1.95");
+  await click(button(f.host, "Update"));
+  expect(saved).toMatchObject({ roleId: -1, customPrompt: "Saved custom persona", topP: 0.05, temperature: 1.95 });
+  await f.render(<PersonaSettings key="reload" rows={rows} />);
+  await settle(() => expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe("Saved custom persona"));
+  expect(field(f.host, "Custom Role").checked).toBe(true);
+  expect(field(f.host, "Personality").value).toBe("0.05");
+  await click(field(f.host, "Custom Role"));
+  await input(query(f.host, 'select[id$="-role"]', HTMLSelectElement), "6");
+  await click(button(f.host, "Update"));
+  expect(saved).toMatchObject({ roleId: 6, customPrompt: "", rolePrompt: "" });
+  expect(updates).toHaveLength(3);
+});
+
+it("AI-089 reviews a preserved legacy grid key before enabling the replacement", async () => {
+  bridge();
+  const legacy = JSON.stringify({ aiModelType: "old-model", useCustomPrompt: true, systemPrompt: "Translate this", enableWakeTalkWindow: true });
+  let saved = Schema.decodeUnknownSync(ProfileKey)({
+    ...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")),
+    childrenName: "aiChat", config: { type: "aiChat", aiConfigData: legacy },
+  });
+  const f = await mount(<AssistantEditor keyValue={saved} onChange={next => { saved = next; }} />);
+  closes.push(f.close);
+  expect(saved.config.assistantSettings).toBeUndefined();
+  await click(button(f.host, "Preview migration"));
+  await click(button(f.host, "Cancel migration"));
+  expect(saved.config.assistantSettings).toBeUndefined();
+  await click(button(f.host, "Preview migration"));
+  await click(button(f.host, "Use reviewed replacement"));
+  expect(saved.config.aiConfigData).toBe(legacy);
+  expect(saved.config.assistantSettings).toMatchObject({ modelId: "old-model", customPrompt: "Translate this", useAgent: false, enableWakeTalkWindow: true });
 });

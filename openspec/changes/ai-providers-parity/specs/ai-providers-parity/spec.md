@@ -285,3 +285,36 @@ Meeting ASR, upload and live translation SHALL compose the existing AiProviderSe
 
 - **WHEN** a saved Qwen or OpenAI profile processes synthetic managed audio through the production meeting facade and loopback HTTP or WebSocket servers
 - **THEN** only its selected credential authenticates the expected direct adapter, the resulting transcript feeds the existing summary facade, and all temporary audio and sockets close without hardware or paid requests
+
+
+### Requirement: Assistant routing and per-key persona pinning
+AI-081, AI-088, AI-089 and AI-241 SHALL bind reviewed imported assistant settings to an isolated per-key session and explicit dictation target. Capture SHALL refuse offline or invalid model configuration before microphone acquisition, publish preparing, and cancel a released preparation without submitting. A visible wake-chat destination SHALL receive the transcript and selected session/settings; direct mode SHALL submit once. Rejected sends SHALL retain the transcript. Imported payloads SHALL remain inert until explicitly reviewed and saved.
+
+#### Scenario: Reviewed legacy keys retain independent sessions
+- **WHEN** two reviewed keys with different saved models, history settings and wake-window choices are held and released
+- **THEN** each uses its own session and pinned settings, stale callbacks cannot select another session, and an early release or offline refusal sends no chat
+
+#### Scenario: Wake dictation and direct submission
+- **WHEN** a final transcript arrives for a wake-window key
+- **THEN** the selected desktop session receives editable dictation and no background inference runs, while a direct key submits once and preserves its transcript on refusal
+
+### Requirement: Retained Copilot key execution and title migration
+AI-117, MGMT-358, MGMT-359 and SETTINGS-110 SHALL execute all six shipped Copilot keys with their per-key Chinese prompts, thinking and search controls. On import and persisted profile read, aiChat keys identified by the six role IDs 128/6/8/93/129/84 or their exact built-in title i18n keys SHALL upgrade an existing false title edit flag to true. The migration SHALL preserve user titles, actions and every other edit flag and SHALL be idempotent.
+
+#### Scenario: Six roles survive title-only editing
+- **WHEN** each saved built-in role key is activated after a title-only edit and repeated profile reads
+- **THEN** the outbound prompt and controls match the saved key, the title stays edited and unrelated keys and locks stay unchanged
+
+### Requirement: Local legacy prompt catalog
+AI-142 and AI-143 SHALL expose a local, provenance-documented prompt catalog with a Default entry. English SHALL use the English catalog; zh, de, fr, es, it, ja and ko SHALL use the historical Chinese fallback. Only decision 12 NSFW and jailbreak entries SHALL be excluded. Missing or malformed catalog input SHALL return Default alone without execution or network access.
+
+#### Scenario: Locale and corrupt catalog handling
+- **WHEN** the loader receives each supported locale or missing/malformed source
+- **THEN** it returns the selected retained catalog prefixed by Default or Default alone on failure, with excluded prompts absent
+
+### Requirement: Desktop persona updates apply to subsequent turns
+AI-228, AI-229 and AI-230 SHALL offer filterable System Role selection, Custom Role prompt editing, Personality top_p 0..1 and Reply Quality temperature 0..2 with 0.05 steps, defaults 0.7 and 1, and recovered endpoint labels. Update SHALL persist the selection and apply it to subsequent desktop turns. Existing turns and stored history SHALL retain their pinned prompts and models. Excluded roles SHALL fail validation.
+
+#### Scenario: Update during a turn
+- **WHEN** a user changes preset/custom role or sampling and presses Update during a running turn, then reloads the controls and sends again
+- **THEN** the active request remains unchanged and the next request uses the persisted new persona and sampling

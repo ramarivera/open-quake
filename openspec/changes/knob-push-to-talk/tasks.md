@@ -49,3 +49,7 @@ passed 24 tests across `voice-ipc.test.ts` and `runtime-knob.test.ts`.
 - [x] 4.1 Scope profile-removal cancellation to the affected device answer turn. Bead open-quake-e2r.9, review 4376058796. Both new `runtime-knob.test.ts` regressions failed before the fix, proving another device answer and unrelated read-aloud were cancelled. They pass after the fix; the removed device capture/text/answer still cancel. Read-aloud has no device/profile owner and survives reconciliation. No real microphone or hardware used.
 
 - [x] 4.2 Clear superseded/cancelled knob pins and match capture/answer ownership before profile removal. Bead open-quake-e2r.10, review 4376513056. Three new regressions reproduced an old knob profile stopping a newer same-device grid recording, voice answer and typed answer. Runtime now drops the pin when a grid capture or unrelated turn replaces it, removes cancelled pins, and compares the actual pinned capture for stop/answer cancellation. All 28 focused speech tests and desktop typecheck pass.
+
+## 5. Assistant-routing burn-down
+
+- [ ] 5.1 Complete saved agent/HA routes and short speech terminal. Bead open-quake-lih.15.15.

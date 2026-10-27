@@ -16,11 +16,12 @@ import {
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface/index.js";
-import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
+import type { PinnedAgentRoute, TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
 import type { AgentConnectionSelection } from "../../shared/agent-connections";
 
 export interface AgentHttpVoiceOptions {
-	readonly selected: () => Effect.Effect<
+	readonly validateAgentRoute?: (route: PinnedAgentRoute) => Effect.Effect<boolean>;
+  readonly selected: () => Effect.Effect<
 		AgentConnectionSelection | undefined,
 		RuntimeError
 	>;
@@ -83,17 +84,18 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 	const send = (request: TextRequest, source: "typed" | "voice") =>
 		Effect.gen(function* () {
 			// A committed direct knob route never follows the mutable external selection.
-			if (request.knob)
+			if (request.knob?.route === "direct")
 				return yield* fallbackTranscript
 					? fallbackTranscript(request)
 					: fallback.sendText(request);
-			const selected = yield* options
-				.selected()
+			if (request.knob?.route === "dkclaw" && (!request.agentRoute || !(yield* options.validateAgentRoute?.(request.agentRoute) ?? Effect.succeed(false)))) return yield* new VoiceRuntimeUnavailable();
+      const selected = request.agentRoute ?? (yield* options
+        .selected()
 				.pipe(
 					Effect.catchAll((cause) =>
 						Effect.fail(new VoiceRuntimeUnavailable(cause)),
 					),
-				);
+				));
 			const selectedGeneration = options.generation();
 			return yield* lock.withPermits(1)(
 				Effect.gen(function* () {
@@ -115,6 +117,7 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 						request.keyCode,
 						selected.connectionId,
 						selected.agentId ?? null,
+            request.agentRoute?.modelId ?? null,
 					]);
 					const previous = sessions.get(route);
 					const sessionId =
@@ -179,6 +182,7 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 								? {}
 								: { agentId: selected.agentId }),
 							...(previous ? { sessionId: previous.local } : {}),
+              ...(request.agentRoute?.modelId ? { modelId: request.agentRoute.modelId } : {}),
 						})
 						.pipe(
 							Stream.runForEach((envelope) =>

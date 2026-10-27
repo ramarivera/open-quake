@@ -8,6 +8,7 @@ import {
 	Stream,
 	SubscriptionRef,
 } from "effect";
+import { upgradeAssistantTitles } from "./profile-assistant-migration.js";
 import { profileParseFailure } from "./profile-codec.js";
 import {
 	type EncodedProfileEnvelope,
@@ -146,7 +147,8 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							Effect.fail(profileParseFailure(cause)),
 						),
 					);
-					const repaired = repairProfileSelections(decoded);
+					const migrated = upgradeAssistantTitles(decoded);
+					const repaired = repairProfileSelections(migrated);
 					const snapshot = yield* committedProfileSnapshot(
 						repaired.envelope,
 					).pipe(
@@ -154,7 +156,8 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							Effect.fail(profileParseFailure(cause)),
 						),
 					);
-					if (repaired.repairedSelections.length > 0) yield* write(snapshot);
+					if (repaired.repairedSelections.length > 0 || migrated !== decoded)
+						yield* write(snapshot);
 					yield* SubscriptionRef.set(committed, Option.some(snapshot));
 					return { ...repaired, envelope: snapshot };
 				},

@@ -94,6 +94,9 @@ export class VoiceLinkRejected extends Schema.TaggedError<VoiceLinkRejected>()(
 }
 
 export const VoiceKnobErrors = {
+ GatewayStopped: { code: "VOICE.KNOB.GATEWAY_STOPPED", category: "unavailable", message: "The agent gateway is stopped", policy: { userFacing: true, userRecoverable: true, retry: "manual" } },
+ GatewayStarting: { code: "VOICE.KNOB.GATEWAY_STARTING", category: "unavailable", message: "The agent gateway is starting", policy: { userFacing: true, userRecoverable: true, retry: "manual" } },
+ GatewayNotReady: { code: "VOICE.KNOB.GATEWAY_NOT_READY", category: "unavailable", message: "The saved agent is not ready on the connected gateway", policy: { userFacing: true, userRecoverable: true, retry: "manual" } },
 	Busy: {
 		code: "VOICE.KNOB.BUSY",
 		category: "unavailable",
@@ -118,6 +121,9 @@ export class VoiceKnobRejected extends Schema.TaggedError<VoiceKnobRejected>()(
 	{
 		code: Schema.Literal(
 			"VOICE.KNOB.BUSY",
+      "VOICE.KNOB.GATEWAY_STOPPED",
+      "VOICE.KNOB.GATEWAY_STARTING",
+      "VOICE.KNOB.GATEWAY_NOT_READY",
 			"VOICE.KNOB.ROUTE_INCOMPLETE",
 			"VOICE.KNOB.ROUTE_UNAVAILABLE",
 		),

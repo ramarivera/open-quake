@@ -19,6 +19,9 @@ import {
 	TestContext,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import copilotKeys from "../../../../../packages/device/src/profiles/builtins/default_ai_copilot_chat_config.json";
+import { assistantSettingsFromActions } from "../../../../../packages/device/src/profiles/assistant-contracts";
+import { inspectProfileImport } from "../../../../../packages/device/src/profiles/profile-import";
 import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	SessionId,
@@ -48,7 +51,7 @@ import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
 import { decodeChatRequest, makeDesktopChatConnection } from "./rpc-server";
-import { createDirectChatVoice } from "./voice";
+import { assistantCapturePreparer, createDirectChatVoice } from "./voice";
 
 const sessionId = () => Schema.decodeUnknownSync(SessionId)(randomUUID());
 const turnId = () => Schema.decodeUnknownSync(TurnId)(randomUUID());
@@ -152,7 +155,7 @@ async function fixture(
 	homeAssistant?: AssistantHaPort,
 	extra: Pick<
 		Parameters<typeof createDirectChat>[0],
-		"fetch" | "keySettings"
+		"fetch" | "keySettings" | "online"
 	> = {},
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
@@ -1247,6 +1250,10 @@ it.each(["allowed", "denied", "revoked"] as const)(
 				if (result._tag === "Left") throw result.left;
 				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
 				expect(executed).toEqual(["light.allowed"]);
+        // lih.15.12: successful equipment results do not depend on another model response.
+        expect(f.endpoint.calls).toHaveLength(2);
+        const snapshot = await f.host.runtime.runPromise(f.host.snapshot(result.right.selection.sessionId, result.right.selection.turnId));
+        expect(snapshot.text).toBe("Home Assistant: toggle completed for light.allowed.");
 			} else {
 				if (result._tag === "Left") throw result.left;
 				const chunks = await f.host.runtime.runPromise(
@@ -1629,7 +1636,7 @@ it("pins Auto routing metadata while another session submits plain chat", async 
 			outcome: "completed",
 		});
 		expect(executed).toEqual(["light.allowed"]);
-		expect(f.endpoint.calls).toHaveLength(4);
+		expect(f.endpoint.calls).toHaveLength(3);
 	} finally {
 		release();
 		await f.close();
@@ -2003,3 +2010,106 @@ it.each(["", "qwen3.6-plus", "my-custom-model"])(
 		}
 	},
 );
+
+it("AI-230 pins desktop Update per admitted turn and persists it across reads without changing prior history", async () => {
+ const f = await fixture();
+ try {
+   const settings = { ...defaultAssistantSettings(), useAgent: false, roleId: -1, customPrompt: "First persona", chatHistoryCount: 4 };
+   await f.bridge.persona?.update(settings);
+   const sid = sessionId(), tid = turnId();
+   await f.bridge.submit({ sessionId: sid, turnId: tid, text: "block" });
+   await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+   await f.bridge.persona?.update({ ...settings, customPrompt: "Next persona", temperature: 0.35 });
+   expect((await f.bridge.persona?.read())?.customPrompt).toBe("Next persona");
+   expect(f.endpoint.calls[0]?.body.messages[0]).toEqual({ role: "system", content: "First persona" });
+   await f.bridge.cancel(sid, tid);
+   const next = await f.host.runtime.runPromise(f.host.submit({ sessionId: sid, turnId: turnId(), text: "next" }));
+   await f.host.runtime.runPromise(Stream.runDrain(next.events));
+   expect(f.endpoint.calls[1]?.body).toMatchObject({ temperature: 0.35, messages: [{ role: "system", content: "Next persona" }, { role: "user", content: "next" }] });
+   expect((await f.bridge.history(sid)).turns).toHaveLength(2);
+ } finally { f.endpoint.release(); await f.close(); }
+});
+
+it("AI-088/241 dictation selects each key's session and settings through typed RPC, and stale acknowledgement can't erase a newer transcript", async () => {
+ const keys = new Map([['1,1', { ...defaultAssistantSettings(), useAgent: false, enableWakeTalkWindow: true, modelId: "first-model", roleId: -1, customPrompt: "First key", chatHistoryCount: 4 }], ['1,2', { ...defaultAssistantSettings(), useAgent: false, enableWakeTalkWindow: true, modelId: "second-model", roleId: -1, customPrompt: "Second key", chatHistoryCount: 4 }]]);
+ const f = await fixture({}, "generic", "fixture-model", undefined, { keySettings: (_serial, code) => Effect.succeed(keys.get(code)) });
+ const v = voiceFixture(f.host, () => Effect.void);
+ try {
+   await v.voice.runPromise(v.send({ serial: "QK", keyCode: "1,1", agentId: "", message: "dictated one" }));
+   const first = await f.bridge.selection?.();
+   expect(first?.transcript).toBe("dictated one");
+   await v.voice.runPromise(v.send({ serial: "QK", keyCode: "1,2", agentId: "", message: "dictated two" }));
+   await f.bridge.acknowledgeSelection?.(first?.generation ?? 0);
+   const second = await f.bridge.selection?.();
+   expect(second?.transcript).toBe("dictated two");
+   expect(second?.sessionId).not.toBe(first?.sessionId);
+   expect(f.endpoint.calls).toHaveLength(0);
+   if (!first || !second) throw new Error("selection missing");
+   for (const selection of [first, second, first]) {
+     const tid = turnId();
+     await f.bridge.submit({ sessionId: selection.sessionId, turnId: tid, text: "typed continuation" });
+     await vi.waitFor(async () => expect(Option.isSome((await f.bridge.snapshot(selection.sessionId, tid)).terminal)).toBe(true));
+   }
+   expect(f.endpoint.calls.map(c => c.body.model)).toEqual(["first-model", "second-model", "first-model"]);
+   expect(f.endpoint.calls[0]?.body.messages[0]?.content).toBe("First key");
+   expect(f.endpoint.calls[2]?.body.messages.filter(m => m.role === "user")).toHaveLength(2);
+ } finally { await v.voice.dispose(); await f.close(); }
+});
+
+it("AI-088 mirrors dictation into a visible desktop composer while a non-wake key still submits one direct turn", async () => {
+ const f = await fixture({}, "generic", "fixture-model", undefined, { keySettings: () => Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }) });
+ const v = voiceFixture(f.host, () => Effect.void);
+ try {
+   await f.bridge.assistantVisibility?.(true);
+   await v.voice.runPromise(v.send({ serial: "QK", keyCode: "1,1", agentId: "", message: "visible dictation" }));
+   await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+   expect((await f.bridge.selection?.())?.transcript).toBe("visible dictation");
+   await f.bridge.assistantVisibility?.(false);
+ } finally { await v.voice.dispose(); await f.close(); }
+});
+
+it("AI-117 MGMT-358 activates all six saved Copilot keys with Chinese prompts and controls after title-only edits", async () => {
+ const profile = inspectProfileImport(copilotKeys).profile;
+ if (!profile) throw new Error("profile missing");
+ const saved = profile.pages.flatMap(p => p.keys).filter(k => k.config.type === "aiChat").map(k => ({ ...k, config: { ...k.config, title: { ...k.config.title, text: `My ${k.keyCode}` } } }));
+ expect(saved).toHaveLength(6);
+ const f = await fixture({}, "qwen", "qwen3.6-plus", undefined, { keySettings: (_serial, code) => { const k = saved.find(k => k.keyCode === code); return Effect.succeed(k ? assistantSettingsFromActions(k.config.actions ?? []) : undefined); } });
+ const v = voiceFixture(f.host, () => Effect.void);
+ try {
+  for (const key of saved) {
+    const settings = assistantSettingsFromActions(key.config.actions ?? []);
+    const count = f.endpoint.calls.length;
+    await v.voice.runPromise(GridVoiceRuntime.pipe(Effect.flatMap(r => r.sendText({ serial: "QK", keyCode: key.keyCode, agentId: "main", message: "Role task" }))));
+    await vi.waitFor(() => expect(f.endpoint.calls.length).toBe(count + 2));
+    const body = f.endpoint.calls.at(-1)?.body;
+    expect(body?.messages[0]).toEqual({ role: "system", content: settings.rolePrompt });
+    expect(body).toMatchObject({ enable_search: settings.webSearch, enable_thinking: settings.thinking });
+    expect(settings.rolePrompt).toMatch(/[\u4e00-\u9fff]/);
+    expect(key.config.title.text).toBe(`My ${key.keyCode}`);
+  }
+ } finally { await v.voice.dispose(); await f.close(); }
+});
+
+it("AI-081 reviewed settings fail offline preflight before model acquisition", async () => {
+  const f = await fixture({}, "generic", "fixture-model", undefined, {
+    online: () => false,
+    keySettings: () => Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }),
+  });
+  try {
+    const result = await Effect.runPromise(assistantCapturePreparer(f.host)({ serial: "QK", keyCode: "1,1", type: "aiChat", captureId: "offline", generation: 1, agentId: Option.none() }).pipe(Effect.either));
+    expect(result._tag).toBe("Left");
+    expect(f.endpoint.calls).toHaveLength(0);
+  } finally { await f.close(); }
+});
+
+it("AI-088 rejected direct voice admission keeps editable dictation", async () => {
+  const f = await fixture({}, "generic", "fixture-model", undefined, { keySettings: () => Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }) });
+  const v = voiceFixture(f.host, () => Effect.void);
+  try {
+    f.changeModel("");
+    const rejected = await v.voice.runPromise(v.send({ serial: "QK", keyCode: "1,1", agentId: "", message: "Keep this transcript" }).pipe(Effect.either));
+    expect(rejected._tag).toBe("Left");
+    expect((await f.bridge.selection?.())?.transcript).toBe("Keep this transcript");
+    expect(f.endpoint.calls).toHaveLength(0);
+  } finally { await v.voice.dispose(); await f.close(); }
+});

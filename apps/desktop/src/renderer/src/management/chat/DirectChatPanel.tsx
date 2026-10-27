@@ -18,6 +18,7 @@ import { fill, relativeTime } from "./format";
 import { Icon } from "./icons";
 import type { DirectChatModel } from "./model-scope";
 import { Prose } from "./Prose";
+import { useAssistantSelection } from "./useAssistantSelection";
 import strings from "./strings.json";
 import "./workspace.css";
 
@@ -80,6 +81,7 @@ export function DirectChatPanel({
 		: t.directNotSet;
 	const busy = state.pending || state.clearing;
 	const [text, setText] = useState("");
+	useAssistantSelection(bridge, controller, hidden, setText);
 	const [title, setTitle] = useState("");
 	const [deleting, setDeleting] = useState(false);
 	const [listOpen, setListOpen] = useState(false);

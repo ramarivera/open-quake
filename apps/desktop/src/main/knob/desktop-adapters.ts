@@ -1,3 +1,6 @@
+import { committedKnob } from "../../../../../packages/device/src/knob/knob-profile";
+import type { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import { keyHaConfig } from "../integrations/profiles";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Effect, Option, Schema } from "effect";
@@ -38,6 +41,7 @@ import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
 
 /** Other lanes compose their qualified action/voice runtimes here. */
 export interface DesktopKnobBindings {
+	readonly homeAssistant?: (key: HaKey, signal: AbortSignal, isCurrent: () => boolean) => Promise<void>;
 	readonly media?: MediaActionAdapter | undefined;
 	readonly deviceId?: () => string;
 	readonly locale?: () => ProfileLocale;
@@ -266,6 +270,22 @@ export function desktopKnobAdapters(
 		profiles: () => catalog,
 	});
 	const ports: KnobModelPort = {
+    assignedPress: snapshot => Effect.gen(function* () {
+      const serial = deviceId();
+      const envelope = yield* read;
+      const selected = envelope.activeByDevice[serial];
+      const profile = envelope.profiles.find(p => p.id === (selected?.profileId ?? snapshot.session.profileId));
+      if (serial !== snapshot.session.deviceId || profile?.id !== snapshot.session.profileId || profile.revision !== snapshot.session.revision) return yield* KnobSessionStale.fromCause();
+      const knob = committedKnob(profile);
+      if (Option.isNone(knob) || !knob.value.config.display) return false;
+      const center = knob.value.config.subActions[0];
+      if (center.config.type !== "homeAssistant") return false;
+      const key = keyHaConfig(center);
+      if (!key || !bindings.homeAssistant) return yield* KnobCapabilityUnavailable.fromCause();
+      const isCurrent = () => deviceId() === serial && context.session === snapshot.session;
+      yield* Effect.tryPromise({ try: signal => bindings.homeAssistant ? bindings.homeAssistant(key, signal, isCurrent) : Promise.reject(KnobCapabilityUnavailable.fromCause()), catch: KnobDispatchFailed.fromCause });
+      return true;
+    }),
 		alert: () => withHardware((session) => session.playTone("error")),
 		selectProfile: Effect.fn("DesktopKnob.selectProfile")(
 			function* (profileId): Effect.fn.Return<KnobModelContext, KnobError> {

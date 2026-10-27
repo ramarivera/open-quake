@@ -33,6 +33,7 @@ import {
 import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import type { CaptureDriver } from "./capture";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { createProductionVoiceRuntime } from "./runtime";
 
 const request: CaptureRequest = {
@@ -57,6 +58,7 @@ const surfaceLayer = (
 	events: VoiceSurfaceEvent[],
 	onEvent: (event: VoiceSurfaceEvent) => Effect.Effect<void> = () =>
 		Effect.void,
+  tones?: string[],
 ) =>
 	VoiceSurface.Default.pipe(
 		Layer.provide(
@@ -67,7 +69,7 @@ const surfaceLayer = (
 							Effect.zipRight(onEvent(event)),
 						),
 				}),
-				Layer.succeed(VoiceTonePort, { play: () => Effect.void }),
+				Layer.succeed(VoiceTonePort, { play: (_serial, tone) => Effect.sync(() => { tones?.push(tone); }) }),
 			),
 		),
 	);
@@ -528,3 +530,57 @@ it.effect(
 			}),
 		),
 );
+
+it.effect.each(["", "a", "𠮷", "好。", "a.", "...", "okay"])("KNOB-046 short recognition %s ends once without chat or server failure", text => Effect.scoped(Effect.gen(function* () {
+ const events: VoiceSurfaceEvent[] = [], tones: string[] = [], sent: string[] = [];
+ yield* Effect.gen(function* () {
+  const speech = yield* AiSpeechService;
+  const terminal = yield* Deferred.make<void>();
+  const controller = yield* createProductionVoiceRuntime({ speech: { ...speech, recognize: () => Effect.succeed(text) }, profiles: () => Effect.succeed({ stt: sttProfile, speakAnswers: false }), capture: { permission: Effect.succeed(true), open: () => Effect.die("fake recognition doesn't acquire recorder") }, sendText: () => Effect.void, sendTranscript: r => Effect.sync(() => { sent.push(r.message); }), hostTone: (_serial, tone) => Effect.sync(() => { tones.push(tone); }), diagnostics: { layer: Layer.empty, instrument: effect => effect, recordCapture: () => Deferred.succeed(terminal, undefined).pipe(Effect.asVoid) } });
+  yield* controller.runtime.startCapture(request);
+  yield* Deferred.await(terminal);
+  expect(tones).toEqual(["start", "end"]);
+  expect(sent).toEqual(text === "okay" ? ["okay"] : []);
+  expect(events.filter(e => e._tag === "Stage" && e.stage._tag === "failed")).toHaveLength(0);
+  expect(events.some(e => e._tag === "Stage" && e.stage._tag === "idle" && e.stage.outcome === (text === "okay" ? "completed" : "empty"))).toBe(true);
+ }).pipe(Effect.provide(Layer.mergeAll(surfaceLayer(events), AiSpeechService.Default)));
+})));
+
+it.effect.each(["GatewayStopped", "GatewayStarting", "GatewayNotReady"] as const)("KNOB-041 %s refuses before microphone with one busy tone and localized toast", kind => Effect.scoped(Effect.gen(function* () {
+ const events: VoiceSurfaceEvent[] = [], tones: string[] = [];
+ yield* Effect.gen(function* () {
+  const speech = yield* AiSpeechService;
+  let acquired = 0;
+  const controller = yield* createProductionVoiceRuntime({ speech, profiles: () => Effect.succeed({ stt: sttProfile, speakAnswers: false }), pinAgentRoute: () => Effect.fail(new VoiceKnobRejected(kind)), capture: { permission: Effect.sync(() => { acquired++; return true; }), open: () => Effect.die("gateway gate must precede mic") }, sendText: () => Effect.void, sendTranscript: () => Effect.die("gateway gate must precede chat") });
+  yield* controller.runtime.startCapture({ ...request, type: "knob", keyCode: "0,1", knob: { profileId: "p", revision: 1, route: "dkclaw", providerId: "", modelId: "", agentId: "writer" } });
+  yield* tick;
+  expect(acquired).toBe(0);
+  expect(tones).toEqual(["busy"]);
+  expect(events.filter(e => e._tag === "Toast")).toEqual([{ _tag: "Toast", serial: request.serial, messageKey: kind === "GatewayStopped" ? "aiAudio.openClawGatewayNotRunning" : kind === "GatewayStarting" ? "aiAudio.openClawGatewayStarting" : "aiAudio.openClawNotReady" }]);
+ }).pipe(Effect.provide(Layer.mergeAll(surfaceLayer(events, () => Effect.void, tones), AiSpeechService.Default)));
+})));
+
+
+it.effect("AI-081/089 releases reviewed legacy preparation before permission and ignores late readiness", () => Effect.scoped(Effect.gen(function* () {
+  const events: VoiceSurfaceEvent[] = [];
+  yield* Effect.gen(function* () {
+    const entered = yield* Deferred.make<void>();
+    const ready = yield* Deferred.make<void>();
+    let permissions = 0;
+    const controller = yield* createProductionVoiceRuntime({
+      speech: yield* AiSpeechService,
+      profiles: () => Effect.succeed({ stt: sttProfile, speakAnswers: false }),
+      prepareAssistant: () => Deferred.succeed(entered, undefined).pipe(Effect.zipRight(Deferred.await(ready)), Effect.zipRight(Effect.never)),
+      capture: { permission: Effect.sync(() => { permissions++; return true; }), open: () => Effect.die("released preparation must not record") },
+      sendText: () => Effect.die("no text"), sendTranscript: () => Effect.die("no transcript"),
+    });
+    yield* controller.runtime.startCapture(request);
+    yield* Deferred.await(entered);
+    expect(events.some(e => e._tag === "Stage" && e.stage._tag === "recording" && e.stage.status === "preparing")).toBe(true);
+    yield* controller.runtime.releaseCapture(request.serial, request.keyCode, request.generation);
+    yield* Deferred.succeed(ready, undefined);
+    yield* tick;
+    expect(permissions).toBe(0);
+    expect(events.some(e => e._tag === "Stage" && e.stage._tag === "idle" && e.stage.outcome === "cancelled")).toBe(true);
+  }).pipe(Effect.provide(Layer.mergeAll(surfaceLayer(events), AiSpeechService.Default)));
+})));

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Effect, Either, Redacted } from "effect";
 import { expect, it } from "vitest";
 import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { initialAgentState } from "../../../../../packages/edge/src/agents/agents-invariants";
 import { AiAuthRequired } from "../../../../../packages/edge/src/ai/ai-errors";
@@ -185,6 +186,50 @@ it.each(["private-model", "gpt-4o", " ", "x".repeat(201)])(
 			expect(Either.isRight(pinned)).toBe(ready);
 			if (Either.isRight(pinned))
 				expect(pinned.right.profile.modelId).toBe(modelId);
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+it.each(["none", "fallback"] as const)(
+	"followed knob resolves each new default when the old row becomes %s",
+	async (role) => {
+		const directory = await mkdtemp(join(tmpdir(), "knob-follow-default-"));
+		const original: ModelRow = {
+			id: "old",
+			role: "default",
+			provider: "openai",
+			model: "gpt-4o",
+			baseUrl: "https://fake.invalid/v1",
+			maxTokens: 1024,
+			credentialRef: "00000000-0000-4000-8000-000000000001",
+		};
+		let rows: readonly ModelRow[] = [original];
+		const host = createDirectChat({
+			directory,
+			models: () => Effect.succeed(rows),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake")),
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const settings = { ...defaultAssistantSettings(), useAgent: false };
+			const first = await host.runtime.runPromise(
+				host.pinKnobModel("old", "gpt-4o", settings),
+			);
+			rows = [
+				{ ...original, role },
+				{ ...original, id: "new", role: "default", model: "gpt-4o-mini" },
+			];
+			const next = await host.runtime.runPromise(
+				host.pinKnobModel("old", "gpt-4o", settings),
+			);
+			expect(first.profile.modelId).toBe("gpt-4o");
+			expect(next.profile.modelId).toBe("gpt-4o-mini");
+			expect(next.profile.id).not.toBe(first.profile.id);
 		} finally {
 			await host.dispose();
 			await rm(directory, { recursive: true, force: true });

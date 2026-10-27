@@ -18,6 +18,8 @@ export const AssistantSettings = Schema.Struct({
 		Schema.filter((n) => ![65, 122, 124, 125].includes(n)),
 	),
 	customPrompt: Schema.String.pipe(Schema.maxLength(3000)),
+	/** Retained per-key preset text, including the six Chinese Copilot prompts. */
+	rolePrompt: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(3000)), { exact: true }),
 	temperature: Schema.Finite.pipe(Schema.between(0, 2)),
 	topP: Schema.Finite.pipe(Schema.between(0, 1)),
 	thinking: Schema.Boolean,
@@ -80,6 +82,7 @@ export function assistantSettingsFromActions(
 		webSearch: value("enableSearch") === true,
 		roleId,
 		customPrompt: roleId === -1 ? rolePrompt : "",
+		...(roleId !== -1 && rolePrompt ? { rolePrompt } : {}),
 	};
 	return Schema.is(AssistantSettings)(next) ? next : defaultAssistantSettings();
 }
