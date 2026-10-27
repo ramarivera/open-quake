@@ -2,7 +2,6 @@
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import strings from "../../../shared/audio-setup-strings.json";
-import { AppLocaleProvider } from "../i18n";
 import { MeetingSettings } from "./MeetingSettings";
 import { click, element, meetingDom } from "./meeting-test-fixture";
 
@@ -14,7 +13,7 @@ it.each(["en", "de"] as const)(
 	"AI-283 %s mounted setup localizes consent, cancellation, failure and retry without capture",
 	async (locale) => {
 		const text = strings[locale];
-		dom = meetingDom();
+		dom = meetingDom([], {}, locale);
 		const setup = vi.fn(
 			async (_request: { action: "status" | "install" }): Promise<unknown> => ({
 				platform: "darwin",
@@ -32,11 +31,7 @@ it.each(["en", "de"] as const)(
 				removeEventListener: vi.fn(),
 			},
 		});
-		await dom.render(
-			<AppLocaleProvider initialLocale={locale} bridge={null}>
-				<MeetingSettings mock={false} />
-			</AppLocaleProvider>,
-		);
+		await dom.render(<MeetingSettings mock={false} />);
 		const button = (text: string) => {
 			const found = [
 				...dom.host.querySelectorAll<HTMLButtonElement>("button"),
