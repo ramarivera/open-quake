@@ -272,3 +272,9 @@ Second/final continuation verification is scoped to these changes, not a rerun o
 - [x] Reviewed main integration preserves both appended editor regression suites, including meeting viewer spans and explicit title persistence, together with the later hardware startup and saved-profile navigation fixes. Bead `open-quake-i3j.5`.
 
 Integration verification, 2026-10-27: 73 mounted desktop editor tests and 47 device editor scenarios pass; desktop typecheck passes. The resolved source retains all later PR129/130 fixes and the previously tested PR131 implementation. Existing whole-candidate verification covers production build, bundle checks and the root suite. Hosted checks and review of the synchronized head remain pending; no native installation/restart or physical acceptance ran.
+
+## Apple release signing follow-up
+
+- [x] Connect the existing Developer ID identity to guarded release signing and notarization. Implementation and actual-artifact acceptance are owned by desktop-release-pipeline/tasks.md section 4, open-quake-i3j.4.
+
+The Developer ID certificate is installed on macmini. The existing private key and notarization API credentials were verified, and all five GitHub Actions secrets were provisioned through the authorized private route. Local candidate `d51bd19b` produced signed, notarized and stapled DMG/ZIP app copies accepted by Gatekeeper; a hosted signed tag build and public release have not run. Signing notices remain unchanged until artifact acceptance. Windows and Linux signing are unchanged.

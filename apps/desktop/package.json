@@ -11,7 +11,7 @@
 		"test:bundle": "node src/main/test/bundle-smoke.mjs",
 		"typecheck": "tsc --noEmit",
 		"package": "electron-builder --config electron-builder.config.cjs --publish never",
-		"test:release": "node --test scripts/release.test.mjs",
+		"test:release": "node --test scripts/release.test.mjs scripts/apple-signing.test.mjs",
 		"test:package": "node scripts/smoke-package.mjs"
 	},
 	"dependencies": {

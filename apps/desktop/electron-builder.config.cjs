@@ -1,4 +1,8 @@
 const { version } = require("./package.json");
+const {
+	appleSigningOptions,
+	appleSigningRequired,
+} = require("./build/apple-signing.cjs");
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -26,12 +30,11 @@ module.exports = {
 	// loads those bindings with the target Electron on every native runner.
 	npmRebuild: false,
 	publish: null,
+	forceCodeSigning: appleSigningRequired(),
 	mac: {
 		target: ["dmg", "zip"],
 		category: "public.app-category.utilities",
-		identity: "-",
-		hardenedRuntime: false,
-		notarize: false,
+		...appleSigningOptions(),
 		extendInfo: {
 			NSMicrophoneUsageDescription:
 				"Record voice commands and meeting audio when you start capture.",

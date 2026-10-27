@@ -4,7 +4,9 @@ import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import appleSigning from "../build/apple-signing.cjs";
 import { downloadName, electronEnvironment } from "./release.mjs";
+import { verifyAppleApp } from "./verify-apple-signing.mjs";
 
 const command = promisify(execFile);
 const directory = resolve(process.argv[2] || "dist");
@@ -71,12 +73,16 @@ try {
 			{ timeout: 60_000 },
 		);
 		try {
+			if (appleSigning.appleSigningRequired())
+				await verifyAppleApp(join(mount, "open-quake.app"));
 			await smoke(join(mount, "open-quake.app/Contents/MacOS/open-quake"));
 		} finally {
 			await command("hdiutil", ["detach", mount], { timeout: 30_000 });
 		}
 		const extracted = join(scratch, "zip");
 		await command("ditto", ["-x", "-k", download("zip"), extracted]);
+		if (appleSigning.appleSigningRequired())
+			await verifyAppleApp(join(extracted, "open-quake.app"));
 		await smoke(join(extracted, "open-quake.app/Contents/MacOS/open-quake"));
 	} else if (process.platform === "win32") {
 		const installed = join(scratch, "installed");
