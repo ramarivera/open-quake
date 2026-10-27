@@ -17,6 +17,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { APP_LANGUAGES } from "../../../shared/locale";
 import type {
+	ProfileForegroundGuidance,
 	ProfileRequest,
 	ProfileView,
 } from "../../../shared/profile-manager";
@@ -131,6 +132,8 @@ export function ProfilesManager(): React.JSX.Element {
 
 	const text = (key: string): string => profileText(key, locale);
 	const [status, setStatus] = useState("");
+	const [foregroundGuidance, setForegroundGuidance] =
+		useState<ProfileForegroundGuidance>("available");
 	const [refreshing, setRefreshing] = useState<readonly string[]>([]);
 	const [failedThumbnails, setFailedThumbnails] = useState<readonly string[]>(
 		[],
@@ -151,6 +154,7 @@ export function ProfilesManager(): React.JSX.Element {
 			setView,
 			(p) => setView((v) => (v ? { ...v, progress: p } : v)),
 			setStatus,
+			setForegroundGuidance,
 		);
 	}, [locale]);
 	const request = async (command: ProfileRequest): Promise<boolean> => {
@@ -558,6 +562,9 @@ export function ProfilesManager(): React.JSX.Element {
 							</button>
 						))}
 				</fieldset>
+			)}
+			{foregroundGuidance === "accessibility-denied" && (
+				<p role="alert">{localeText("foregroundAccessibility")}</p>
 			)}
 			{status && <p role="status">{status}</p>}
 		</section>

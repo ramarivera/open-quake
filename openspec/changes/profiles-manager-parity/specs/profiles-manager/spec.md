@@ -166,6 +166,10 @@ Quick's website and Help SHALL point to the open-quake repository and issues in 
 - **WHEN** platform catalogs and legacy resource fixtures are imported under supported locales
 - **THEN** project/help URLs and OpenAI availability remain region-neutral, legacy layouts remain selectable after import, and resource kinds and references survive round trips
 
+#### Scenario: Export current profile payloads once
+- **WHEN** a legacy-imported profile is exported and its legacy projection is imported again
+- **THEN** only the current profile payload becomes a DeviceConfig row, its retained metadata stays intact, and archived originals do not add duplicate pages
+
 ### Requirement: Foreground permission and logical device rules
 The monitor SHALL check macOS Accessibility without prompting, provide guidance when denied, resume probing when granted, and reload links after committed manager edits even if the foreground identity is unchanged. Native serials and ws_ aliases SHALL identify one logical device; All Device rules SHALL address each connected logical device once. Failure reports SHALL be bounded to one warning per error code in thirty seconds without stopping polls or recovery. Sources: MAIN-084, MAIN-085, SETTINGS-109.
 
@@ -176,6 +180,14 @@ The monitor SHALL check macOS Accessibility without prompting, provide guidance 
 #### Scenario: Aliases and sustained failures
 - **WHEN** native/ws_ rules target connected twins, and repeated probes fail for thirty seconds before recovering
 - **THEN** each logical device gets one selection, logs remain bounded per code, and polling resumes successful delivery
+
+#### Scenario: Ignored alias disconnect
+- **WHEN** an ignored ws_ alias disconnects while the original connection stays live
+- **THEN** foreground switching continues to target the original connection until its owning serial disconnects
+
+#### Scenario: Accessibility denial reaches the manager
+- **WHEN** macOS Accessibility is denied before or after the manager mounts
+- **THEN** the typed bridge delivers localized recovery guidance without prompting, manager reads replay the current permission, and recovery clears the guidance
 
 ### Requirement: Bounded owned thumbnail pipeline
 The six vendor thumbnail operations/events SHALL map to typed read, thumbnail, thumbnails, cancel-thumbnails, progress and snapshot messages. Read SHALL prefetch a map, progress and updates SHALL fan out to all live windows, and picker consumers SHALL decode before publication and discard cancelled or stale work. Captures SHALL produce owned 960 by 240 PNGs rather than vendor WebP q85 paths; opaque content/locale/border hashes replace generator-version filenames and numeric-only resource IDs. The thirty-visible-profile limit replaces the vendor sixty-four capture guard; existing retention SHALL keep current saved-profile hashes and prune obsolete owned files. Invalid or missing IDs, busy/unsupported capture, deadlines and IO errors SHALL fail closed through typed profile errors. Capture SHALL wait for fonts, decoded images and video frames, then compare up to six frames for two consecutive equal frames. Platform capture SHALL use a hidden window on macOS/Windows and offscreen rendering on Linux, avoiding foreground activation. Load, execution and capture SHALL be bounded to thirty, five and eight seconds. Optional startup sweep SHALL run after eight seconds, disabled on Linux unless explicitly enabled. Sources: SCREEN-096, SCREEN-097, SCREEN-098.
@@ -208,9 +220,22 @@ Wizard profile choices SHALL start from persisted built-in visibility, default t
 - **THEN** its initial choices follow current manager visibility, including hidden defaults available for re-enabling
 - **AND** Continue holds its busy state through the visibility commit and draft save; a failed draft save stays on Profiles with the committed visibility intact and an idempotent retry, without claiming cross-store atomicity
 
+#### Scenario: Visibility retry preserves page and explains partial persistence
+- **WHEN** wizard visibility commits but the progress save fails, then Continue retries
+- **THEN** feedback says visibility was saved, the retry only saves progress for unchanged choices, and valid connected-device pages and folders remain selected
+
 ### Requirement: Profile switch key
 Switch Profile SHALL expose Next Profile with sentinel -1, explicit profile and page selection. Next SHALL wrap across visible profiles; invalid or hidden destinations SHALL not change selection. Source: MGMT-297.
 
 #### Scenario: Next and explicit destinations
 - **WHEN** a saved switch key selects Next at the final visible profile or names a missing profile/page
 - **THEN** Next wraps to the first visible profile and invalid references fail without selection changes
+
+#### Scenario: Imported Switch Profile destinations
+- **WHEN** a native backup imports profiles with forward and self Switch Profile targets, or a single profile imports a self target
+- **THEN** saved targets use the allocated destination IDs, including knob actions; Next retains sentinel -1 and unknown external IDs stay unchanged
+- **AND** repeating an unchanged native import reuses its existing profiles while edited imported content remains intact
+
+#### Scenario: Empty visible profile traversal
+- **WHEN** Next Profile encounters a visible profile with no saved keys followed by a hidden profile
+- **THEN** it selects the visible empty profile and skips the hidden profile

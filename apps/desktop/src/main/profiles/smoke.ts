@@ -8,6 +8,7 @@ import { Effect, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
 import { KnobReply } from "../../shared/knob-contracts";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
 	ProfileReplySchema,
 	type ProfileRequest,
 } from "../../shared/profile-manager";
@@ -418,6 +419,33 @@ async function smoke(): Promise<void> {
 				await writeFile(
 					join(scratch, `profile-settings-${locale}-${width}.png`),
 					(await management.webContents.capturePage()).toPNG(),
+				);
+				management.webContents.send(
+					PROFILE_FOREGROUND_GUIDANCE,
+					"accessibility-denied",
+				);
+				await ready(management, ".profiles-manager [role=alert]");
+				const guidance =
+					await management.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+					const alert = document.querySelector('.profiles-manager [role=alert]');
+					alert.scrollIntoView({behavior:'instant',block:'center'});
+					resolve({text:alert.textContent,overflow:document.documentElement.scrollWidth > innerWidth});
+				})))`);
+				assert(
+					guidance.text.includes(
+						locale === "de" ? "Bedienungshilfen" : "Accessibility",
+					),
+				);
+				assert(!guidance.overflow);
+				await writeFile(
+					join(scratch, `foreground-guidance-${locale}-${width}.png`),
+					(await management.webContents.capturePage()).toPNG(),
+				);
+				management.webContents.send(PROFILE_FOREGROUND_GUIDANCE, "available");
+				assert(
+					await management.webContents.executeJavaScript(
+						`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(!document.querySelector('.profiles-manager [role=alert]')))))`,
+					),
 				);
 			}
 		}

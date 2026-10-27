@@ -348,7 +348,24 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						(a) => a.type === "page",
 					)?.value;
 					if (destination === "-1") {
-						yield* navigate(deviceId, 3);
+						const visible = env.profiles.filter(
+							(p) =>
+								!(Option.getOrUndefined(env.manager)?.hidden ?? []).includes(
+									p.id,
+								),
+						);
+						const next =
+							visible[
+								pageIndex(
+									visible.findIndex((p) => p.id === profile.id),
+									visible.length,
+									1,
+								)
+							];
+						if (next) {
+							yield* port.select(deviceId, next.id, next.pages[0].id);
+							yield* refresh(deviceId);
+						}
 						return;
 					}
 					const target = env.profiles.find(

@@ -9,7 +9,10 @@ import {
 	Profile,
 	ProfileKey,
 } from "./profile-contracts.js";
-import { inspectProfileImport } from "./profile-import.js";
+import {
+	inspectProfileImport,
+	remapImportedProfile,
+} from "./profile-import.js";
 import {
 	applyManagerCommand,
 	installProfileCatalog,
@@ -223,4 +226,49 @@ it("SETTINGS-059 atomically applies all default choices, preserves custom visibi
 	).toEqual(["1-2", "1-8", "local-profile"]);
 	expect(result.envelope.activeByDevice.serial?.profileId).toBe("1-2");
 	expect(result.envelope.profiles).toHaveLength(envelope.profiles.length);
+});
+
+it("MGMT-297 single-profile import remaps self targets and knob but preserves Next and external IDs", () => {
+	const key = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const switchKey = (value: string) => ({
+		...key,
+		childrenName: "switchProfile",
+		config: {
+			...key.config,
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value },
+				{ type: "page", value: 1 },
+			],
+		},
+	});
+	const profile = {
+		id: "original",
+		name: "Custom",
+		revision: 0,
+		pages: [
+			{
+				id: "one",
+				keys: [
+					switchKey("original"),
+					{ ...switchKey("-1"), keyCode: "1,2" },
+					{ ...switchKey("external"), keyCode: "1,3" },
+				],
+			},
+		],
+		knob: { ...switchKey("original"), keyCode: "0,1" },
+	};
+	const imported = remapImportedProfile(
+		Schema.encodeSync(Profile)(Schema.decodeUnknownSync(Profile)(profile)),
+		"new-id",
+	);
+	expect(
+		imported.pages[0]?.keys.map((k) => k.config.actions?.[0]?.value),
+	).toEqual(["new-id", "-1", "external"]);
+	expect(imported.knob?.config).toMatchObject({
+		actions: [
+			{ type: "profile", value: "new-id" },
+			{ type: "page", value: 1 },
+		],
+	});
 });

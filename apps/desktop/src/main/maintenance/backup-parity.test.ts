@@ -20,6 +20,7 @@ import {
 import { appLibraryStore } from "../key-library/app-library-store";
 import { encodeAccountConfig } from "./account-config";
 import { readBackup, writeBackup } from "./backup-archive";
+import { backupProjection, mergeBackup } from "./backup-merge";
 import { exportBackup, prepareRestore } from "./backup-store";
 
 const bytes = (value: unknown) => Buffer.from(JSON.stringify(value));
@@ -131,6 +132,12 @@ it("MGMT-400/429 restores every resource taxonomy, references and OBS library id
 			"DK-Suite_default_test.zip",
 			"default",
 		);
+		for (const [path, data] of files) {
+			if (/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(path)) {
+				expect(Buffer.from(data).toString()).not.toContain(source);
+				expect(Buffer.from(data).toString()).toContain(target);
+			}
+		}
 		const catalog = JSON.parse(
 			Buffer.from(files.get("app/assets/resources.conf") ?? []).toString(),
 		);
@@ -161,6 +168,15 @@ it("MGMT-400/429 restores every resource taxonomy, references and OBS library id
 				name: `Named ${kind}`,
 				customField: { retained: true },
 			});
+		expect(rows.filter((r) => r.resourceType === "DeviceConfig")).toHaveLength(
+			2,
+		);
+		const projected = new Map(
+			[...files].filter(([path]) => !path.startsWith("open-quake/")),
+		);
+		expect(() =>
+			mergeBackup(projected, initial, join(root, "legacy-again")),
+		).not.toThrow();
 		const restoredLibrary = Schema.decodeUnknownSync(AppLibrarySnapshot)(
 			JSON.parse(await readFile(join(target, "app-library-v1.json"), "utf8")),
 		);
@@ -292,3 +308,102 @@ it.each(["native", "legacy"])(
 		}
 	},
 );
+
+it("MGMT-297 native imports remap forward, backward and knob destinations and repeated imports reuse them", () => {
+	const switchKey = (value: string) => ({
+		...key,
+		childrenName: "switchProfile",
+		config: {
+			...key.config,
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value },
+				{ type: "page", value: 1 },
+			],
+		},
+	});
+	const profile = (id: string, target: string) => ({
+		id,
+		name: id,
+		revision: 0,
+		pages: [
+			{
+				id: "one",
+				keys: [switchKey(target), { ...switchKey("-1"), keyCode: "1,2" }],
+			},
+		],
+		knob: { ...switchKey(id), keyCode: "0,1" },
+	});
+	const files = new Map<string, Uint8Array>([
+		[
+			"export_index.json",
+			bytes({ originalBasePath: base, originalPlatform: "linux" }),
+		],
+		[
+			"open-quake/profiles-v1.json",
+			bytes({ ...initial, profiles: [profile("a", "b"), profile("b", "a")] }),
+		],
+	]);
+	const merged = mergeBackup(files, initial, "/owned");
+	const a = merged.envelope.profiles.find((p) => p.name === "a");
+	const b = merged.envelope.profiles.find((p) => p.name === "b");
+	if (!a || !b) throw new Error("missing restored profiles");
+	expect(a.pages[0]?.keys[0]?.config.actions?.[0]?.value).toBe(b.id);
+	expect(b.pages[0]?.keys[0]?.config.actions?.[0]?.value).toBe(a.id);
+	expect(a.pages[0]?.keys[1]?.config.actions?.[0]?.value).toBe("-1");
+	expect(a.knob?.config).toMatchObject({
+		actions: [
+			{ type: "profile", value: a.id },
+			{ type: "page", value: 1 },
+		],
+	});
+	const repeat = mergeBackup(files, merged.envelope, "/owned");
+	expect(repeat.imported).toBe(0);
+	expect(repeat.envelope.profiles).toEqual(merged.envelope.profiles);
+	const edited = {
+		...merged.envelope,
+		profiles: merged.envelope.profiles.map((p) =>
+			p.id !== a.id
+				? p
+				: { ...p, pages: p.pages.map((page) => ({ ...page, keys: [] })) },
+		),
+	};
+	expect(mergeBackup(files, edited, "/owned").imported).toBe(1);
+});
+
+it("MGMT-297 legacy projection imports remap profile targets and repeated imports remain idempotent", () => {
+	const switchKey = (value: string) => ({
+		...key,
+		childrenName: "switchProfile",
+		config: {
+			...key.config,
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value },
+				{ type: "page", value: 1 },
+			],
+		},
+	});
+	const profile = (id: string, target: string) => ({
+		id,
+		name: id,
+		revision: 0,
+		pages: [{ id: "one", keys: [switchKey(target)] }],
+	});
+	const files = backupProjection(
+		{ ...initial, profiles: [profile("a", "b"), profile("b", "a")] },
+		base,
+		"linux",
+	);
+	const merged = mergeBackup(files, initial, "/owned");
+	const a = merged.envelope.profiles.find(
+		(p) => p.id === merged.profileIds?.get("a"),
+	);
+	const b = merged.envelope.profiles.find(
+		(p) => p.id === merged.profileIds?.get("b"),
+	);
+	if (!a || !b) throw new Error("missing restored profiles");
+	expect(a.pages[0]?.keys[0]?.config.actions?.[0]?.value).toBe(b.id);
+	expect(b.pages[0]?.keys[0]?.config.actions?.[0]?.value).toBe(a.id);
+	expect(mergeBackup(files, merged.envelope, "/owned").imported).toBe(0);
+});

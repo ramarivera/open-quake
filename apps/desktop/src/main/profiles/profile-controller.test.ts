@@ -525,3 +525,46 @@ it.effect(
 		);
 	},
 );
+
+it.effect(
+	"SETTINGS-059 repeated visibility saves preserve connected second pages and folders",
+	() =>
+		Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const repository = yield* ProfileRepository;
+			yield* switching.connect("mock", "1-1");
+			for (const pageId of ["second", "folder"]) {
+				yield* repository.transact((current) =>
+					Effect.succeed({
+						...current,
+						profiles: EffectArray.map(current.profiles, (p) =>
+							p.id !== "1-1"
+								? p
+								: {
+										...p,
+										pages: EffectArray.append(
+											p.pages.filter((page) => page.id !== pageId),
+											{ ...p.pages[0], id: pageId },
+										),
+									},
+						),
+						activeByDevice: {
+							...current.activeByDevice,
+							mock: { profileId: "1-1", pageId },
+						},
+					}),
+				);
+				for (let attempt = 0; attempt < 2; attempt++) {
+					const reply = yield* controller.request({
+						type: "manage",
+						command: { type: "default-visibility", ids: ["1-1"] },
+					});
+					expect(reply._tag).toBe("success");
+					expect(
+						(yield* repository.load()).envelope.activeByDevice.mock,
+					).toEqual({ profileId: "1-1", pageId });
+				}
+			}
+		}).pipe(Effect.provide(layer())),
+);

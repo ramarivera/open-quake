@@ -199,6 +199,8 @@ function SetupFlow({
 	const [profileFailure, setProfileFailure] = useState(false);
 	const [profilePending, setProfilePending] = useState(false);
 	const advancing = useRef(false);
+	const committedVisibility = useRef<readonly string[] | undefined>(undefined);
+	const [visibilitySaved, setVisibilitySaved] = useState(false);
 	const [choices, setChoices] = useState<SetupChoices>(() =>
 		initialChoices(
 			snapshot,
@@ -262,8 +264,12 @@ function SetupFlow({
 		advancing.current = true;
 		setProfilePending(true);
 		try {
-			if (step === "profiles") {
-				setProfileFailure(false);
+			if (step === "profiles") setProfileFailure(false);
+			if (
+				step === "profiles" &&
+				JSON.stringify(committedVisibility.current) !==
+					JSON.stringify(current.profileIds)
+			) {
 				try {
 					const reply = await window.quakeProfileManager?.request({
 						type: "manage",
@@ -276,6 +282,8 @@ function SetupFlow({
 						setProfileFailure(true);
 						return;
 					}
+					committedVisibility.current = [...current.profileIds];
+					setVisibilitySaved(true);
 				} catch {
 					setProfileFailure(true);
 					return;
@@ -330,7 +338,11 @@ function SetupFlow({
 					)}
 					{state.failure ? (
 						<p role="alert" className="setup-error">
-							{failureText(t, state.failure)}
+							{step === "profiles" &&
+							visibilitySaved &&
+							state.failure.code === "QUAKE.SETTINGS.PERSIST_FAILED"
+								? t("setup.failure.profileProgress")
+								: failureText(t, state.failure)}
 						</p>
 					) : null}
 					<div className="setup-actions">
@@ -455,7 +467,11 @@ function SetupFlow({
 					)}
 					{state.failure ? (
 						<p role="alert" className="setup-error">
-							{failureText(t, state.failure)}
+							{step === "profiles" &&
+							visibilitySaved &&
+							state.failure.code === "QUAKE.SETTINGS.PERSIST_FAILED"
+								? t("setup.failure.profileProgress")
+								: failureText(t, state.failure)}
 							{step === "review" ? ` ${t("setup.failure.notComplete")}` : ""}
 						</p>
 					) : null}

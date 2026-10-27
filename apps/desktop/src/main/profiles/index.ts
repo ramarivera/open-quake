@@ -50,6 +50,7 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-switching-service.js";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
 	PROFILE_PROGRESS,
 	PROFILE_REQUEST,
 	PROFILE_SELECTION,
@@ -182,16 +183,17 @@ export function prepareProfiles(
 						process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
 							? () => Effect.succeed(Option.none())
 							: yield* makeScopedForegroundProbe(platform, undefined, {
-									trusted: () =>
-										platform !== "darwin" ||
-										systemPreferences.isTrustedAccessibilityClient(false),
-									denied: () => {
-										broadcast("profiles:foreground-guidance", {
-											code: "accessibility-denied",
-											message:
-												"Enable Accessibility for open-quake in System Settings > Privacy & Security > Accessibility",
-										});
+									trusted: () => {
+										const trusted =
+											platform !== "darwin" ||
+											systemPreferences.isTrustedAccessibilityClient(false);
+										broadcast(
+											PROFILE_FOREGROUND_GUIDANCE,
+											trusted ? "available" : "accessibility-denied",
+										);
+										return trusted;
 									},
+									denied: () => {},
 								});
 					return {
 						platform,
@@ -532,6 +534,18 @@ export function prepareProfiles(
 						)
 					)
 						return { _tag: "rejected", reason: "unauthorized" };
+					// Replay current permission on mount, even if the one-shot denial
+					// occurred before this renderer subscribed. This never prompts.
+					if (decoded.right.type === "read" && !decoded.right.preview) {
+						const denied =
+							process.env.OPEN_QUAKE_MOCK_DEVICE !== "1" &&
+							platform === "darwin" &&
+							!systemPreferences.isTrustedAccessibilityClient(false);
+						event.sender.send(
+							PROFILE_FOREGROUND_GUIDANCE,
+							denied ? "accessibility-denied" : "available",
+						);
+					}
 					const operation = runtime.runPromise(
 						controller.pipe(
 							Effect.flatMap((service) => service.request(decoded.right)),

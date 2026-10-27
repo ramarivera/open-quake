@@ -91,3 +91,44 @@ it("bundles the approved chat, runtime and agent namespaces offline", () => {
 		vi.unstubAllGlobals();
 	}
 });
+
+function ProfileProgressProbe() {
+	const t = useAppTranslations("settings");
+	return createElement("p", null, t("setup.failure.profileProgress"));
+}
+it("bundles specific profile-progress failure feedback in all eight locales", () => {
+	const messages = [
+		"Profile visibility was saved",
+		"Profilsichtbarkeit wurde gespeichert",
+		"配置可见性已保存",
+		"visibilidad de los perfiles",
+		"visibilité des profils",
+		"프로필 표시 설정",
+		"visibilità dei profili",
+		"プロファイルの表示設定",
+	];
+	for (const [index, locale] of [
+		"en",
+		"de",
+		"zh",
+		"es",
+		"fr",
+		"ko",
+		"it",
+		"ja",
+	].entries()) {
+		const rendered = renderToStaticMarkup(
+			createElement(
+				GTProvider,
+				{
+					locale,
+					translations: {},
+					dictionaries: appDictionaries,
+					_reload: () => {},
+				},
+				createElement(ProfileProgressProbe),
+			),
+		);
+		expect(rendered).toContain(messages[index]);
+	}
+});

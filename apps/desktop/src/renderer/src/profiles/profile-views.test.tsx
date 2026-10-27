@@ -34,6 +34,7 @@ import type { IntegrationsBridge } from "../../../shared/integrations";
 import type { KeyReply, KeyRequest } from "../../../shared/key-library";
 import type { AppLocaleBridge, LocaleSnapshot } from "../../../shared/locale";
 import type {
+	ProfileForegroundGuidance,
 	ProfileReply,
 	ProfileView,
 } from "../../../shared/profile-manager";
@@ -140,12 +141,19 @@ async function fixture(
 				: { _tag: "rejected", reason: result.left.code };
 		},
 	);
+	let guidance: ((value: ProfileForegroundGuidance) => void) | undefined;
 	window.quakeProfileManager = {
 		request,
 		onSnapshot: (cb) => {
 			snapshot = cb;
 			return () => {
 				snapshot = undefined;
+			};
+		},
+		onForegroundGuidance: (callback) => {
+			guidance = callback;
+			return () => {
+				guidance = undefined;
 			};
 		},
 		onProgress: () => () => {},
@@ -255,6 +263,9 @@ async function fixture(
 		request,
 		capture,
 		saved: () => saved,
+		guidance: async (value: ProfileForegroundGuidance) => {
+			await act(async () => guidance?.(value));
+		},
 		failWrite: (value: boolean) => {
 			failWrite = value;
 		},
@@ -640,3 +651,19 @@ it("MGMT-314 closes the manager through its keyboard-accessible return control a
 	);
 	expect(document.activeElement?.classList.contains("content")).toBe(true);
 });
+
+for (const locale of ["en", "de"] as const) {
+	it(`MAIN-084 displays permission guidance in ${locale} and clears it after recovery`, async () => {
+		const f = await fixture("darwin");
+		if (locale === "de")
+			await input(query(f.host, "header select", HTMLSelectElement), locale);
+		await f.guidance("accessibility-denied");
+		expect(f.host.querySelector("[role=alert]")?.textContent).toContain(
+			locale === "de" ? "Bedienungshilfen" : "Accessibility",
+		);
+		await f.publish();
+		expect(f.host.querySelector("[role=alert]")).not.toBeNull();
+		await f.guidance("available");
+		expect(f.host.querySelector("[role=alert]")).toBeNull();
+	});
+}

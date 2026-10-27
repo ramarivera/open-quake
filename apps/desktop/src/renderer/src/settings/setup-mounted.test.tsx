@@ -417,9 +417,19 @@ it("SETTINGS-059 seeds current visibility, re-enables hidden defaults, locks the
 	).toHaveLength(3);
 	await act(async () => release?.());
 	expect(element(".setup").getAttribute("data-step")).toBe("profiles");
-	expect(document.querySelector("[role=alert]")).not.toBeNull();
+	expect(document.querySelector("[role=alert]")?.textContent).toContain(
+		"Profile visibility was saved",
+	);
+	expect(document.querySelector("[role=alert]")?.textContent).not.toContain(
+		"Nothing changed",
+	);
+	const committed = encodeProfileEnvelope(envelope);
 	fail = false;
 	await click(button("Continue"));
 	expect(element(".setup").getAttribute("data-step")).toBe("review");
 	expect(saved.profileIds).toHaveLength(2);
+	expect(encodeProfileEnvelope(envelope)).toEqual(committed);
+	expect(
+		request.mock.calls.filter(([command]) => command.type === "manage"),
+	).toHaveLength(1);
 });

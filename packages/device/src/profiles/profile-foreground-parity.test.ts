@@ -66,6 +66,7 @@ it.effect(
 				manager = yield* ProfileManager;
 			yield* switching.connect("serial");
 			yield* switching.connect("ws_serial");
+			yield* switching.disconnect("ws_serial");
 			expect(yield* switching.connectedSerials()).toEqual(["serial"]);
 			yield* manager.command({
 				type: "link",

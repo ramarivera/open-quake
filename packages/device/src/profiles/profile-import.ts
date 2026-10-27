@@ -1,4 +1,4 @@
-import { Either, ParseResult, Schema } from "effect";
+import { Array as EffectArray, Either, ParseResult, Schema } from "effect";
 import { legacyDiagnosticCode } from "../../../edge/src/ai/legacy-diagnostics.js";
 import {
 	legacyAssistantState,
@@ -45,6 +45,46 @@ const isPageReference = (type: string, value: unknown): boolean =>
 	["folder", "emojiFolderId", "parentFolder"].includes(type) ||
 	(type === "page" && typeof value === "string");
 
+/** Rewrite only executable Switch Profile targets, including the profile-level knob. */
+export function remapProfileDestinations(
+	profile: typeof Profile.Encoded,
+	ids: ReadonlyMap<string, string>,
+): typeof Profile.Encoded {
+	const key = <
+		T extends { readonly config: Readonly<Record<string, unknown>> },
+	>(
+		value: T,
+	): T => {
+		if (
+			value.config.type !== "switchProfile" ||
+			!Array.isArray(value.config.actions)
+		)
+			return value;
+		return {
+			...value,
+			config: {
+				...value.config,
+				actions: value.config.actions.map((action) => {
+					const fields = record(action);
+					return fields?.type === "profile" &&
+						typeof fields.value === "string" &&
+						fields.value !== "-1"
+						? { ...fields, value: ids.get(fields.value) ?? fields.value }
+						: action;
+				}),
+			},
+		};
+	};
+	return {
+		...profile,
+		pages: EffectArray.map(profile.pages, (page) => ({
+			...page,
+			keys: page.keys.map(key),
+		})),
+		...(profile.knob ? { knob: key(profile.knob) } : {}),
+	};
+}
+
 /** Allocate every destination before rewriting links, including forward references. */
 export function remapImportedProfile(
 	profile: typeof Profile.Encoded,
@@ -53,27 +93,30 @@ export function remapImportedProfile(
 	const ids = new Map(
 		profile.pages.map((page, i) => [page.id, `${id}-page-${i + 1}`]),
 	);
-	return {
-		...profile,
-		id,
-		revision: 0,
-		pages: profile.pages.map((page, i) => ({
-			...page,
-			id: `${id}-page-${i + 1}`,
-			keys: page.keys.map((key) => ({
-				...key,
-				config: {
-					...key.config,
-					actions: (key.config.actions ?? []).map((action) =>
-						isPageReference(action.type, action.value) &&
-						typeof action.value === "string"
-							? { ...action, value: ids.get(action.value) ?? "" }
-							: action,
-					),
-				},
+	return remapProfileDestinations(
+		{
+			...profile,
+			id,
+			revision: 0,
+			pages: EffectArray.map(profile.pages, (page, i) => ({
+				...page,
+				id: `${id}-page-${i + 1}`,
+				keys: page.keys.map((key) => ({
+					...key,
+					config: {
+						...key.config,
+						actions: (key.config.actions ?? []).map((action) =>
+							isPageReference(action.type, action.value) &&
+							typeof action.value === "string"
+								? { ...action, value: ids.get(action.value) ?? "" }
+								: action,
+						),
+					},
+				})),
 			})),
-		})),
-	};
+		},
+		new Map([[profile.id, id]]),
+	);
 }
 
 /** No evaluation, host IO or action execution. Original JSON stays inert. */

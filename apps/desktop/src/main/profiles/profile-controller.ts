@@ -277,7 +277,13 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 											...selections,
 											[serial]: {
 												profileId: profile.id,
-												pageId: profile.pages[0].id,
+												pageId:
+													target &&
+													profile.pages.some(
+														(page) => page.id === target?.pageId,
+													)
+														? target.pageId
+														: profile.pages[0].id,
 											},
 										};
 									}

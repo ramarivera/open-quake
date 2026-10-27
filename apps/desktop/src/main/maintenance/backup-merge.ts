@@ -11,6 +11,7 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { remapProfileDestinations } from "../../../../../packages/device/src/profiles/profile-import.js";
 import {
 	managerState,
 	PROFILE_LIMIT,
@@ -194,6 +195,13 @@ export function mergeBackup(
 			const duplicate = profiles.find((p) => {
 				const existing = Schema.encodeSync(Profile)(p);
 				return (
+					(existing.compatibility?.nativeImportFingerprint === fingerprint &&
+						existing.compatibility?.nativeImportContentFingerprint ===
+							hashBytes(
+								Buffer.from(
+									stable({ pages: existing.pages, knob: existing.knob }),
+								),
+							)) ||
 					hashBytes(
 						Buffer.from(stable({ pages: existing.pages, knob: existing.knob })),
 					) === fingerprint
@@ -209,10 +217,37 @@ export function mergeBackup(
 			let suffix = 1;
 			while (profiles.some((p) => p.id === id)) id = `${base}-${suffix++}`;
 			profiles.push(
-				Schema.decodeUnknownSync(Profile)({ ...encoded, id, revision: 0 }),
+				Schema.decodeUnknownSync(Profile)({
+					...encoded,
+					id,
+					revision: 0,
+					compatibility: {
+						...encoded.compatibility,
+						nativeImportFingerprint: fingerprint,
+					},
+				}),
 			);
 			profileIds.set(profile.id, id);
 			added++;
+		}
+		// Allocate all IDs before rewriting cross-profile and forward references.
+		for (const [i, profile] of profiles.entries()) {
+			if (i < envelope.profiles.length) continue;
+			const rewritten = remapProfileDestinations(
+				Schema.encodeSync(Profile)(profile),
+				profileIds,
+			);
+			profiles[i] = Schema.decodeUnknownSync(Profile)({
+				...rewritten,
+				compatibility: {
+					...rewritten.compatibility,
+					nativeImportContentFingerprint: hashBytes(
+						Buffer.from(
+							stable({ pages: rewritten.pages, knob: rewritten.knob }),
+						),
+					),
+				},
+			});
 		}
 		assertCapacity(envelope, profiles);
 		return {
@@ -372,9 +407,19 @@ export function mergeBackup(
 				}),
 			),
 		);
-	const seenProfiles = new Set(
-		profiles.map((profile) => fingerprint(Schema.encodeSync(Profile)(profile))),
-	);
+	const seenProfiles = new Map<string, string>();
+	for (const profile of profiles) {
+		const encoded = Schema.encodeSync(Profile)(profile);
+		const content = fingerprint(encoded);
+		seenProfiles.set(content, profile.id);
+		if (
+			encoded.compatibility?.importedContentFingerprint === content &&
+			typeof encoded.compatibility.sourceFingerprint === "string"
+		) {
+			seenProfiles.set(encoded.compatibility.sourceFingerprint, profile.id);
+		}
+	}
+	const profileIds = new Map<string, string>();
 	const pending = new Map<
 		string,
 		{
@@ -477,7 +522,16 @@ export function mergeBackup(
 		const content = fingerprint(
 			Schema.encodeSync(Profile)(Schema.decodeUnknownSync(Profile)(draft)),
 		);
-		if (item.unchangedBuiltin || seenProfiles.has(content)) {
+		const sourceIds = item.pages.flatMap((page) => {
+			const resource = page.compatibility?.backupResource;
+			return Schema.is(ProfileJsonObject)(resource)
+				? [String(resource.id)]
+				: [];
+		});
+		const duplicateId = seenProfiles.get(content);
+		if (item.unchangedBuiltin || duplicateId) {
+			if (duplicateId)
+				for (const source of sourceIds) profileIds.set(source, duplicateId);
 			skipped++;
 			continue;
 		}
@@ -493,8 +547,23 @@ export function mergeBackup(
 				compatibility: { imported: true, sourceFingerprint: content },
 			}),
 		);
-		seenProfiles.add(content);
+		seenProfiles.set(content, id);
+		for (const source of sourceIds) profileIds.set(source, id);
 		added++;
+	}
+	for (const [i, profile] of profiles.entries()) {
+		if (i < envelope.profiles.length) continue;
+		const rewritten = remapProfileDestinations(
+			Schema.encodeSync(Profile)(profile),
+			profileIds,
+		);
+		profiles[i] = Schema.decodeUnknownSync(Profile)({
+			...rewritten,
+			compatibility: {
+				...rewritten.compatibility,
+				importedContentFingerprint: fingerprint(rewritten),
+			},
+		});
 	}
 	// Keep the original taxonomy and extra metadata in existing legacy storage.
 	// The payload uses owned rewritten paths and content IDs, never source paths.
@@ -518,6 +587,7 @@ export function mergeBackup(
 			}).profiles,
 		}),
 		resources,
+		profileIds,
 		legacyFiles: portable.legacyFiles,
 		imported: added + resources.size,
 		skipped,
@@ -549,6 +619,14 @@ export function backupProjection(
 		.filter(
 			(asset) =>
 				!/\/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(asset.source),
+		)
+		.filter(
+			({ source }) =>
+				!metadata.some(
+					(entry) =>
+						entry.resourceType === "DeviceConfig" &&
+						entry.path.replaceAll("\\", "/") === source.replaceAll("\\", "/"),
+				),
 		)
 		.flatMap(({ source, bytes }) => {
 			const id = hashBytes(bytes);

@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Cause, Effect, Option, Runtime } from "effect";
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain, systemPreferences } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
@@ -21,6 +21,7 @@ import {
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
 	PROFILE_PROGRESS,
 	PROFILE_REQUEST,
 	PROFILE_SELECTION,
@@ -107,6 +108,7 @@ vi.mock("electron", () => {
 		app: { getPath: () => fixture.root },
 		BrowserWindow: Window,
 		dialog: {},
+		systemPreferences: { isTrustedAccessibilityClient: vi.fn(() => true) },
 		ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
 		nativeImage: {
 			createFromBuffer: (bytes: Buffer) => ({
@@ -597,4 +599,33 @@ it("SCREEN-096/097 broadcasts thumbnail map and batch progress to two windows an
 				typeof value === "string" && value.startsWith("data:image/png;base64,"),
 		),
 	).toBe(true);
+});
+
+it("MAIN-084 replays nonprompting permission guidance on manager read and clears it after recovery", async () => {
+	const management = new BrowserWindow({ show: false });
+	await setup(undefined, undefined, undefined, management);
+	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "0");
+	const trusted = vi.mocked(systemPreferences.isTrustedAccessibilityClient);
+	const handler = vi
+		.mocked(ipcMain.handle)
+		.mock.calls.slice()
+		.reverse()
+		.find(([channel]) => channel === PROFILE_REQUEST)?.[1];
+	if (!handler) throw new Error("Missing manager handler");
+	const event = {
+		sender: management.webContents,
+		senderFrame: management.webContents.mainFrame,
+	};
+	for (const allowed of [false, true]) {
+		trusted.mockReturnValue(allowed);
+		await handler(event as Electron.IpcMainInvokeEvent, {
+			type: "read",
+			locale: "en",
+		});
+		expect(trusted).toHaveBeenLastCalledWith(false);
+		expect(management.webContents.send).toHaveBeenLastCalledWith(
+			PROFILE_FOREGROUND_GUIDANCE,
+			allowed ? "available" : "accessibility-denied",
+		);
+	}
 });

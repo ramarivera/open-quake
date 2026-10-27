@@ -139,15 +139,10 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			const disconnect = Effect.fn("ProfileSwitching.disconnect")(
 				(serial: string): Effect.Effect<void> =>
 					Effect.sync(() => {
-						for (const connected of sessions) {
-							if (
-								logicalProfileSerial(connected) !== logicalProfileSerial(serial)
-							)
-								continue;
-							sessions.delete(connected);
-							generations.set(connected, (generations.get(connected) ?? 0) + 1);
-							lifetimes.set(connected, (lifetimes.get(connected) ?? 0) + 1);
-						}
+						// An ignored alias never owned this session's lifetime.
+						if (!sessions.delete(serial)) return;
+						generations.set(serial, (generations.get(serial) ?? 0) + 1);
+						lifetimes.set(serial, (lifetimes.get(serial) ?? 0) + 1);
 					}),
 			);
 			const probe = Effect.fn("ProfileSwitching.probe")(

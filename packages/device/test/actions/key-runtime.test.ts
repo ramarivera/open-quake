@@ -844,3 +844,77 @@ for (const sentinel of [-1, -2])
 			expect(f.selection()?.pageId).toBe("two");
 		}).pipe(Effect.provide(f.layer));
 	});
+
+it.effect(
+	"MGMT-297 Next includes visible empty local profiles and skips hidden ones",
+	() => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const env = Schema.decodeUnknownSync(ProfileEnvelope)({
+			schemaVersion: 1,
+			manager: {
+				revision: 0,
+				installed: true,
+				userHasSetDefault: false,
+				approvedCommands: [],
+				hidden: ["hidden"],
+				links: [],
+			},
+			profiles: [
+				{
+					id: "p",
+					name: "P",
+					revision: 0,
+					pages: [
+						{
+							id: "one",
+							keys: [
+								{
+									...empty,
+									childrenName: "switchProfile",
+									config: {
+										...empty.config,
+										type: "switchProfile",
+										actions: [
+											{ type: "profile", value: "-1" },
+											{ type: "page", value: 1 },
+										],
+									},
+								},
+							],
+						},
+					],
+				},
+				{
+					id: "hidden",
+					name: "Hidden",
+					revision: 0,
+					pages: [{ id: "one", keys: [] }],
+				},
+				{
+					id: "local-profile",
+					name: "Local",
+					revision: 0,
+					pages: [{ id: "empty", keys: [] }],
+				},
+			],
+			activeByDevice: { device: { profileId: "p", pageId: "one" } },
+		});
+		const selected: string[] = [];
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				read: Effect.succeed(env),
+				select: (_device, profile, page) =>
+					Effect.sync(() => {
+						selected.push(`${profile}:${page}`);
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(selected).toEqual(["local-profile:empty"]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
