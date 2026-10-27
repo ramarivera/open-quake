@@ -8,8 +8,8 @@ import {
 	sliderToVolume,
 	volumeToSlider,
 } from "../../../shared/hardware-contracts";
-import { QmkLightingSettings } from "./QmkLightingSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
+import { QmkLightingSettings } from "./QmkLightingSettings";
 import "./hardware.css";
 
 // Recovered locale-en.json: version, settings.knobLEDAlwaysOn, settings.buzzerAlertVolume,
@@ -66,6 +66,18 @@ export function HardwareSettings(): React.JSX.Element {
 			if (mounted.current && id === sequence.current) setLoading(false);
 		}
 	}, []);
+	const liveSession = useRef<string | undefined>(undefined);
+	liveSession.current = snapshot?.session;
+	useEffect(
+		() => () => {
+			const session = liveSession.current;
+			if (session)
+				void window.quakeHardware
+					?.request({ _tag: "longTone", session, on: false })
+					.catch(() => undefined);
+		},
+		[],
+	);
 	useEffect(() => {
 		mounted.current = true;
 		void request({ _tag: "read" });
@@ -149,7 +161,7 @@ export function HardwareSettings(): React.JSX.Element {
 				</button>
 			</PageHeader>
 			<QmkLightingSettings />
-            <Group title="Device">
+			<Group title="Device">
 				<Row label="Firmware Version">
 					<output className="value mono" data-testid="hardware-firmware">
 						{snapshot?.firmware

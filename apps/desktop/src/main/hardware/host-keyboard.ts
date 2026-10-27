@@ -1,12 +1,12 @@
 import { Effect, Either } from "effect";
 import { systemPreferences } from "electron";
 import koffi from "koffi";
-import { linuxKeyboardPort } from "./host-keyboard-linux";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors";
 import {
 	deviceKeyboardTokens,
 	encodeDeviceChord,
 } from "../../../../../packages/device/src/hardware/hardware-invariants";
+import { linuxKeyboardPort } from "./host-keyboard-linux";
 
 /** USB usage to macOS virtual key code. No keyboard layout translation or foreground activation. */
 const macKeys: Readonly<Record<number, number>> = {
@@ -107,18 +107,18 @@ const modifiers = [
 ];
 export interface NativeKeyboardPort {
 	readonly available: () => boolean;
-    readonly code?: (usage: number) => number | undefined;
-    readonly close?: () => void;
+	readonly code?: (usage: number) => number | undefined;
+	readonly close?: () => void;
 	readonly post: (key: number, down: boolean, flags: number) => void;
 }
 let native: NativeKeyboardPort | undefined;
 export function nativeKeyboardPort(): NativeKeyboardPort {
 	if (native) return native;
 	if (process.platform === "linux") {
-        native = {...linuxKeyboardPort(), code: (usage) => usage};
-        return native;
-    }
-    if (process.platform !== "darwin")
+		native = { ...linuxKeyboardPort(), code: (usage) => usage };
+		return native;
+	}
+	if (process.platform !== "darwin")
 		return {
 			available: () => false,
 			post: () => {
@@ -197,14 +197,17 @@ export function hostKeyboardAdapter(
 				let flags = 0;
 				for (const m of held) {
 					flags |= m.flag;
-					const code = port.code ? port.code(224 + modifiers.indexOf(m)) : m.key;
-                    if (code === undefined) throw new Error("host-keyboard-modifier-unavailable");
-                    pressed.push({ key: code, flags });
-                    port.post(code, true, flags);
+					const code = port.code
+						? port.code(224 + modifiers.indexOf(m))
+						: m.key;
+					if (code === undefined)
+						throw new Error("host-keyboard-modifier-unavailable");
+					pressed.push({ key: code, flags });
+					port.post(code, true, flags);
 				}
 				if (key !== undefined) {
 					pressed.push({ key, flags });
-                    port.post(key, true, flags);
+					port.post(key, true, flags);
 				}
 			},
 			catch: (cause) => new HostActionFailed(cause),
@@ -233,4 +236,7 @@ export function hostKeyboardAdapter(
 	};
 }
 
-export function closeHostKeyboard(): void { native?.close?.(); native = undefined; }
+export function closeHostKeyboard(): void {
+	native?.close?.();
+	native = undefined;
+}

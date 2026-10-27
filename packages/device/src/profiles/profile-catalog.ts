@@ -91,7 +91,10 @@ export const builtinProfiles = (
 							: {}),
 						// Windows/macOS Quick cells are locked; recovered Linux controls remain editable.
 						...(entry.id === "1-2" &&
-						platform !== "linux" &&
+						(platform !== "linux" ||
+							!["luminance", "buzzer", "mic"].includes(
+								String(key.config.type),
+							)) &&
 						!key.config.basicEditableItems
 							? {
 									basicEditableItems: {

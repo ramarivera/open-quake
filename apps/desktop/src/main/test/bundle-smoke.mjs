@@ -47,6 +47,9 @@ class Window extends EventEmitter {
 	url = "";
 	webContents = Object.assign(new EventEmitter(), {
 		setWindowOpenHandler: () => {},
+		session: Object.assign(new EventEmitter(), {
+			setDevicePermissionHandler: () => {},
+		}),
 		setAudioMuted: () => {},
 		setZoomFactor: () => {},
 		send: (channel, event) => events.push({ channel, event }),

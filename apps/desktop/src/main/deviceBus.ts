@@ -29,7 +29,10 @@ export type DeviceBus = {
 	device?: (serial: string) => DeviceBus | undefined;
 	setScreenPower?: (on: boolean) => Effect.Effect<boolean, DeviceStreamError>;
 	hardware?(): HardwareSession | undefined;
-    releaseForVia?: () => Effect.Effect<Effect.Effect<void>>;
+	releaseForVia?: () => Effect.Effect<
+		Effect.Effect<void>,
+		import("@open-quake/device").QuakeHidCloseFailed
+	>;
 	recover?: (reopen?: boolean) => Effect.Effect<void>;
 };
 
@@ -68,7 +71,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	let connectionNow: QuakeConnection | undefined;
 	let matrix: { row: 1 | 2; col: 8 } = { row: 2, col: 8 };
 	let retry = 0;
-    let viaLeased = false;
+	let viaLeased = false;
 	let selectedPath: string | undefined;
 	let exhaustedPresence: string | undefined;
 	let reset = yield* Deferred.make<void>();
@@ -269,8 +272,11 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	);
 	yield* Effect.forever(
 		Effect.gen(function* () {
-			if (viaLeased) {yield* wait(500); return;}
-            if (retry >= 5) {
+			if (viaLeased) {
+				yield* wait(500);
+				return;
+			}
+			if (retry >= 5) {
 				const presence = yield* scanPresence;
 				if (presence !== exhaustedPresence) {
 					retry = 0;
@@ -405,11 +411,21 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 			secondary.get(hidSerialFromAlias(serial))?.bus ??
 			(hidSerialFromAlias(serial) === lastSerial ? primary : undefined),
 		hardware: () => hardware,
-        releaseForVia: () => Effect.gen(function* () {
-            viaLeased = true;
-            if (connectionNow) yield* connectionNow.disconnect().pipe(Effect.ignore);
-            return Effect.sync(() => {viaLeased = false;}).pipe(Effect.zipRight(resetBackoff()));
-        }),
+		releaseForVia: () =>
+			Effect.gen(function* () {
+				viaLeased = true;
+				if (connectionNow)
+					yield* connectionNow.disconnect().pipe(
+						Effect.tapError(() =>
+							Effect.sync(() => {
+								viaLeased = false;
+							}),
+						),
+					);
+				return Effect.sync(() => {
+					viaLeased = false;
+				}).pipe(Effect.zipRight(resetBackoff()));
+			}),
 		recover: resetBackoff,
 		setScreenPower: (on) =>
 			Effect.suspend(() =>

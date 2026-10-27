@@ -308,3 +308,42 @@ it.scoped(
 			});
 		}),
 );
+
+it.scoped(
+	"MAIN-108 missing raw replies close and poison the owner before another transaction",
+	() =>
+		Effect.gen(function* () {
+			const { makeFakeHidTransport } = yield* Effect.promise(
+				() => import("../../src/hid-fake.js"),
+			);
+			const fake = yield* makeFakeHidTransport();
+			const device = yield* QuakeDevice.pipe(
+				Effect.provide(
+					QuakeDevice.DefaultWithoutDependencies.pipe(
+						Layer.provide(fake.layer),
+					),
+				),
+			);
+			const connection = yield* device.connect();
+			const controls = yield* HardwareControls.pipe(
+				Effect.provide(HardwareControls.Default),
+			);
+			const session = yield* controls.create(connection, {
+				serial: "fake-quake",
+				session: "timeout",
+			});
+			const pending = yield* session
+				.qmk([{ _tag: "protocol" }])
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(1500);
+			expect(Either.isLeft(yield* Fiber.join(pending))).toBe(true);
+			expect((yield* session.snapshot()).available).toBe(false);
+			const writes = (yield* fake.writes).length;
+			expect(
+				Either.isLeft(
+					yield* session.qmk([{ _tag: "save" }]).pipe(Effect.either),
+				),
+			).toBe(true);
+			expect(yield* fake.writes).toHaveLength(writes);
+		}),
+);

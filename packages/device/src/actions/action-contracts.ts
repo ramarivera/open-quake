@@ -1,3 +1,4 @@
+import { JsonValue } from "@open-quake/protocol";
 import { Schema } from "effect";
 import { BuzzerKeyConfig, MicKeyConfig } from "../hardware/hardware-actions.js";
 import { ProfileAction } from "../profiles/profile-contracts.js";
@@ -317,14 +318,42 @@ export const TimerConfig = Schema.Struct({
 		),
 	),
 });
+/** Same full key shape consumed by Home Assistant; connection/entity authorization remains its owner's job. */
+export const HomeAssistantSequenceData = Schema.Struct({
+	entity_id: Schema.String,
+	service: Schema.String,
+	service_data: Schema.Record({ key: Schema.String, value: JsonValue }),
+	custom_display_type: Schema.Literal("icon", "default", "custom"),
+	custom_display_settings: Schema.Struct({
+		fontSize: Schema.Int.pipe(Schema.between(10, 70)),
+	}),
+	custom_display_detail: Schema.Array(
+		Schema.Struct({
+			displayItemKey: Schema.String,
+			displayAlias: Schema.String,
+		}),
+	),
+});
 export const HomeAssistantKeyConfig = Schema.Struct({
-    type: Schema.Literal("homeAssistant"),
-    actions: Schema.Tuple(Schema.Struct({type: Schema.Literal("configData", "haConfig", "homeAssistant"), value: Schema.String.pipe(Schema.minLength(2), Schema.maxLength(65536), Schema.filter((value) => {
-        try { const data: unknown = JSON.parse(value); return typeof data === "object" && data !== null && "entity_id" in data && typeof data.entity_id === "string" && "service" in data && typeof data.service === "string"; } catch {return false;}
-    }))})),
+	type: Schema.Literal("homeAssistant"),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("configData", "haConfig", "homeAssistant"),
+			value: Schema.String.pipe(
+				Schema.maxLength(65536),
+				Schema.filter((value) => {
+					try {
+						return Schema.is(HomeAssistantSequenceData)(JSON.parse(value));
+					} catch {
+						return false;
+					}
+				}),
+			),
+		}),
+	),
 });
 export const SequenceLeaf = Schema.Union(
-    HomeAssistantKeyConfig,
+	HomeAssistantKeyConfig,
 	BuzzerKeyConfig,
 	MicKeyConfig,
 	MuteConfig,

@@ -22,8 +22,18 @@ export function hardwareRequest(
 		if (!current) return { _tag: "offline" } as const;
 		const command = decoded.right;
 		const snapshot = yield* current.snapshot();
-		if (command._tag === "chooseGameTarget" || command._tag === "qmkTargets" || command._tag === "qmk" || command._tag === "lighting") return {_tag: "failure", code: "QUAKE.HARDWARE.INVALID_REQUEST"} as const;
-        if (command._tag !== "read" && command.session !== snapshot.session)
+		if (
+			command._tag === "chooseGameTarget" ||
+			command._tag === "qmkTargets" ||
+			command._tag === "qmkBindings" ||
+			command._tag === "qmk" ||
+			command._tag === "lighting"
+		)
+			return {
+				_tag: "failure",
+				code: "QUAKE.HARDWARE.INVALID_REQUEST",
+			} as const;
+		if (command._tag !== "read" && command.session !== snapshot.session)
 			return { _tag: "failure", code: "QUAKE.HARDWARE.STALE_SESSION" } as const;
 		switch (command._tag) {
 			case "read":

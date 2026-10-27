@@ -24,7 +24,7 @@ import {
 } from "./action-contracts.js";
 import {
 	type ActionError,
-    HostActionFailed,
+	HostActionFailed,
 	InvalidKeyAction,
 	KeyFunctionUnavailable,
 } from "./action-errors.js";
@@ -226,6 +226,19 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			> {
 				const control = JSON.stringify([deviceId, keyCode]);
 				if (kind === "up" || kind === "cancel") {
+					if (kind === "cancel") {
+						for (const [identity, fiber] of running) {
+							const parts: unknown = JSON.parse(identity);
+							if (
+								Array.isArray(parts) &&
+								parts[0] === deviceId &&
+								parts[3] === keyCode
+							) {
+								running.delete(identity);
+								yield* Fiber.interrupt(fiber);
+							}
+						}
+					}
 					const contact = contacts.get(control);
 					if (!contact) return;
 					if (contact.release) {
@@ -455,10 +468,30 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									if (action._tag === "Left")
 										return yield* Effect.fail(action.left);
 									if (action.right.type === "homeAssistant") {
-                                        if (!port.executeOwned) return yield* new HostActionFailed("home-assistant-unavailable");
-                                        const synthetic = {...key, config: {...key.config, type: action.right.type, actions: action.right.actions}};
-                                        if (!(yield* port.executeOwned(synthetic, {deviceId, profileId: profile.id, pageId: page.id, revision: profile.revision}))) return yield* new HostActionFailed("home-assistant-unavailable");
-                                    } else yield* port.execute(action.right, deviceId);
+										if (!port.executeOwned)
+											return yield* new HostActionFailed(
+												"home-assistant-unavailable",
+											);
+										const synthetic = {
+											...key,
+											config: {
+												...key.config,
+												type: action.right.type,
+												actions: action.right.actions,
+											},
+										};
+										if (
+											!(yield* port.executeOwned(synthetic, {
+												deviceId,
+												profileId: profile.id,
+												pageId: page.id,
+												revision: profile.revision,
+											}))
+										)
+											return yield* new HostActionFailed(
+												"home-assistant-unavailable",
+											);
+									} else yield* port.execute(action.right, deviceId);
 								}
 								yield* feedback({
 									...base,

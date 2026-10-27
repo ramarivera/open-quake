@@ -59,6 +59,12 @@ const electron = vi.hoisted(() => {
 		destroyed = false;
 		contentListeners = new Map<string, () => void>();
 		webContents = {
+			session: {
+				on: vi.fn(),
+				removeListener: vi.fn(),
+				setDevicePermissionHandler: vi.fn(),
+				flushStorageData: vi.fn(),
+			},
 			id: 1,
 			mainFrame: { url: "http://localhost:5173/?surface=management" },
 			getURL: () => "http://localhost:5173/?surface=management",
@@ -2108,6 +2114,11 @@ describe("desktop main with the real device service and fake HID", () => {
 			);
 			if (!reopened) throw new Error("Management must reopen");
 			expect(reopened).not.toBe(management);
+			expect(
+				electron.BrowserWindow.getAllWindows().filter(
+					(window) => window.options.title === "open-quake panel",
+				),
+			).toHaveLength(1);
 			if (event === "second-instance") {
 				expect(reopened.show).toHaveBeenCalledOnce();
 				expect(reopened.focus).toHaveBeenCalledOnce();

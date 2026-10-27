@@ -2,6 +2,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import { Effect, Layer } from "effect";
+import { vi } from "vitest";
+
+vi.mock("./host-keyboard", () => ({ hostKeyboardAvailable: () => false }));
+
 import { hardwareRequest } from "./controller";
 
 describe("hardware settings consumer", () => {
@@ -42,7 +46,7 @@ describe("hardware settings consumer", () => {
 					yield* hardwareRequest(
 						{ _tag: "inputMode", session: "session-A", mode: "host" },
 						current,
-						true,
+						false,
 					),
 				).toEqual({
 					_tag: "failure",

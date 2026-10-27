@@ -86,7 +86,26 @@ const media = <const I extends string, const Command extends C.MediaCommand>(
 
 /** The editor, validator and conductor consume these same declarations. */
 export const ACTION_REGISTRY = [
-    define("homeAssistant", C.HomeAssistantKeyConfig, {submenu: "decoKeeAI", requiredAdapter: "integrations.homeAssistant", binding: "delegate", defaults: {actions: [{type: "configData", value: ""}]}}),
+	define("homeAssistant", C.HomeAssistantKeyConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "integrations.homeAssistant",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{
+					type: "configData",
+					value: JSON.stringify({
+						entity_id: "light.example",
+						service: "toggle",
+						service_data: {},
+						custom_display_type: "default",
+						custom_display_settings: { fontSize: 20 },
+						custom_display_detail: [],
+					}),
+				},
+			],
+		},
+	}),
 	define("buzzer", BuzzerKeyConfig, {
 		submenu: "decoKeeAI",
 		requiredAdapter: "hardware.controls",

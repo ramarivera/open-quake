@@ -17,24 +17,26 @@ import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { desktopProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { registerAppLocale } from "../settings/registration";
 import { registerHardware } from "./index";
 import { hardwarePreferencesLive } from "./preferences";
 
 const Session = Context.GenericTag<HardwareSession>("HardwareSmokeSession");
 let directory: string | undefined;
+let disposeLocale: (() => Promise<void>) | undefined;
 let disposeRuntime: (() => Promise<void>) | undefined;
 let disposeMedia: (() => Promise<void>) | undefined;
 let disposeProfiles: (() => Promise<void>) | undefined;
 let disposeLifecycle: (() => Promise<void>) | undefined;
 let unregisterLifecycle: (() => void) | undefined;
-let unregister: (() => void) | undefined;
+let unregister: (() => Promise<void>) | undefined;
 async function smoke(): Promise<void> {
 	assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
 	const artifacts = process.argv[2];
 	assert(artifacts, "Pass the absolute lane screenshot directory");
 	assert(
 		artifacts.startsWith(
-			"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/hw-controls/",
+			"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/hardware/",
 		),
 	);
 	await mkdir(artifacts, { recursive: true });
@@ -147,7 +149,16 @@ async function smoke(): Promise<void> {
 		() => current,
 		() => window,
 		true,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
 	);
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en-US",
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		windows: () => [window],
+	});
+	disposeLocale = () => locale.dispose();
+	window.webContents.setAudioMuted(true);
 	await window.loadFile(resolve("out/renderer/index.html"));
 	const js = (script: string): Promise<unknown> =>
 		window.webContents.executeJavaScript(script);
@@ -171,6 +182,38 @@ async function smoke(): Promise<void> {
 			(await js(
 				'document.querySelector("[data-testid=hardware-firmware]")?.textContent',
 			)) === "1.0.21",
+	);
+	await wait(
+		async () =>
+			(await js(
+				"!!document.querySelector('[aria-label=\"Brightness\"]') && !document.querySelector('[aria-label=\"Brightness\"]').disabled",
+			)) === true,
+	);
+	await js(`(() => {
+		const slider = document.querySelector('[aria-label="Brightness"]');
+		Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(slider, "180");
+		slider.dispatchEvent(new Event("input", {bubbles: true}));
+	})()`);
+	await wait(
+		async () =>
+			(await js(
+				"document.querySelector('[aria-label=\"Brightness\"]').value",
+			)) === "180",
+	);
+	await wait(
+		async () =>
+			(await js(
+				'!Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save")?.disabled',
+			)) === true,
+	);
+	await js(
+		'Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save").click()',
+	);
+	await wait(
+		async () =>
+			(await js(
+				'Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save").closest(".row").querySelector("output").textContent === "saved"',
+			)) === true,
 	);
 	rejectRefresh = true;
 	await js(
@@ -279,6 +322,26 @@ async function smoke(): Promise<void> {
 			(await window.webContents.capturePage()).toPNG(),
 		);
 	}
+	await js("window.quakeLocale.set('de')");
+	await new Promise<void>((done) => setTimeout(done, 300));
+	await writeFile(
+		join(artifacts, "hardware-de.png"),
+		(await window.webContents.capturePage()).toPNG(),
+	);
+	await js(
+		'document.querySelector("#device-mic").scrollIntoView({block:"center"}); null;',
+	);
+	await new Promise<void>((done) => setTimeout(done, 80));
+	await writeFile(
+		join(artifacts, "hardware-controls-de.png"),
+		(await window.webContents.capturePage()).toPNG(),
+	);
+	await js("window.quakeLocale.set('en')");
+	await new Promise<void>((done) => setTimeout(done, 100));
+	await writeFile(
+		join(artifacts, "hardware-controls-en.png"),
+		(await window.webContents.capturePage()).toPNG(),
+	);
 	window.setSize(390, 844);
 	await new Promise<void>((done) => setTimeout(done, 100));
 	await js(
@@ -309,10 +372,11 @@ async function smoke(): Promise<void> {
 	);
 }
 async function cleanup() {
-	unregister?.();
+	await unregister?.();
 	unregisterLifecycle?.();
 	await disposeLifecycle?.();
 	await disposeRuntime?.();
+	await disposeLocale?.();
 	await disposeMedia?.();
 	await disposeProfiles?.();
 	if (directory) await rm(directory, { recursive: true, force: true });

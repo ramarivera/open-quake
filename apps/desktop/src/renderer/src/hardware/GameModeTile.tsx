@@ -20,7 +20,7 @@ export function GameModeTile({
 		(a) => a.type === "monitorAppView" && a.value === true,
 	);
 	useMonitor(monitor && context.interactive !== false && gaming === true);
-    useEffect(() => {
+	useEffect(() => {
 		setArtwork("");
 		if (!monitor || context.interactive === false || gaming !== true) return;
 		let live = true;

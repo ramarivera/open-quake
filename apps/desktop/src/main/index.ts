@@ -54,11 +54,14 @@ import { findPanelDisplay, type PanelRotation, panelRotation } from "./display";
 import { prepareEmoji } from "./emoji";
 import { createEmojiGeneration } from "./emoji/generation";
 import { createEventForwarder } from "./eventForwarding";
-import { registerViaPermissions } from "./hardware/via-permissions";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
-import { hostKeyboardAvailable, closeHostKeyboard } from "./hardware/host-keyboard";
+import {
+	closeHostKeyboard,
+	hostKeyboardAvailable,
+} from "./hardware/host-keyboard";
 import { hardwarePreferencesLive } from "./hardware/preferences";
+import { registerViaPermissions } from "./hardware/via-permissions";
 import { prepareIntegrations } from "./integrations";
 import { integrationKeyAction } from "./integrations/key-action";
 import { fileStore, systemCredentialVault } from "./integrations/storage";
@@ -1217,18 +1220,34 @@ if (!app.requestSingleInstanceLock()) {
 							panelSerial,
 						);
 						let viaSerial: string | undefined;
-                        const disposeVia = registerViaPermissions(managementWin.webContents.session, {
-                            origin: process.env.OPEN_QUAKE_VIA_ORIGIN ?? "",
-                            selectedSerial: () => viaSerial ?? activeDeviceId(),
-                            release: async (serial) => {
-                                const target = bus?.device?.(serial) ?? (bus?.serial?.() === serial ? bus : undefined);
-                                if (!target?.releaseForVia || mock) return;
-                                viaSerial = serial;
-                                const resume = await runtime.runPromise(target.releaseForVia());
-                                return async () => {try {await runtime.runPromise(resume);} finally {viaSerial = undefined;}};
-                            },
-                        });
-                        let running:
+						const disposeVia = registerViaPermissions(
+							managementWin.webContents.session,
+							{
+								origin: process.env.OPEN_QUAKE_VIA_ORIGIN ?? "",
+								selectedSerial: () => viaSerial ?? activeDeviceId(),
+								release: async (serial) => {
+									const target =
+										bus?.device?.(serial) ??
+										(bus?.serial?.() === serial ? bus : undefined);
+									if (!target?.releaseForVia || mock) return;
+									viaSerial = serial;
+									const resume = await runtime
+										.runPromise(target.releaseForVia())
+										.catch((cause: unknown) => {
+											viaSerial = undefined;
+											throw cause;
+										});
+									return async () => {
+										try {
+											await runtime.runPromise(resume);
+										} finally {
+											viaSerial = undefined;
+										}
+									};
+								},
+							},
+						);
+						let running:
 							| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
 							| undefined;
 						let stopping = Promise.resolve();
@@ -1603,9 +1622,7 @@ if (!app.requestSingleInstanceLock()) {
 							removeDevicePicker();
 							removeKnobLocale();
 							removeKnobThumbnailStyle();
-							void disposeVia();
-                            disposeHardware();
-                            closeHostKeyboard();
+
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 							removeDeviceReady();
 							removeStripTransport();
@@ -1615,6 +1632,8 @@ if (!app.requestSingleInstanceLock()) {
 								for (const stop of [
 									// Bus teardown joins input work owned by the knob registration.
 									// Cancel its loads/dispatches before waiting for that queue.
+									() => disposeVia(),
+									() => disposeHardware(),
 									() => knob.dispose(),
 									() => stopBus(),
 									() => weatherMedia.dispose(),
@@ -1641,6 +1660,7 @@ if (!app.requestSingleInstanceLock()) {
 									() => clock.dispose(),
 									() => media.dispose(),
 									() => runtime.dispose(),
+									() => closeHostKeyboard(),
 								]) {
 									try {
 										await stop();
@@ -1719,7 +1739,14 @@ if (!app.requestSingleInstanceLock()) {
 							if (quitting) return;
 							if (managementWin.isDestroyed()) {
 								if (panelWin.isDestroyed())
-									syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
+									syncPanelDisplay(
+										findPanelDisplay(screen.getAllDisplays()),
+										// Teardown clears activeSerial before reopen. Retain the
+										// panel's identity instead of creating a stray preview.
+										[...stripWindows.entries()].find(
+											([, entry]) => entry.win === panelWin,
+										)?.[0] ?? activeDeviceId(),
+									);
 								managementWin = createManagementWindow();
 								desktopShell.attach(managementWin);
 								removeLifecycle.bindManagement();

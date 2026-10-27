@@ -16,7 +16,6 @@ import {
 	type Scope,
 	Stream,
 } from "effect";
-import { importQmkOperations, qmkOperationBytes } from "./qmk-operations.js";
 import type { QuakeConnection } from "../device-service.js";
 import {
 	defaultHardwarePreferences,
@@ -42,6 +41,7 @@ import {
 	HardwarePreferencesStore,
 	MemoryHardwarePreferences,
 } from "./hardware-repository.js";
+import { importQmkOperations, qmkOperationBytes } from "./qmk-operations.js";
 
 export type HardwareSession = Effect.Effect.Success<
 	ReturnType<HardwareControls["create"]>
@@ -63,7 +63,9 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 			): Effect.fn.Return<
 				{
 					readonly snapshot: () => Effect.Effect<HardwareSnapshot>;
-					readonly qmk: (commands: readonly import("./qmk-operations.js").QmkOperation[]) => Effect.Effect<readonly (readonly number[])[], HardwareError>;
+					readonly qmk: (
+						commands: readonly import("./qmk-operations.js").QmkOperation[],
+					) => Effect.Effect<readonly (readonly number[])[], HardwareError>;
 					readonly refresh: () => Effect.Effect<void, HardwareError>;
 					readonly readVersion: () => Effect.Effect<string, HardwareError>;
 					readonly enterDfu: () => Effect.Effect<void, HardwareError>;
@@ -372,9 +374,10 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 							yield* toneLock
 								.withPermits(1)(
 									Effect.gen(function* () {
-										yield* send({ _tag: "Buzzer", level: preferences.alertVolume }).pipe(
-											Effect.uninterruptible,
-										);
+										yield* send({
+											_tag: "Buzzer",
+											level: preferences.alertVolume,
+										}).pipe(Effect.uninterruptible);
 										yield* Deferred.succeed(started, undefined);
 										yield* Effect.never;
 									}).pipe(Effect.ensuring(silence)),
@@ -440,26 +443,87 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					}),
 				);
 				return {
-                    qmk: Effect.fn("HardwareControls.qmk")(function* (commands) {
-                        const operations = yield* importQmkOperations(commands);
-                        return yield* wireLock.withPermits(1)(Effect.gen(function* () {
-                            yield* ensureActive();
-                            const exchangeRaw = connection.exchangeRaw;
-                            if (!exchangeRaw) return yield* new HardwareUnavailable();
-                            return yield* Effect.forEach(operations, (operation) => Effect.gen(function* () {
-                                yield* ensureActive();
-                                const {report, prefix, length} = qmkOperationBytes(operation);
-                                const reply = yield* exchangeRaw(report, (bytes) => {
-                                    const body = bytes.length === 33 && bytes[0] === 0 ? bytes.slice(1) : bytes;
-                                    return body.length >= prefix.length + length && prefix.every((v, i) => body[i] === v);
-                                }).pipe(Effect.mapError((cause) => new HardwareUnavailable(cause)));
-                                yield* ensureActive();
-                                const body = reply.length === 33 && reply[0] === 0 ? reply.slice(1) : reply;
-                                return Array.from(body.slice(prefix.length, prefix.length + length));
-                            }));
-                        }).pipe(Effect.tapError(() => Effect.sync(() => {poisoned = true;}))));
-                    }),
-                    readVersion: Effect.fn("HardwareControls.readVersion")(
+					qmk: Effect.fn("HardwareControls.qmk")(function* (commands) {
+						const operations = yield* importQmkOperations(commands);
+						return yield* wireLock.withPermits(1)(
+							Effect.gen(function* () {
+								yield* ensureActive();
+								const exchangeRaw = connection.exchangeRaw;
+								if (!exchangeRaw) return yield* new HardwareUnavailable();
+								const exchange = (
+									operation: Exclude<
+										import("./qmk-operations.js").QmkOperation,
+										{ _tag: "probe" }
+									>,
+								) =>
+									Effect.gen(function* () {
+										yield* ensureActive();
+										const { report, prefix, length } =
+											qmkOperationBytes(operation);
+										const reply = yield* exchangeRaw(report, (bytes) => {
+											const body =
+												bytes.length === 33 && bytes[0] === 0
+													? bytes.slice(1)
+													: bytes;
+											return (
+												body.length >= prefix.length + length &&
+												prefix.every((v, i) => body[i] === v)
+											);
+										}).pipe(
+											Effect.mapError(
+												(cause) => new HardwareUnavailable(cause),
+											),
+										);
+										yield* ensureActive();
+										const body =
+											reply.length === 33 && reply[0] === 0
+												? reply.slice(1)
+												: reply;
+										return Array.from(
+											body.slice(prefix.length, prefix.length + length),
+										);
+									});
+								return yield* Effect.forEach(operations, (operation) =>
+									Effect.gen(function* () {
+										if (operation._tag !== "probe")
+											return yield* exchange(operation);
+										const get = {
+											_tag: "get" as const,
+											prefix: operation.prefix,
+											length: operation.values.length,
+										};
+										const before = yield* exchange(get);
+										// The whole reversible probe stays on this owner and transaction lock.
+										// Once a test write starts, cancellation must still restore its old value.
+										const after = yield* Effect.gen(function* () {
+											const attempted = yield* exchange({
+												_tag: "set",
+												prefix: operation.prefix,
+												values: operation.values,
+											}).pipe(Effect.zipRight(exchange(get)), Effect.either);
+											yield* exchange({
+												_tag: "set",
+												prefix: operation.prefix,
+												values: before,
+											});
+											return yield* attempted;
+										}).pipe(Effect.uninterruptible);
+										const changed = before.some(
+											(value, i) => value !== after[i],
+										);
+										return [...before, ...after, changed ? 1 : 0];
+									}),
+								);
+							}).pipe(
+								Effect.tapError(() =>
+									Effect.sync(() => {
+										poisoned = true;
+									}),
+								),
+							),
+						);
+					}),
+					readVersion: Effect.fn("HardwareControls.readVersion")(
 						(): Effect.Effect<string, HardwareError> =>
 							mutationLock.withPermits(1)(
 								Effect.gen(function* () {

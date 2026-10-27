@@ -20,7 +20,11 @@ PR76 review fix: timer shutdown now settles its pending reply as HardwareUnavail
 
 ## 3. Hardware burn-down lane
 
-- [ ] 3.1 Persist acknowledged mic/luminance separately from session synchronization, and implement bounded arbitrary, long, mark and success tones. Bead open-quake-lih.11.25.
-- [ ] 3.2 Register saved hardware controls, hydrate serial state and implement gaming mode consumers. Bead open-quake-lih.11.26.
-- [ ] 3.3 Wire QUAKE QMK ownership, origin permission and lighting settings; record ARIS scope limitation. Bead open-quake-lih.11.27.
+- [x] 3.1 Persist acknowledged mic/luminance separately from session synchronization, and implement bounded arbitrary, long, mark and success tones. Bead open-quake-lih.11.25.
+- [x] 3.2 Register saved hardware controls, hydrate serial state and implement gaming mode consumers. Bead open-quake-lih.11.26.
+- [x] 3.3 Wire QUAKE QMK ownership, origin permission and lighting settings; record ARIS scope limitation. Bead open-quake-lih.11.27.
 - [ ] 3.4 Merge current main, run all required gates and mock native EN/DE smoke, push and open a PR. Leave row beads open for lead merge.
+
+Software evidence, 2026-10-27, GPT-6.1 Sol: recovered state remains separate from live synchronization; saved controls and cancellable sequences use their activation serial; meeting feedback deduplicates accepted transitions; QMK probes, batches and qualified lighting share one HID owner; VIA handoff awaits cleanup and canonicalizes serials; exact QUAKE Linux identity and scoped uaccess delivery are implemented. The ARIS-68 portion of MGMT-406 remains the approved exclusion. Device hardware tests pass 57/57 on Linux, with desktop hardware/runtime tests 41/41 and the final canonical-serial regression 3/3. Hidden native fake-HID smoke exercises actual preload/IPC, QMK brightness/save, mic, luminance, volume persistence and recovery, with EN/DE screenshots under the lane SSD scratch directory. Physical QUAKE, native input permissions, acoustics and firmware persistence after reboot remain unverified. Row beads stay open for lead acceptance.
+
+Gate 3.4 remains incomplete only for full strict OpenSpec validation: CLI 1.15.0 reports 10 passing changes and 37 existing requirement-length warning failures, tracked in open-quake-lih.23.2 and independently reproduced by the lead on clean main. The owning hardware-controls-parity change passes strict validation. No unrelated specs, validator policy or checks were changed. PR delivery and final regression counts are recorded in the three lane beads and the PR.

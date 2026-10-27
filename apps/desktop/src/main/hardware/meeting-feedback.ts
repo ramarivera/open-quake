@@ -7,29 +7,45 @@ import type { MeetingProgressEvent } from "../../../../../packages/edge/src/meet
 export function meetingHardwareFeedback(
 	hardware: (serial?: string) => HardwareSession | undefined,
 ) {
-	const processing = new Map<string, {serial: string; session: string}>();
-	const play = (serial: string | undefined, name: "firework" | "success", expectedSession?: string) =>
+	const completed = new Set<string>();
+	const markTransitions = new Set<string>();
+	const processing = new Map<string, { serial: string; session: string }>();
+	const play = (
+		serial: string | undefined,
+		name: "firework" | "success",
+		expectedSession?: string,
+	) =>
 		Effect.gen(function* () {
 			const session = hardware(serial);
 			if (!session) return;
 			const state = yield* session.snapshot();
-			if (!state.available || (serial && state.serial !== serial) || (expectedSession && state.session !== expectedSession)) return;
+			if (
+				!state.available ||
+				(serial && state.serial !== serial) ||
+				(expectedSession && state.session !== expectedSession)
+			)
+				return;
 			yield* session.playTone(name);
 		}).pipe(Effect.catchAll((error) => Effect.logWarning(error.code)));
 	return {
-        stage: (event: MeetingProgressEvent) => Effect.gen(function* () {
-            if (event.stage !== 5) return;
-            if (event.status === 1) {
-                const serial = event.origin?.serial;
-                const owner = serial && hardware(serial);
-                const state = owner ? yield* owner.snapshot() : undefined;
-                if (serial && state?.available && state.serial === serial) processing.set(event.meetingId, {serial, session: state.session});
-                return;
-            }
-            const target = processing.get(event.meetingId);
-            processing.delete(event.meetingId);
-            if (event.status === 2 && target) yield* play(target.serial, "success", target.session);
-        }),
+		stage: (event: MeetingProgressEvent) =>
+			Effect.gen(function* () {
+				if (event.stage !== 5 || completed.has(event.meetingId)) return;
+				if (event.status === 1) {
+					const serial = event.origin?.serial;
+					const owner = serial && hardware(serial);
+					const state = owner ? yield* owner.snapshot() : undefined;
+					if (serial && state?.available && state.serial === serial)
+						processing.set(event.meetingId, { serial, session: state.session });
+					return;
+				}
+				const target = processing.get(event.meetingId);
+				processing.delete(event.meetingId);
+				if (event.status === 2 && target) {
+					completed.add(event.meetingId);
+					yield* play(target.serial, "success", target.session);
+				}
+			}),
 		mark: (before: MeetingSnapshot, next: MeetingSnapshot, serial: string) =>
 			Effect.suspend(() => {
 				const changed = next.records.some((record) => {
@@ -45,7 +61,10 @@ export function meetingHardwareFeedback(
 								))
 					);
 				});
-				return changed ? play(serial, "firework") : Effect.void;
+				const transition = `${serial}:${next.revision}:${next.records.map((record) => `${record.id}:${record.marks.length}:${Option.getOrUndefined(record.marks.at(-1)?.endMs ?? Option.none())}`).join(",")}`;
+				if (!changed || markTransitions.has(transition)) return Effect.void;
+				markTransitions.add(transition);
+				return play(serial, "firework");
 			}),
 	};
 }

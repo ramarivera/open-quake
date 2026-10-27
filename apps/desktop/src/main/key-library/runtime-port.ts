@@ -77,7 +77,7 @@ export const desktopKeyRuntimePort = (
 					).pressChord(chord);
 				}),
 			});
-            const keyboard = keyboardFor();
+			const keyboard = keyboardFor();
 			if (!mock && mediaActions?.observe) {
 				const changes = yield* Queue.sliding<{
 					readonly level: number;
@@ -230,26 +230,61 @@ export const desktopKeyRuntimePort = (
 					if (isHardwareKey(config.type)) {
 						const decoded =
 							Schema.decodeUnknownEither(HardwareKeyConfig)(config);
-						if (config.type === "gameMode" && !mock && !hostKeyboardAvailable())
-							return Effect.fail(
-								new HostActionFailed("host-keyboard-unavailable"),
-							);
+
 						return decoded._tag === "Left"
 							? Effect.fail(new HostActionFailed(decoded.left))
-							: executeHardwareKey(
-									decoded.right,
-									hardware(deviceId),
-									deviceId,
-								).pipe(Effect.mapError((cause) => new HostActionFailed(cause)), Effect.tap(() => {
-                                    if (decoded.right.type !== "gameMode") return Effect.void;
-                                    const path = decoded.right.actions.find((a) => a.type === "path")?.value;
-                                    return Effect.gen(function* () {
-                                        const state = yield* hardware(deviceId)?.snapshot() ?? Effect.fail(new HostActionFailed("hardware-unavailable"));
-                                        if (state.inputMode === "device" && typeof path === "string" && path) yield* adapters.application.pipe(Option.match({onNone: () => Effect.fail(new HostActionFailed("application-unavailable")), onSome: (adapter) => adapter.launchApplication(path)}));
-                                    });
-                                }));
+							: Effect.gen(function* () {
+									const owner = hardware(deviceId);
+									if (
+										config.type === "gameMode" &&
+										owner &&
+										!mock &&
+										(yield* owner.snapshot()).inputMode === "device" &&
+										!hostKeyboardAvailable()
+									)
+										return yield* new HostActionFailed(
+											"host-keyboard-unavailable",
+										);
+									return yield* executeHardwareKey(
+										decoded.right,
+										hardware(deviceId),
+										deviceId,
+									);
+								}).pipe(
+									Effect.mapError((cause) => new HostActionFailed(cause)),
+									Effect.tap(() => {
+										if (decoded.right.type !== "gameMode") return Effect.void;
+										const path = decoded.right.actions.find(
+											(a) => a.type === "path",
+										)?.value;
+										return Effect.gen(function* () {
+											const state = yield* hardware(deviceId)?.snapshot() ??
+												Effect.fail(
+													new HostActionFailed("hardware-unavailable"),
+												);
+											if (
+												state.inputMode === "device" &&
+												typeof path === "string" &&
+												path
+											)
+												yield* adapters.application.pipe(
+													Option.match({
+														onNone: () =>
+															Effect.fail(
+																new HostActionFailed("application-unavailable"),
+															),
+														onSome: (adapter) =>
+															adapter.launchApplication(path),
+													}),
+												);
+										});
+									}),
+								);
 					}
-					return executeActionLeaf(config, {...adapters, keyboard: Option.some(keyboardFor(deviceId))});
+					return executeActionLeaf(config, {
+						...adapters,
+						keyboard: Option.some(keyboardFor(deviceId)),
+					});
 				},
 				holdHotkey: (key, activation) =>
 					Effect.gen(function* () {
