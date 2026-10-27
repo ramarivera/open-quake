@@ -1,7 +1,8 @@
 import { Schema } from "effect";
 import { useEffect, useState } from "react";
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
-import { visibleProfiles } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
+import { isBuiltinProfile } from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { managerState } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
 import type {
 	AgentConnectionReply,
 	AgentConnectionsBridge,
@@ -68,7 +69,7 @@ export function latestRead<T>(accept: (value: T) => void): {
 	};
 }
 
-export type ProfileChoice = { readonly id: string; readonly name: string };
+export type ProfileChoice = { readonly id: string; readonly name: string; readonly enabled?: boolean };
 export type ProfileChoices =
 	| {
 			readonly state: "ready";
@@ -95,9 +96,10 @@ export async function readProfiles(
 		return {
 			state: "ready",
 			// The manager's own visibility rule, as the root validates it.
-			profiles: visibleProfiles(envelope).map((profile) => ({
+			profiles: envelope.profiles.filter((profile) => isBuiltinProfile(profile.id) && !(navigator.platform.includes("Mac") && profile.id === "1-0")).map((profile) => ({
 				id: profile.id,
 				name: profile.name,
+                enabled: !managerState(envelope).hidden.includes(profile.id),
 			})),
 			active: Object.fromEntries(
 				Object.entries(envelope.activeByDevice).map(([serial, selection]) => [

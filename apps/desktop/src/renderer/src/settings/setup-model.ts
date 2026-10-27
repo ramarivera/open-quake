@@ -79,19 +79,17 @@ export function initialChoices(
 	};
 }
 
-/** Saved profile IDs that still exist, else the profile active for the display. */
+/** Saved choices win; otherwise seed all enabled default profiles. */
 export function profileDefaults(
 	saved: ReadonlyArray<string>,
 	choices: ProfileChoices,
-	display: WizardDisplay | null,
+	_display: WizardDisplay | null,
 ): ReadonlyArray<string> {
 	if (choices.state !== "ready") return saved;
 	const known = new Set(choices.profiles.map((profile) => profile.id));
 	const kept = saved.filter((id) => known.has(id));
 	if (kept.length > 0) return kept;
-	const key = display?._tag === "quake" ? display.deviceId : "desktop-preview";
-	const active = choices.active[key] ?? choices.active["desktop-preview"];
-	return active && known.has(active) ? [active] : [];
+	return choices.profiles.filter((profile) => profile.enabled !== false).map((profile) => profile.id);
 }
 
 export function displayUsable(

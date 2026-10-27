@@ -42,8 +42,8 @@ import {
 	appearanceRecord,
 	pendingAppearance,
 } from "./appearance-backup";
-import { clearOwnedData, exportBackup, prepareRestore } from "./backup-store";
-import { replaceBackup } from "./backup-write";
+import { exportBackupTo } from "./backup-export";
+import { clearOwnedData, prepareRestore } from "./backup-store";
 import {
 	atomicJson,
 	firmwareFiles,
@@ -206,14 +206,11 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						)
 					)
 						throw new BackupFailed();
-					const appearance = appearanceRecord(
-						await parent.webContents.executeJavaScript(
-							`localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)})`,
-						),
-					);
-					const bytes = await exportBackup(root, signal, appearance);
-					if (signal.aborted) return false;
-					await replaceBackup(selected.filePath, bytes, signal);
+					await exportBackupTo(root, selected.filePath, async () => appearanceRecord(
+                        await parent.webContents.executeJavaScript(
+                            `localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)})`,
+                        ),
+                    ), signal);
 					shell.showItemInFolder(selected.filePath);
 					return true;
 				},

@@ -5,6 +5,7 @@ import {
 	KnobReply,
 	type KnobRequest,
 } from "../../../../../shared/knob-contracts";
+import { decodeKnobThumbnails } from "./thumbnail-decoding";
 
 export function useKnob() {
 	const [snapshot, setSnapshot] = useState<KnobModelSnapshot>();
@@ -17,6 +18,7 @@ export function useKnob() {
 		let alive = true;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let pending: KnobModelSnapshot;
+        let cancelDecode: (() => void) | undefined;
 		const accept = (value: unknown): void => {
 			if (
 				!alive ||
@@ -25,13 +27,14 @@ export function useKnob() {
 			)
 				return;
 			revision.current = value.revision;
-			// Domain deltas are never dropped; React renders the newest authoritative frame.
-			pending = value;
-			if (!timer)
-				timer = setTimeout(() => {
-					timer = undefined;
-					if (alive) setSnapshot(pending);
-				}, 16);
+            cancelDecode?.();
+            cancelDecode = decodeKnobThumbnails(value, (decoded) => {
+                pending = decoded;
+                if (!timer) timer = setTimeout(() => {
+                    timer = undefined;
+                    if (alive) setSnapshot(pending);
+                }, 16);
+            });
 		};
 		const off = bridge.onSnapshot(accept);
 		void bridge
@@ -45,6 +48,7 @@ export function useKnob() {
 			});
 		return () => {
 			alive = false;
+            cancelDecode?.();
 			off();
 			if (timer) clearTimeout(timer);
 		};

@@ -196,6 +196,8 @@ function SetupFlow({
 	const step =
 		chosen && steps.includes(chosen) ? chosen : resumeStep(snapshot, steps);
 	const [regionConfirm, setRegionConfirm] = useState(false);
+    const [profileFailure, setProfileFailure] = useState(false);
+    const [profilePending, setProfilePending] = useState(false);
 	const [choices, setChoices] = useState<SetupChoices>(() =>
 		initialChoices(
 			snapshot,
@@ -241,7 +243,7 @@ function SetupFlow({
 		}));
 	}, [step, owners.profiles]);
 	const current = choices;
-	const busy = state.pending !== null;
+	const busy = state.pending !== null || profilePending;
 	const completed = snapshot.completed;
 	const index = steps.indexOf(step);
 	const go = (next: SetupStep): void => setStep(next);
@@ -255,6 +257,15 @@ function SetupFlow({
 			await store.complete();
 			return;
 		}
+        if (step === "profiles") {
+            setProfilePending(true);
+            setProfileFailure(false);
+            try {
+                const reply = await window.quakeProfileManager?.request({ type: "manage", command: { type: "default-visibility", ids: [...current.profileIds] } });
+                if (reply?._tag !== "success") { setProfileFailure(true); return; }
+            } catch { setProfileFailure(true); return; }
+            finally { setProfilePending(false); }
+        }
 		if (await store.save(continueDraft(step, current, locale)))
 			go(nextStep(steps, step));
 	};
@@ -291,6 +302,7 @@ function SetupFlow({
 						/>
 						{t("setup.done.hardware")}
 					</p>
+					{profileFailure && <p role="alert" className="setup-error">{t("setup.failure.persist")}</p>}
 					{state.failure ? (
 						<p role="alert" className="setup-error">
 							{failureText(t, state.failure)}
@@ -410,6 +422,7 @@ function SetupFlow({
 						}
 						onEdit={go}
 					/>
+					{profileFailure && <p role="alert" className="setup-error">{t("setup.failure.persist")}</p>}
 					{state.failure ? (
 						<p role="alert" className="setup-error">
 							{failureText(t, state.failure)}
@@ -934,7 +947,7 @@ export function ProfilesStep({
 							type="checkbox"
 							name={`${id}-profiles`}
 							checked={selected.has(profile.id)}
-							disabled={busy}
+							disabled={busy || (selected.has(profile.id) && selected.size === 1)}
 							title={profile.name}
 							badge={
 								profiles.active[activeKey] === profile.id ? (

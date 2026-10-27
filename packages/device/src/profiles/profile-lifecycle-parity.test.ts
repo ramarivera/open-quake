@@ -13,6 +13,7 @@ import { inspectProfileImport } from "./profile-import.js";
 import {
 	applyManagerCommand,
 	managerState,
+    installProfileCatalog,
 } from "./profile-manager-invariants.js";
 import { editProfilePages } from "./profile-pages.js";
 
@@ -187,3 +188,18 @@ it.each([-1, -2])(
 		});
 	},
 );
+
+
+it("SETTINGS-059 atomically applies all default choices, preserves custom visibility and repairs hidden active profiles", () => {
+    const base = installProfileCatalog(createInitialProfileEnvelope(), "win32");
+    const envelope = { ...base, activeByDevice: { serial: { profileId: "1-1", pageId: base.profiles.find((p) => p.id === "1-1")?.pages[0].id ?? "1" } } };
+    const before = encodeProfileEnvelope(envelope);
+    expect(applyManagerCommand(envelope, { type: "default-visibility", ids: [] })).toEqual({ _tag: "rejected", reason: "last-builtin" });
+    expect(applyManagerCommand(envelope, { type: "default-visibility", ids: ["missing"] })).toEqual({ _tag: "rejected", reason: "missing" });
+    expect(encodeProfileEnvelope(envelope)).toEqual(before);
+    const result = applyManagerCommand(envelope, { type: "default-visibility", ids: ["1-2", "1-8"] });
+    if (result._tag !== "updated") throw new Error("visibility failed");
+    expect(result.envelope.profiles.filter((p) => !managerState(result.envelope).hidden.includes(p.id)).map((p) => p.id)).toEqual(["1-2", "1-8", "local-profile"]);
+    expect(result.envelope.activeByDevice.serial?.profileId).toBe("1-2");
+    expect(result.envelope.profiles).toHaveLength(envelope.profiles.length);
+});

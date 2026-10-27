@@ -1,0 +1,32 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { exportBackupTo } from "./backup-export";
+import { exportBackup } from "./backup-store";
+import { replaceBackup } from "./backup-write";
+vi.mock("./backup-store", () => ({ exportBackup: vi.fn() }));
+vi.mock("./backup-write", () => ({ replaceBackup: vi.fn() }));
+afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); });
+it("MGMT-428 aborts at 120 seconds and cannot publish when archive work completes late", async () => {
+    vi.useFakeTimers();
+    let finish: (bytes: Uint8Array) => void = () => {};
+    vi.mocked(exportBackup).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = exportBackupTo("root", "destination", async () => "{}", new AbortController().signal);
+    const failed = expect(pending).rejects.toMatchObject({ _tag: "BackupFailed", code: "QUAKE.BACKUP.FAILED" });
+    await vi.advanceTimersByTimeAsync(120_000);
+    await failed;
+    expect(vi.mocked(exportBackup).mock.calls[0]?.[1]?.aborted).toBe(true);
+    finish(new Uint8Array([1]));
+    await Promise.resolve();
+    expect(replaceBackup).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+});
+it("MGMT-428 cancels pending appearance reads and publishes complete successful bytes once", async () => {
+    const controller = new AbortController();
+    const pending = exportBackupTo("root", "destination", () => new Promise(() => {}), controller.signal);
+    const cancelled = expect(pending).rejects.toMatchObject({ _tag: "BackupFailed" });
+    controller.abort(); await cancelled;
+    expect(exportBackup).not.toHaveBeenCalled();
+    const bytes = new Uint8Array([1,2,3]);
+    vi.mocked(exportBackup).mockResolvedValue(bytes);
+    await exportBackupTo("root", "destination", async () => "{}", new AbortController().signal);
+    expect(replaceBackup).toHaveBeenCalledExactlyOnceWith("destination", bytes, expect.any(AbortSignal));
+});

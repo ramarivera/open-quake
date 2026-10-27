@@ -38,3 +38,5 @@ Task 1.11 verification: the baseline read/write cases timed out on the first shu
 - [ ] 2.4 Stable media-ready thumbnails, incremental decoding, fan-out and cancellation. Bead open-quake-lih.9.18.
 - [ ] 2.5 Capacity-atomic imports, bounded exports, metadata and OBS restore. Bead open-quake-lih.9.19.
 - [ ] 2.6 Merge current main, rerun gates and native mock EN/DE smoke, deliver PR without merge or thread resolution.
+
+Profiles resume checkpoint, 2026-10-27: the interrupted lifecycle/foreground/capture work is committed as `667d3171`; current main merged normally as `dd0fa47d`. Added export deadline, batch wizard visibility and picker predecode changes compile through direct desktop TypeScript. No lane row is newly claimed complete: tests and Biome remain unrun because macOS read-permission queries on ExtSSD hang. At the lead's request, stop own runners, preserve a local checkpoint, do not push, and resume from `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/profiles/RESUME.md` after the host fix. All six lane tasks and Beads `.9.15` through `.9.19` stay open.
