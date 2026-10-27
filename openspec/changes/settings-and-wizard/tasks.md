@@ -254,4 +254,3 @@ The merged media smoke retains the shell's locale-safe selector and checks both 
 - [x] Connect the existing Developer ID identity to guarded release signing and notarization. Implementation and actual-artifact acceptance are owned by desktop-release-pipeline/tasks.md section 4, open-quake-i3j.4.
 
 The Developer ID certificate is installed on macmini. Unattended private-key access, notarization credentials, hosted runner provisioning and actual signed releases remain unverified. Signing notices remain unchanged until artifact acceptance. Windows and Linux signing are unchanged.
-
