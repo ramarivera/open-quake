@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Either, Redacted } from "effect";
+import { Effect, Either, Option, Redacted } from "effect";
 import { expect, it } from "vitest";
 import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants";
 import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
@@ -13,6 +13,7 @@ import {
 	knobVoiceReady,
 } from "../../renderer/src/keys/knob-draft";
 import { createDirectChat } from "./host";
+import { assistantCapturePreparer } from "./voice";
 
 it.each<ModelRow["role"]>(["none", "default", "fallback"])(
 	"editor readiness and production knob pinning agree for saved role %s",
@@ -233,6 +234,61 @@ it.each(["none", "fallback"] as const)(
 		} finally {
 			await host.dispose();
 			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+it.each(["", "qwen3.6-plus", "private-model", "explicit-model"])(
+	"PR128 capture resolves empty/changed-provider model %s before pinning",
+	async (modelId) => {
+		const directory = await mkdtemp(join(tmpdir(), "capture-model-"));
+		const host = createDirectChat({
+			directory,
+			online: () => true,
+			keySettings: () =>
+				Effect.succeed({
+					...defaultAssistantSettings(),
+					useAgent: false,
+					modelRowId:
+						modelId === "" || modelId === "explicit-model" ? "saved" : "",
+					modelId,
+				}),
+			models: () =>
+				Effect.succeed([
+					{
+						id: "saved",
+						role: "default",
+						provider: "deepseek",
+						model: "deepseek-v4-flash",
+						baseUrl: "https://fake.invalid/v1",
+						maxTokens: 1024,
+						credentialRef: "00000000-0000-4000-8000-000000000001",
+					},
+				]),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake")),
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const prepared = await Effect.runPromise(
+				assistantCapturePreparer(host)({
+					serial: "QK",
+					keyCode: "1,1",
+					type: "aiChat",
+					captureId: "test",
+					generation: 1,
+					agentId: Option.none(),
+				}),
+			);
+			expect(prepared.directModel.profile.modelId).toBe(
+				modelId === "private-model" || modelId === "explicit-model"
+					? modelId
+					: "deepseek-v4-flash",
+			);
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true });
 		}
 	},
 );

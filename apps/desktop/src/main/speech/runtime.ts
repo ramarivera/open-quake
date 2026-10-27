@@ -480,14 +480,21 @@ export const createProductionVoiceRuntime = Effect.fn(
 								error instanceof VoiceKnobRejected &&
 								error.code.startsWith("VOICE.KNOB.GATEWAY_")
 							)
-								return surface.rejectBusy(
-									request.serial,
-									request.keyCode,
-									error.code === "VOICE.KNOB.GATEWAY_STOPPED"
-										? "aiAudio.openClawGatewayNotRunning"
-										: error.code === "VOICE.KNOB.GATEWAY_STARTING"
-											? "aiAudio.openClawGatewayStarting"
-											: "aiAudio.openClawNotReady",
+								return stage(owner, {
+									_tag: "idle",
+									outcome: "cancelled",
+								}).pipe(
+									Effect.zipRight(
+										surface.rejectBusy(
+											request.serial,
+											request.keyCode,
+											error.code === "VOICE.KNOB.GATEWAY_STOPPED"
+												? "aiAudio.openClawGatewayNotRunning"
+												: error.code === "VOICE.KNOB.GATEWAY_STARTING"
+													? "aiAudio.openClawGatewayStarting"
+													: "aiAudio.openClawNotReady",
+										),
+									),
 								);
 							const failure =
 								error instanceof AiUnavailable &&

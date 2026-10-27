@@ -1,8 +1,9 @@
-import { Effect, Schema } from "effect";
+import { Effect, Either, Option, Schema } from "effect";
 import { expect, it, vi } from "vitest";
 import {
 	emptyKnobResource,
 	emptyKnobSlot,
+	validateKnobResource,
 } from "../../../../../packages/device/src/knob/knob-invariants";
 import { committedKnob } from "../../../../../packages/device/src/knob/knob-profile";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service";
@@ -25,7 +26,7 @@ it("MGMT-213 imports saved HA configData and dispatches the committed center pre
 		custom_display_settings: { fontSize: 24 },
 		custom_display_detail: [],
 	};
-	const configData = JSON.stringify(config);
+	const configData = ` ${JSON.stringify(config)}\n`;
 	const knob = {
 		...emptyKnobResource(),
 		config: {
@@ -94,6 +95,85 @@ it("MGMT-213 imports saved HA configData and dispatches the committed center pre
 			}),
 		);
 		expect(calls).toEqual([config]);
+	} finally {
+		await runtime.dispose();
+	}
+});
+
+it.each([
+	{},
+	{ entity_id: "light.desk", service: "toggle" },
+	{
+		entity_id: "light.desk",
+		service: "toggle",
+		service_data: {},
+		custom_display_type: "default",
+		custom_display_settings: { fontSize: 99 },
+		custom_display_detail: [],
+	},
+])("PR128 malformed imported HA object stays inert: %j", async (config) => {
+	const knob = {
+		...emptyKnobResource(),
+		config: {
+			...emptyKnobResource().config,
+			display: true,
+			subActions: [
+				{
+					childrenName: "homeAssistant",
+					config: {
+						type: "homeAssistant",
+						actions: [{ type: "configData", value: JSON.stringify(config) }],
+					},
+				},
+				emptyKnobSlot(),
+				emptyKnobSlot(),
+			],
+		},
+	};
+	const imported = inspectProfileImport({
+		id: "p",
+		name: "bad HA",
+		revision: 1,
+		pages: [{ id: "one", keys: [] }],
+		knob,
+	}).profile;
+	expect(imported).toBeDefined();
+	const envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
+		schemaVersion: 1,
+		profiles: [imported],
+		activeByDevice: { device: { profileId: "p", pageId: "one" } },
+	});
+	expect(Either.isLeft(validateKnobResource(knob))).toBe(true);
+	const saved = envelope.profiles[0];
+	if (!saved) throw new Error("missing profile");
+	expect(committedKnob(saved)).toEqual(Option.none());
+	const calls: unknown[] = [];
+	const adapter = desktopKnobAdapters(
+		"/unused",
+		{
+			deviceId: () => "device",
+			voice: () => Effect.void,
+			homeAssistant: async (key) => {
+				calls.push(key);
+			},
+		},
+		{
+			read: async () => Schema.encodeSync(ProfileEnvelope)(envelope),
+			write: async () => {},
+		},
+	);
+	const context = await Effect.runPromise(adapter.load);
+	const runtime = makeKnobRuntime(adapter.ports);
+	try {
+		await runtime.runPromise(KnobModel.configure(context));
+		await runtime.runPromise(
+			KnobModel.dispatch({
+				_tag: "Key",
+				sessionId: context.session.sessionId,
+				code: 1,
+			}),
+		);
+		expect(calls).toEqual([]);
 	} finally {
 		await runtime.dispose();
 	}

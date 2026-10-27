@@ -87,6 +87,9 @@ export const createDirectChatVoice = (
 							request.keyCode,
 							request.agentId || "main",
 							request.knob?.profileId,
+							request.knob?.route === "direct"
+								? request.directModel?.profile.id
+								: undefined,
 						]);
 						let sessionId = sessions.get(route)?.sessionId;
 						if (!sessionId) {

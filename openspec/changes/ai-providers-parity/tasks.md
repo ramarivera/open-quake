@@ -108,3 +108,38 @@ warnings, tracked in open-quake-lih.23.2. None of the new lane requirements are
 flagged. Linux execution, physical QUAKE, microphone, playback, real HA and paid
 providers remain unverified. Beads .15.13 and .15.14 stay open for lead review
 and merge; task 8.4 and physical/live acceptance remain open.
+
+
+## PR128 batched review fixes
+
+- [x] Reconcile selected-session ownership, draft identity, model admission, capture cleanup and HA assignment validation with real-consumer regressions. Bead open-quake-lih.15.16. Implementation beads .15.13/.15.14/.15.15 remain open for parent review.
+
+
+PR128 fix1 implements all nine distinct findings from eleven threads. Direct
+knob session identity now includes its pinned profile; explicit persona rows use
+the editor catalog; capture resolves empty overrides and reconciles followed
+provider models before pinning. Mounted persona drafts refresh on selection
+generation, discard late reads/Update results, and send a generation-bound
+Update. Selected edits never write the global persona. They remain in memory
+until key reselection or session eviction; saved key settings remain the
+reselection/restart source. Assistant RPCs claim unowned selected sessions and
+reject foreign read/update/selection/ack operations using existing ownership.
+Gateway refusal terminates the original reservation before localized busy
+feedback. Canonical HaKey validation is shared below edge; invalid imports stay
+inert, Save rejects malformed actions, and valid configData remains verbatim.
+
+Focused production-consumer regressions cover loopback inference/history,
+selected/global persona isolation, two real encoded RPC connections, mounted
+async destination races, refused capture followed by a grid capture, imported HA
+presses and profile Save rejection. Fail-before logs reproduce the original
+routing, isolation, ownership, capture and malformed-assignment defects. Tests
+use fake microphone permission/providers/equipment only. Six package typechecks,
+Biome, desktop build, both bundle modes and hidden muted native persona smoke
+passed; four EN/DE captures were visually inspected. Strict OpenSpec 1.15.0
+retains the inherited 9 pass / 38 fail requirement-length baseline in
+open-quake-lih.23.2. None of this round's new requirements are flagged.
+
+Bead open-quake-lih.15.16 remains in progress for parent diff/reply review.
+Implementation beads .15.13/.15.14/.15.15 stay open. No review threads were
+posted to, resolved or retriggered by this lane. Hardware, real microphone,
+playback, real HA, live providers and Linux remain unverified.

@@ -112,3 +112,25 @@ MGMT-213 SHALL preserve the center Home Assistant slot configData through save/i
 #### Scenario: Saved HA press and successful equipment result
 - **WHEN** a configured HA center slot is pressed or an admitted assistant turn operates allowed equipment
 - **THEN** the saved action executes once and its result remains visible even if response generation is unavailable, while invalid, cancelled or stale work never executes
+
+
+### Requirement: Assistant route admission consistency
+Direct capture SHALL resolve the selected row before choosing its model, use the row model for an empty assistant override, and reconcile known cross-provider models before pinning a followed default. Custom model IDs SHALL remain intact. A changed pinned direct profile SHALL use a separate conversation; an unchanged route SHALL reuse its per-key conversation.
+
+#### Scenario: Changed model or followed provider
+- **WHEN** a direct knob changes model or its followed provider changes
+- **THEN** capture pins the resolved compatible model and starts a separate session without carrying the previous route's history
+
+### Requirement: Refused capture reservation cleanup
+Gateway refusal SHALL terminate the original capture reservation before publishing localized busy feedback.
+
+#### Scenario: Gateway refuses and another key captures
+- **WHEN** a gateway refuses a preparing knob capture
+- **THEN** no microphone opens for that capture and an unrelated grid key can reserve the released device
+
+### Requirement: Portable equipment assignment validation
+Home Assistant assignment validation SHALL use the canonical existing HaKey shape without changing configData bytes.
+
+#### Scenario: Malformed imported equipment assignment
+- **WHEN** imported knob configData is valid JSON but fails the canonical HaKey shape
+- **THEN** the assignment is rejected before Save or execution and valid configData remains verbatim

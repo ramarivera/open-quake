@@ -8,6 +8,7 @@ import {
 	Queue,
 	Redacted,
 	Schema,
+	TestClock,
 } from "effect";
 import { AiCredentials } from "../../../../../packages/edge/src/ai/ai-credentials";
 import {
@@ -26,6 +27,8 @@ import {
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
 import {
+	GridVoice,
+	GridVoiceRuntime,
 	VoiceSurface,
 	VoiceSurfacePublisher,
 	VoiceTonePort,
@@ -674,6 +677,8 @@ it.effect.each([
 				yield* Effect.gen(function* () {
 					const speech = yield* AiSpeechService;
 					let acquired = 0;
+					const surface = yield* VoiceSurface;
+					yield* surface.reserve(request.serial, "0,1", request.captureId);
 					const controller = yield* createProductionVoiceRuntime({
 						speech,
 						profiles: () =>
@@ -682,7 +687,7 @@ it.effect.each([
 						capture: {
 							permission: Effect.sync(() => {
 								acquired++;
-								return true;
+								return false;
 							}),
 							open: () => Effect.die("gateway gate must precede mic"),
 						},
@@ -704,6 +709,10 @@ it.effect.each([
 					});
 					yield* tick;
 					expect(acquired).toBe(0);
+					expect(yield* surface.activeFlow(request.serial)).toEqual(
+						Option.none(),
+					);
+
 					expect(tones).toEqual(["busy"]);
 					expect(events.filter((e) => e._tag === "Toast")).toEqual([
 						{
@@ -717,6 +726,19 @@ it.effect.each([
 										: "aiAudio.openClawNotReady",
 						},
 					]);
+					yield* Effect.gen(function* () {
+						yield* GridVoice.input(request.serial, {
+							keyCode: "1,1",
+							kind: "down",
+							type: "aiChat",
+						});
+						yield* TestClock.adjust(1000);
+						yield* tick;
+						expect(acquired).toBe(1);
+					}).pipe(
+						Effect.provide(GridVoice.Default),
+						Effect.provideService(GridVoiceRuntime, controller.runtime),
+					);
 				}).pipe(
 					Effect.provide(
 						Layer.mergeAll(

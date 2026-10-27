@@ -117,8 +117,8 @@ export function createDirectChatBridge(
 	return {
 		persona: {
 			read: () => run((client) => client.assistant.read(undefined)),
-			update: (settings) =>
-				run((client) => client.assistant.update({ settings })),
+			update: (settings, generation = null) =>
+				run((client) => client.assistant.update({ settings, generation })),
 		},
 		assistantVisibility: (visible) =>
 			run((client) => client.assistant.visibility({ visible })),

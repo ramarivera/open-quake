@@ -327,3 +327,25 @@ AI-228, AI-229 and AI-230 SHALL offer filterable System Role selection, Custom R
 - **WHEN** a device key selects a desktop session and the user opens the persona controls and presses Update
 - **THEN** the controls read that session's settings and the next desktop turn in that session uses the updated prompt and sampling
 - **AND** another key's session and an already admitted request remain unchanged
+
+
+### Requirement: Selected assistant draft isolation
+The desktop SHALL bind persona drafts to their selection generation and reject stale updates. Selected-session edits SHALL stay in memory until key reselection or session eviction, without changing the durable ordinary persona. Saved key configuration SHALL remain the source on key reselection and restart.
+
+#### Scenario: Switch keys while reading or updating
+- **WHEN** selection changes from key A to key B while an editor read or Update is pending
+- **THEN** the editor discards A's late results and the host rejects A's stale Update without changing B or the global persona
+
+### Requirement: Selected assistant connection ownership
+Assistant RPC reads, selection, updates and acknowledgement SHALL respect per-connection selected-session ownership. An unowned selected session MAY be claimed by its first consumer.
+
+#### Scenario: Another window requests selected assistant data
+- **WHEN** one connection has claimed a selected session and a second connection requests its settings, transcript, Update or acknowledgement
+- **THEN** the second connection receives CHAT.INPUT.INVALID and cannot mutate or consume that selection
+
+### Requirement: Persona catalog resolution
+Explicit persona model rows SHALL resolve from the editor's default catalog. An unset persona row SHALL retain main-scope fallback.
+
+#### Scenario: Explicit persona under main model override
+- **WHEN** the persona selects a default-catalog row absent from main's override
+- **THEN** ordinary desktop inference uses that explicit row, and an unset persona row still follows main's default

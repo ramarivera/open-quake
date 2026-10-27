@@ -1,7 +1,7 @@
 import { Either, Option, Schema } from "effect";
+import { HaKey } from "../actions/ha-key-contracts.js";
 import {
 	type KnobFunction,
-	KnobJson,
 	KnobNavigationActions,
 	type KnobSlotName,
 	KnobVoiceActions,
@@ -48,7 +48,7 @@ const validateOwned = (
 		? Either.right(undefined)
 		: Either.left(InvalidKnobConfig.fromCause("function-actions"));
 };
-/** Assignment validation preserves configData verbatim. The HA executor validates HaKey before IO. */
+/** Decode for validation only; retain configData verbatim through Save and import. */
 const validateHa = (
 	assignment: KnobFunction,
 ): Either.Either<void, InvalidKnobConfig> => {
@@ -62,13 +62,10 @@ const validateHa = (
 		typeof action.value !== "string"
 	)
 		return Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
-	const decoded = Schema.decodeUnknownEither(Schema.parseJson(KnobJson))(
+	const decoded = Schema.decodeUnknownEither(Schema.parseJson(HaKey))(
 		action.value,
 	);
-	return Either.isRight(decoded) &&
-		typeof decoded.right === "object" &&
-		decoded.right !== null &&
-		!Array.isArray(decoded.right)
+	return Either.isRight(decoded)
 		? Either.right(undefined)
 		: Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
 };

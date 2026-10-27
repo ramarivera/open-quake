@@ -23,6 +23,7 @@ export interface DirectChatBridge {
 		readonly read: () => Promise<AssistantSettings>;
 		readonly update: (
 			settings: AssistantSettings,
+			generation?: number | null,
 		) => Promise<AssistantSettings>;
 	};
 	readonly assistantVisibility?: (visible: boolean) => Promise<void>;

@@ -45,7 +45,10 @@ import type {
 	SessionId,
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
-import type { ChatError } from "../../../../../packages/edge/src/chat/chat-errors";
+import {
+	type ChatError,
+	ChatInvalid,
+} from "../../../../../packages/edge/src/chat/chat-errors";
 import { ChatInferenceLive } from "../../../../../packages/edge/src/chat/chat-ports";
 import {
 	ChatRepository,
@@ -273,7 +276,9 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								pinned ??
 								(yield* Effect.gen(function* () {
 									const rows = yield* options.models(
-										keySettings ? "default" : scope,
+										keySettings || savedSettings?.modelRowId
+											? "default"
+											: scope,
 									);
 									const eligible = resolveModelRows(rows);
 									const saved = savedSettings?.modelRowId
@@ -488,24 +493,39 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			return {
 				runtime,
 				persona: {
-					read: () =>
-						Effect.suspend(() => {
+					read: (generation?: number | null) =>
+						Effect.gen(function* () {
+							if (
+								generation !== undefined &&
+								generation !== (selection?.generation ?? null)
+							)
+								return yield* new ChatInvalid();
 							const settings =
 								selection && sessionSettings.get(selection.sessionId);
-							return settings ? Effect.succeed(settings) : persona.read();
+							return settings ?? (yield* persona.read());
 						}),
 					update: Effect.fn("DesktopChat.updatePersona")(function* (
 						input: AssistantSettings,
+						generation: number | null = null,
 					) {
-						// Capture the destination before persistence yields. A newer key
-						// selection must never inherit an update meant for this one.
-						const sessionId = selection?.sessionId;
-						const saved = yield* persona.update(input);
-						if (sessionId && sessionSettings.has(sessionId)) {
-							sessionSettings.set(sessionId, saved);
-							if (selection?.sessionId === sessionId)
-								selection = { ...selection, settings: saved };
-						}
+						// A draft can only update the selection that supplied it. Selected
+						// edits are session-local; the saved key remains the restart source.
+						if ((selection?.generation ?? null) !== generation)
+							return yield* new ChatInvalid();
+						const destination = selection;
+						if (!destination) return yield* persona.update(input);
+						const saved = yield* Schema.decodeUnknown(AssistantSettings, {
+							onExcessProperty: "error",
+						})(input).pipe(
+							Effect.mapError((cause) => new AiConfigInvalid(cause)),
+						);
+						if (
+							selection?.generation !== generation ||
+							!sessionSettings.has(destination.sessionId)
+						)
+							return yield* new ChatInvalid();
+						sessionSettings.set(destination.sessionId, saved);
+						selection = { ...destination, settings: saved };
 						return saved;
 					}),
 				},
@@ -648,21 +668,15 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					const provider = followed
 						? eligible.find((r) => r.role === "default")?.id
 						: assistant?.modelRowId || providerId;
-					const model = assistant
-						? assistant.modelId ||
-							(followed
-								? eligible.find((r) => r.id === provider)?.model
-								: modelId) ||
-							""
-						: modelId;
-					const matches = eligible.filter(
-						(r) =>
-							r.id === provider &&
-							model.trim().length > 0 &&
-							model.length <= 200,
-					);
+					const matches = eligible.filter((r) => r.id === provider);
 					const row = matches.length === 1 ? matches[0] : undefined;
 					if (!row?.model.trim() || !row.credentialRef)
+						return yield* new VoiceKnobRejected("RouteIncomplete");
+					const settings = assistant
+						? reconcileAssistantProvider(assistant, row)
+						: undefined;
+					const model = settings ? settings.modelId || row.model : modelId;
+					if (!model.trim() || model.length > 200)
 						return yield* new VoiceKnobRejected("RouteIncomplete");
 					const profile = yield* Effect.try({
 						try: () => profileFromModel({ ...row, model }),

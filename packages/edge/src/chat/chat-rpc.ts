@@ -52,7 +52,10 @@ export const ChatRpcs = RpcGroup.make(
 		error: ChatRpcFailure,
 	}),
 	Rpc.make("assistant.update", {
-		payload: { settings: AssistantSettings },
+		payload: {
+			settings: AssistantSettings,
+			generation: Schema.NullOr(Schema.Int),
+		},
 		success: AssistantSettings,
 		error: ChatRpcFailure,
 	}),
