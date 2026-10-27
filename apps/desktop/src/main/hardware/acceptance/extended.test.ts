@@ -165,3 +165,48 @@ it("keeps unqualified V3 brightness, effect and color writes blocked", () => {
 		expect(allowedExtendedWrite(bytes, true)).toBe(false);
 	}
 });
+
+it.each([false, true])(
+	"runs the qualified V3 production lighting inventory, mutations=%s",
+	async (mutations) => {
+		const fake = await Effect.runPromise(
+			makeFakeHardwareTransport({
+				serial: "v3-acceptance",
+				firmware: [3, 1, 0, 19],
+				qmkProtocolVersion: 12,
+				qmkValues: [
+					{ prefix: [3, 1], values: [247] },
+					{ prefix: [3, 2], values: [0] },
+					{ prefix: [3, 3], values: [156] },
+					{ prefix: [3, 4], values: [0, 255] },
+				],
+			}),
+		);
+		const report = await Effect.runPromise(
+			runExtendedAcceptance({
+				serial: "v3-acceptance",
+				mutations,
+				cycles: 1,
+			}).pipe(Effect.provide(fake.layer)),
+		);
+		expect(report.checks.filter((row) => row.status === "failed")).toEqual([]);
+		expect(
+			report.checks.find((row) => row.id === "lighting-effectSpeed-roundtrip")
+				?.status,
+		).toBe(mutations ? "passed" : "skipped");
+		for (const field of ["brightness", "color1"]) {
+			expect(
+				report.checks.find((row) => row.id === `lighting-${field}-roundtrip`),
+			).toMatchObject({
+				status: "skipped",
+				reason: "Field is not qualified for this firmware",
+			});
+		}
+		const writes = await Effect.runPromise(fake.writes);
+		expect(
+			writes.filter((b) => b[1] === 7).every((b) => b[2] === 3 && b[3] === 3),
+		).toBe(true);
+		expect(writes.some((b) => b[1] === 9)).toBe(false);
+		expect(report.handlesClosed).toBe(report.handlesOpened);
+	},
+);

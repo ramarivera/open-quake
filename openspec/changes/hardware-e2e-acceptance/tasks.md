@@ -26,3 +26,13 @@ Baseline PR135 squash merged as a37a5172 after exact-head review and all hosted 
 
 
 Native supplemental results passed concurrent queries, twelve software reconnect cycles,13/13handle cleanup and V3 effect-speed restoration. Six legacy-lighting checks are retained as skips on the installed3:1.0.19/protocol12 identity. Readback experiments established that brightness/color are not yet byte-for-byte controls and the repeatable write guard blocks them. The original observed247brightness/off0mode was restored after qualification. Real USB capture passed twice with ordered PCM, pause/resume, short final frames, stop and worker cleanup, plus low-level native output and playback drainage. No raw audio was saved. Production V3 capability-schema approval remains a separate pending question; the test extension can ship independently.
+
+## Approved narrow V3 production control
+
+Execution issue `open-quake-fdc.4`. Ramiro approved the schema change.
+
+- [x] 3.1 Add the exact hardware-qualified V3 speed capability and shared-owner mapping, with unsupported operations rejected before IO.
+- [x] 3.2 Verify capability/schema, production consumer, renderer and actual native speed application/restoration.
+- [ ] 3.3 Ship the narrow fix separately with at most one review round.
+
+Narrow V3 implementation verifies exact identity, scalar descriptor3, shared prefix[3,3], unsupported edits/save before IO and disabled renderer save. Native production run passed8/10 supplemental checks with2 explicit unsupported fields, speed restored156, original brightness247/mode0 retained,13/13 handles closed and538 safe diagnostics with zero drops/failures. Physical illumination remains unverified.

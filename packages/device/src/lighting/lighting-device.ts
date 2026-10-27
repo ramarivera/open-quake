@@ -98,6 +98,9 @@ export class LightingDevice extends Effect.Service<LightingDevice>()(
 				Scope.Scope
 			> {
 				const { capabilities: caps, info } = registration;
+				// This standalone adapter encodes legacy QMK frames. V3 uses the shared owner.
+				if (caps.transport !== "legacy")
+					return yield* new LightingTargetUnavailable();
 				const current = Effect.fn("LightingDevice.checkBinding")(
 					function* (): Effect.fn.Return<void, LightingTargetUnavailable> {
 						const fresh = yield* resolve(caps.target);

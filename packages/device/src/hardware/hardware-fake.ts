@@ -28,6 +28,7 @@ export const makeFakeHardwareTransport = (
 	options: {
 		readonly serial?: string;
 		readonly qmkProtocolVersion?: number;
+		readonly firmware?: readonly [number, number, number, number];
 		readonly qmkValues?: readonly {
 			prefix: readonly number[];
 			values: readonly number[];
@@ -122,7 +123,9 @@ export const makeFakeHardwareTransport = (
 									if (command.cmdId === 6)
 										yield* fake.emit(fakeHardwareReply(6, [knobLed]));
 									if (command.cmdId === 46)
-										yield* fake.emit(fakeHardwareReply(46, [1, 1, 0, 21]));
+										yield* fake.emit(
+											fakeHardwareReply(46, options.firmware ?? [1, 1, 0, 21]),
+										);
 								} else if (command.opCode === 1) {
 									if (command.cmdId === 6)
 										knobLed = command.subData[0] ?? knobLed;

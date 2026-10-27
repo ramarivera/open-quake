@@ -154,7 +154,10 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 									};
 									if (state.status === "unavailable") return;
 									assert.equal(state.status, "ready");
-									assert.equal(state.applied.length, 3);
+									assert.equal(
+										state.applied.length,
+										state.capabilities.transport === "v3" ? 1 : 3,
+									);
 								}),
 							),
 						),
@@ -171,6 +174,18 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 					}
 					const originals = state.value.applied;
 					const caps = state.value.capabilities.fields;
+					for (const field of [
+						"brightness",
+						"effectSpeed",
+						"color1",
+					] as const) {
+						if (!caps.some((cap) => cap.field === field && cap.writable))
+							record({
+								id: `lighting-${field}-roundtrip`,
+								status: "skipped",
+								reason: "Field is not qualified for this firmware",
+							});
+					}
 					for (const original of originals) {
 						const id = `lighting-${original.field}-roundtrip`;
 						if (!options.mutations) {
@@ -183,6 +198,10 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 						}
 						const cap = caps.find((cap) => cap.field === original.field);
 						assert(cap);
+						const prefix =
+							state.value.capabilities.transport === "v3"
+								? [3, cap.valueId]
+								: [cap.valueId];
 						const bytes = (value: LightingChange) =>
 							typeof value.value === "number"
 								? [value.value]
@@ -221,12 +240,12 @@ export const runExtendedAcceptance = Effect.fn("HardwareAcceptance.extended")(
 									.qmk([
 										{
 											_tag: "set",
-											prefix: [cap.valueId],
+											prefix,
 											values: bytes(original),
 										},
 										{
 											_tag: "get",
-											prefix: [cap.valueId],
+											prefix,
 											length: bytes(original).length,
 										},
 									])

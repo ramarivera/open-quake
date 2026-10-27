@@ -35,7 +35,7 @@ export const LightingFieldCapability = Schema.Union(
 	Schema.Struct({
 		...fieldAccess,
 		field: Schema.Literal("effectSpeed"),
-		valueId: Schema.Literal(0x0b, 0x82),
+		valueId: Schema.Literal(0x0b, 0x82, 0x03),
 		range: ByteRange,
 	}),
 	Schema.Struct({
@@ -81,7 +81,7 @@ export type LightingChange = typeof LightingChange.Type;
 export const LightingCapabilities = Schema.Struct({
 	target: LightingTarget,
 	identity: LightingIdentity,
-	transport: Schema.Literal("legacy", "unavailable"),
+	transport: Schema.Literal("legacy", "v3", "unavailable"),
 	fields: Schema.Array(LightingFieldCapability),
 	save: Schema.OptionFromSelf(
 		Schema.Struct({
