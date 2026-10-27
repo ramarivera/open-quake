@@ -99,3 +99,37 @@ export function competingOwners(output: string, ownPid: number): number[] {
 			: [];
 	});
 }
+
+/** Extended lighting accepts only the three source-qualified volatile legacy fields. */
+export function allowedExtendedWrite(
+	report: Uint8Array,
+	mutations: boolean,
+): boolean {
+	if (allowedAcceptanceWrite(report, mutations)) return true;
+	if (report.length !== 33 || report[0] !== 0) return false;
+	const command = report[1],
+		field = report[2];
+	if (
+		field === 3 &&
+		report[3] !== undefined &&
+		[1, 2, 3, 4].includes(report[3])
+	) {
+		const size = report[3] === 4 ? 2 : 1;
+		if (command === 8) return report.slice(4).every((byte) => byte === 0);
+		// Only speed has a verified byte-for-byte native round trip on this V3 firmware.
+		return (
+			mutations &&
+			command === 7 &&
+			report[3] === 3 &&
+			report.slice(4 + size).every((byte) => byte === 0)
+		);
+	}
+	const length = field === 12 ? 2 : field === 9 || field === 11 ? 1 : 0;
+	if (!length) return false;
+	if (command === 8) return report.slice(3).every((byte) => byte === 0);
+	return (
+		mutations &&
+		command === 7 &&
+		report.slice(3 + length).every((byte) => byte === 0)
+	);
+}

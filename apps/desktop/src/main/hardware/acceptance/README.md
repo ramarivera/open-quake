@@ -77,3 +77,12 @@ No physical cursor movement or shortcuts occur. Do not run it
 for unattended or background-only tests. Its separate `keyboard-result.json`
 is supplemental evidence; the control-suite percentage does not silently count
 an unexecuted supervised test as passed.
+
+
+## Supplemental native tests
+
+Set `OPEN_QUAKE_HW_E2E_EXTENDED=1` alongside the native opt-in, exact serial and a fresh artifact directory, then run `pnpm test:hardware`. Mutation mode is still separate. The supplemental result preserves ten fixed checks, including skips, without changing the original twenty-scenario denominator. It exercises twelve concurrent production query operations, twelve software reconnect cycles, stale-owner rejection and complete handle cleanup.
+
+Legacy lighting round trips require the existing qualified firmware identity. Installed QUAKE:3:1.0.19/protocol12 is inspected separately through the production generic QMK owner. Channel3 values1-4 are readable; only effect speed has verified exact application and restoration. Brightness, color and effect writes are blocked in the repeatable suite. Qualification experiments found nontrivial brightness readback mapping, and restored its original247/off0 state; an echoed write is not proof of application. No lighting flash-save command is permitted.
+
+`audio-smoke.ts`, built with `audio-smoke.config.ts`, additionally requires `OPEN_QUAKE_HW_E2E_AUDIO=1` and existing native microphone permission. It records two brief sessions from the default USB PnP input, validates PCM sequencing, pause/resume, stop/tail drainage and worker cleanup, then plays a low-level250ms tone through the production audio output. Results retain counts and RMS only, not audio samples. Native playback completion does not prove acoustic audibility or a provider loop. Raw hardware gestures, USB cable hot-plug and physical illumination remain separate acceptance items.

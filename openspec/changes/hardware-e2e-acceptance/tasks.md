@@ -3,7 +3,7 @@
 - [x] 1.1 Add the bounded scenario consumer, dedicated native opt-in and restoration/coverage regressions.
 - [x] 1.2 Build current main and run existing hidden native/mock UI and bundle checks.
 - [x] 1.3 Execute the safe opted-in native suite, inspect retained diagnostics and report exact scenario coverage.
-- [ ] 1.4 Ship the suite with one PR review round and preserve explicit physical-only limits.
+- [x] 1.4 Ship the suite with one PR review round and preserve explicit physical-only limits.
 
 Execution issue `open-quake-fdc.1`; supervised keyboard execution is `open-quake-fdc.2`. Existing physical acceptance stays in `open-quake-l86.7`.
 
@@ -14,3 +14,15 @@ Live keyboard testing then exposed the fixture's own Chromium helpers being mist
 Keyboard evidence is supplemental. The background suite stays at 13/20, and the additional keyboard scenario has now been exercised. Touch, knob gestures, physical USB hot-plug, visible panel output, audio/provider behavior and lighting qualification remain unverified. Ramiro reported an unlit/blank QUAKE during tests; macOS detects DK-QUAKE online at 1920x480, but those tests do not render the product panel. The observation is tracked in `open-quake-l86.7`.
 
 Build outputs and raw run artifacts remain in owned SSD scratch, outside git. The hidden native UI smoke passes but does not claim full-shell acceptance. No firmware flashing occurred. Ramiro waived repeated local test focus/readiness requests for the Mac mini during this task.
+
+
+## Expanded automation
+
+Baseline PR135 squash merged as a37a5172 after exact-head review and all hosted checks passed. Execution issue `open-quake-fdc.3` owns this extension.
+
+- [x] 2.1 Add and exercise native lighting restoration, concurrent query and software reconnect checks with fake regressions.
+- [x] 2.2 Add and execute real USB microphone capture, pause/resume and cleanup checks through the production driver.
+- [ ] 2.3 Reconcile actual additional coverage, ship the extension and handle one review round.
+
+
+Native supplemental results passed concurrent queries, twelve software reconnect cycles,13/13handle cleanup and V3 effect-speed restoration. Six legacy-lighting checks are retained as skips on the installed3:1.0.19/protocol12 identity. Readback experiments established that brightness/color are not yet byte-for-byte controls and the repeatable write guard blocks them. The original observed247brightness/off0mode was restored after qualification. Real USB capture passed twice with ordered PCM, pause/resume, short final frames, stop and worker cleanup, plus low-level native output and playback drainage. No raw audio was saved. Production V3 capability-schema approval remains a separate pending question; the test extension can ship independently.
