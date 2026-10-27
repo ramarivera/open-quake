@@ -107,3 +107,7 @@ Key-runtime section 8 evidence: real hidden mock Electron timer zero/clear and t
 ## PR #127 authorized residual continuation
 
 - [x] Include the owning revision when comparing progress so equal percentages in a replacement revision receive their own 1000 ms completion or 5000 ms inactivity expiry. Bead `open-quake-lih.10.28`. Effect-clock regressions preserve the new overlay at the old expiry and clear it at the replacement deadline; same-revision repeats don't extend it. Parent owns current-head CI/review acceptance.
+
+## PR #127 second and final continuation
+
+- [x] Scope countdown history, clear suppression and timer ownership to the incoming revision; clear runtime artwork on reset and verify the mounted renderer restores saved artwork. Bead `open-quake-lih.10.28`; parent owns remote gates.

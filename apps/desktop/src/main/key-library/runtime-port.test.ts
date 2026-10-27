@@ -5,6 +5,7 @@ import {
 	Effect,
 	Fiber,
 	Layer,
+	Option,
 	Schema,
 	TestClock,
 	TestContext,
@@ -184,7 +185,7 @@ function layer(
 			},
 			...runtimeActions,
 		},
-	).pipe(Layer.provide(profiles));
+	).pipe(Layer.provideMerge(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
 }
 it("resolves bundle references with structured macOS argv and keeps filesystem paths", async () => {
@@ -1174,3 +1175,76 @@ it("review: production keyboard catalog permits a supported text media follow-up
 	);
 	expect(calls).toEqual(["text", "audio_play"]);
 });
+
+it.each([
+	["example.org/{title}", "http://example.org/hello world", false],
+	[
+		"https://example.org/" + "$" + "{title}",
+		"https://example.org/hello world",
+		false,
+	],
+	["javascript:alert(1)", "javascript:alert(1)", true],
+	["file:///private/data", "file:///private/data", true],
+	["{title}", "{title}", true, "javascript:alert(1)"],
+	[
+		"example.org/" + "$" + "{title}",
+		"http://example.org/javascript:alert(1)",
+		false,
+		"javascript:alert(1)",
+	],
+])(
+	"continuation2: production profile import dispatches only safe normalized website %s",
+	async (url, expected, unsupported, title = "hello world") => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const source = {
+			...empty,
+			childrenName: "website",
+			config: {
+				...empty.config,
+				type: "website",
+				title: { ...empty.config.title, text: title },
+				actions: [{ type: "url", value: url }],
+			},
+		};
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const port = yield* KeyRuntimePort;
+				// The desktop port captures the same ProfileService that owns its imports.
+				const service = yield* ProfileService;
+				const imported = yield* service.importProfile(
+					JSON.stringify([source]),
+					"imported",
+				);
+				const profile = imported.profiles.find((p) => p.id === "imported");
+				if (!profile) return yield* Effect.die("Missing imported profile");
+				const key = profile.pages[0].keys[0];
+				if (!key) return yield* Effect.die("Missing imported website key");
+				expect(
+					Option.isSome(key.compatibility) &&
+						key.compatibility.value.unsupported,
+				).toBe(unsupported);
+				expect(
+					Option.isSome(key.compatibility) && key.compatibility.value.source,
+				).toEqual(source);
+				expect(key.config.actions?.[0]?.value).toBe(expected);
+				expect(os.openExternal).not.toHaveBeenCalled();
+				yield* service.selectProfile({
+					deviceId: "device",
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+				});
+				const runtime = yield* KeyRuntime;
+				yield* runtime.activate("device", "1,1", "press");
+				yield* runtime.activate("device", "1,1", "release");
+				expect((yield* port.read).activeByDevice.device?.profileId).toBe(
+					"imported",
+				);
+			}).pipe(Effect.provide(layer()), Effect.scoped),
+		);
+		expect(os.openExternal.mock.calls).toEqual(unsupported ? [] : [[expected]]);
+		expect(os.exec).not.toHaveBeenCalled();
+		expect(os.openPath).not.toHaveBeenCalled();
+		expect(os.clipboard).not.toHaveBeenCalled();
+		expect(os.worker).not.toHaveBeenCalled();
+	},
+);

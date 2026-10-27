@@ -216,3 +216,8 @@ Native actions SHALL preserve clipboard data on failed setup and interruption, c
 - **WHEN** a sequence includes a website template or an edited timer revision replaces running work
 - **THEN** website steps normalize against the parent title before any host effect, unsafe schemes reject the entire sequence, and the first activation starts the new timer
 - **AND** clearing expired zero retires pending alarm work so the next activation starts a timer
+
+#### Scenario: Production profile imports normalize website actions
+- **WHEN** the profile service imports a website key with a scheme-less URL and title placeholders
+- **THEN** the existing action normalizer runs before validation, the supported key executes the normalized HTTP or HTTPS URL once on activation, and import itself performs no host action
+- **AND** original JSON remains inert compatibility data, while unsafe URL schemes remain unsupported

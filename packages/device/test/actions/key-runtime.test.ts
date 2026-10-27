@@ -1552,3 +1552,59 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+for (const prior of [
+	"expired",
+	"cleared",
+	"owned-running",
+	"display-running",
+] as const) {
+	it.effect(
+		`continuation2: replacement countdown ignores ${prior} revision ownership`,
+		() => {
+			let callbacks = 0;
+			const f = fixture(timerDraft, false, 0, {
+				timerCompleted: () =>
+					Effect.sync(() => {
+						callbacks++;
+					}),
+			});
+			return Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				const event = (time: number, revision = 0) =>
+					runtime.displayEvent({
+						...displayTarget,
+						type: "countdown",
+						time,
+						revision,
+					});
+				if (prior === "owned-running") yield* press;
+				else yield* event(prior === "display-running" ? 1000 : 0);
+				if (prior === "cleared") yield* event(1000);
+				yield* TestClock.adjust(50);
+				f.nextRevision();
+				yield* event(2000, 1);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 2000,
+					countdownPhase: "running",
+					endAt: 2050,
+				});
+				yield* TestClock.adjust(1000);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 1000,
+					countdownPhase: "running",
+				});
+				yield* TestClock.adjust(1000);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 0,
+					countdownPhase: "expired",
+				});
+				expect(callbacks).toBe(0);
+				expect(f.calls).toEqual([]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

@@ -4,6 +4,7 @@ import {
 	legacyAssistantState,
 	migrateLegacyAiConfig,
 } from "../../../edge/src/ai/provider-catalog.js";
+import { normalizeActionImport } from "../actions/action-import.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
@@ -90,7 +91,10 @@ export function inspectProfileImport(
 	) => diagnostics.push({ code, path, blocking });
 	const normalizeKey = (input: unknown, path: string, pageId?: string) => {
 		const source = record(input);
-		const config = record(source?.config);
+		const normalized = source
+			? record(normalizeActionImport(source).normalized)
+			: undefined;
+		const config = record(normalized?.config);
 		if (!source || !config) {
 			report("invalid-field", path, true);
 			return input;
@@ -183,7 +187,7 @@ export function inspectProfileImport(
 			}
 		}
 		const candidate = {
-			...source,
+			...normalized,
 			...(source.childrenName === "" || source.childrenName === null
 				? { childrenName: undefined }
 				: {}),

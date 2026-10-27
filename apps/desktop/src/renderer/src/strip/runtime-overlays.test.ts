@@ -396,6 +396,25 @@ it("SCREEN-038 MGMT-172: targeted artwork is immutable and page indicator follow
 			);
 		});
 		expect(image("1,1")).toBe(replacement);
+		// The consumer stays mounted at the same saved revision across reset.
+		await act(async () => {
+			await runtime.runPromise(KeyRuntime.reset("other-device"));
+		});
+		expect(image("1,1")).toBe(replacement);
+		await act(async () => {
+			await runtime.runPromise(KeyRuntime.reset("device"));
+		});
+		expect(await runtime.runPromise(KeyRuntime.snapshot)).toEqual([]);
+		expect(image("1,1")).toBe(icon);
+		expect(image("1,2")).toBe(icon);
+		await act(async () => {
+			await runtime.runPromise(KeyRuntime.refresh("device"));
+		});
+		expect(image("1,1")).toBe(icon);
+		await act(async () => {
+			await runtime.runPromise(KeyRuntime.displayEvent(event));
+		});
+		expect(image("1,1")).toBe(replacement);
 		for (let page = 1; page <= 10; page++) {
 			await act(async () => {
 				await runtime.runPromise(KeyRuntime.navigate("device", 1, page));

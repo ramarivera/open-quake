@@ -132,7 +132,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const states = new Map<string, KeyFeedback>();
 			const alertVersions = new Map<string, object>();
 			const progressVersions = new Map<string, object>();
-			const clearedAt = new Map<string, number>();
+			const clearedAt = new Map<
+				string,
+				{ readonly revision: number; readonly time: number }
+			>();
 			const timerTaps = new Map<
 				string,
 				{ readonly revision: number; readonly time: number }
@@ -589,7 +592,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								running.delete(identity);
 								yield* Fiber.interrupt(expired.fiber);
 							}
-							clearedAt.set(identity, now);
+							clearedAt.set(identity, {
+								revision: profile.revision,
+								time: now,
+							});
 							timerTaps.set(identity, {
 								revision: profile.revision,
 								time: now,
@@ -880,11 +886,23 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					case "countdown": {
 						if (key.config.type !== "timer") return;
 						const now = yield* Clock.currentTimeMillis;
-						const previous = states.get(id);
-						if (event.time > 0 && now - (clearedAt.get(id) ?? -Infinity) < 120)
+						const retained = states.get(id);
+						const previous =
+							retained?.revision === event.revision ? retained : undefined;
+						const clear = clearedAt.get(id);
+						if (
+							event.time > 0 &&
+							clear?.revision === event.revision &&
+							now - clear.time < 120
+						)
 							return;
+						const owner = running.get(id);
+						if (owner && owner.revision !== event.revision) {
+							running.delete(id);
+							yield* Fiber.interrupt(owner.fiber);
+						}
 						if (event.time > 0 && previous?.countdownPhase === "expired") {
-							clearedAt.set(id, now);
+							clearedAt.set(id, { revision: event.revision, time: now });
 							const pending = displayTimers.get(id);
 							if (pending) {
 								yield* Fiber.interrupt(pending);
@@ -1091,6 +1109,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					if (!deviceId || value.deviceId === deviceId) {
 						yield* port.publish({
 							...value,
+							icon: "",
 							alternate: 0,
 							countdown: -1,
 							countdownPhase: "hidden",

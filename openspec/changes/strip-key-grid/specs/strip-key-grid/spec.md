@@ -423,3 +423,13 @@ Feedback SHALL remain bound to the original activation, and terminal failure ale
 - **WHEN** a new committed revision reports the same progress percentage as retained feedback
 - **THEN** the replacement owns a new 1000 ms completion or 5000 ms inactivity deadline, and the old revision's expiry cannot hide it
 - **AND** repeated equal values within that revision don't extend its deadline
+
+#### Scenario: Countdown replacement ignores obsolete timer state
+- **WHEN** a current revision receives a positive countdown after a prior revision expired, cleared, or started a timer
+- **THEN** the replacement starts immediately and owns its countdown ticks without inheriting the old zero-clear suppression
+- **AND** same-revision zero-clear suppression remains 120 ms
+
+#### Scenario: Reset restores saved artwork in a mounted renderer
+- **WHEN** a device resets after targeted runtime artwork replaced a saved icon
+- **THEN** the reset explicitly clears the icon override through the existing runtime contract and the mounted tile displays its saved icon at the same revision
+- **AND** the runtime snapshot is empty and another device's artwork remains intact
