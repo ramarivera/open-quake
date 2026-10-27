@@ -534,3 +534,60 @@ export function normalizeWebsiteUrl(
 		: `http://${expanded}`;
 	return Schema.is(WebsiteUrl)(url) ? url : undefined;
 }
+
+/** Normalize all website leaves before decoding or dispatching any sequence step. */
+export const normalizeSequenceWebsites = (
+	input: unknown,
+	title: string,
+): unknown => {
+	if (
+		typeof input !== "object" ||
+		input === null ||
+		!("subActions" in input) ||
+		!Array.isArray(input.subActions)
+	)
+		return input;
+	return {
+		...input,
+		subActions: input.subActions.map((step: unknown) => {
+			if (
+				typeof step !== "object" ||
+				step === null ||
+				!("config" in step) ||
+				("isPlugin" in step && step.isPlugin === true)
+			)
+				return step;
+			const config = step.config;
+			if (
+				typeof config !== "object" ||
+				config === null ||
+				!("type" in config) ||
+				config.type !== "website" ||
+				!("actions" in config) ||
+				!Array.isArray(config.actions)
+			)
+				return step;
+			return {
+				...step,
+				config: {
+					...config,
+					actions: config.actions.map((action: unknown) => {
+						if (
+							typeof action !== "object" ||
+							action === null ||
+							!("type" in action) ||
+							action.type !== "url" ||
+							!("value" in action) ||
+							typeof action.value !== "string"
+						)
+							return action;
+						return {
+							...action,
+							value: normalizeWebsiteUrl(action.value, title),
+						};
+					}),
+				},
+			};
+		}),
+	};
+};

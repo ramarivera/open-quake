@@ -72,6 +72,8 @@ export function KeyState({
 					role="status"
 					aria-label={state.alert === 1 ? "Invalid operation" : "Complete"}
 					style={{
+						position: "relative",
+						zIndex: 1,
 						width: 50,
 						height: 50,
 						background: "rgb(255,255,100)",
@@ -92,6 +94,7 @@ export function KeyState({
 					aria-valuenow={Math.round(progress)}
 					style={{
 						position: "absolute",
+						zIndex: 0,
 						inset: 0,
 						background: "#0a0a1a",
 						overflow: "hidden",

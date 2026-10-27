@@ -1245,3 +1245,230 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+for (const url of [
+	"example.org/{title}",
+	"https://example.org/" + "$" + "{title}",
+	"javascript:alert(1)",
+	"file:///private/data",
+]) {
+	it.effect(
+		`review: sequence normalizes ${url} before all host effects`,
+		() => {
+			const unsafe = /^(javascript|file):/.test(url);
+			const f = fixture({
+				type: "multiActions",
+				title: {
+					...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config
+						.title,
+					text: "hello",
+				},
+				subActions: [
+					{
+						config: {
+							type: "hotkey",
+							actions: [{ type: "key", value: "a" }],
+							gap: 0,
+						},
+					},
+					{
+						config: {
+							type: "website",
+							actions: [{ type: "url", value: url }],
+							gap: 0,
+						},
+					},
+				],
+			});
+			return Effect.gen(function* () {
+				const result = yield* Effect.either(press);
+				yield* TestClock.adjust(0);
+				if (unsafe) {
+					expect(result._tag).toBe("Left");
+					expect(f.calls).toEqual([]);
+				} else {
+					expect(result._tag).toBe("Right");
+					expect(f.calls).toHaveLength(2);
+					expect(f.calls[1]).toEqual({
+						type: "website",
+						actions: [
+							{
+								type: "url",
+								value: url.startsWith("https:")
+									? "https://example.org/hello"
+									: "http://example.org/hello",
+							},
+						],
+					});
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"review: new timer revision starts immediately and retires old callback work",
+	() => {
+		let completed = 0;
+		const f = fixture(
+			{
+				...timerDraft,
+				actions: [
+					{ type: "time", value: 2000 },
+					{ type: "callback", value: 1 },
+				],
+			},
+			false,
+			0,
+			{
+				timerCompleted: () =>
+					Effect.sync(() => {
+						completed++;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* press;
+			yield* TestClock.adjust(100);
+			f.nextRevision();
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.feedback.at(-1)).toMatchObject({
+				revision: 1,
+				countdownPhase: "running",
+				endAt: 2100,
+			});
+			yield* TestClock.adjust(1900);
+			expect(completed).toBe(0);
+			yield* TestClock.adjust(100);
+			expect(completed).toBe(1);
+			expect((yield* r.snapshot).at(-1)?.revision).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: clearing expired timer interrupts alarm and next tap restarts",
+	() => {
+		let stopped = 0;
+		const f = fixture(
+			{
+				...timerDraft,
+				actions: [
+					...timerDraft.actions.filter((a) => a.type !== "sound"),
+					{ type: "sound", value: "synthetic.wav" },
+				],
+			},
+			false,
+			0,
+			{
+				alarm: () =>
+					Effect.never.pipe(
+						Effect.ensuring(
+							Effect.sync(() => {
+								stopped++;
+							}),
+						),
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			yield* TestClock.adjust(2000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("expired");
+			yield* press;
+			expect(stopped).toBe(1);
+			yield* TestClock.adjust(600);
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.feedback.at(-1)).toMatchObject({
+				countdownPhase: "running",
+				endAt: 3600,
+			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: reset expiry cannot clear replacement alert or progress",
+	() => {
+		const f = fixture(timerDraft);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const target = {
+				deviceId: "device",
+				profileId: "p",
+				pageId: "one",
+				revision: 0,
+				keyCode: "1,1",
+			};
+			const update = Effect.gen(function* () {
+				yield* r.displayEvent({ ...target, type: "showAlert", alertType: 1 });
+				yield* r.displayEvent({ ...target, type: "progress", percent: 100 });
+			});
+			yield* update;
+			yield* TestClock.adjust(500);
+			yield* r.reset("device");
+			yield* update;
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.progress).toBe(100);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.progress).toBe(-1);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.alert).toBe(1);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.alert).toBe(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: physical deferred failure never marks the newly selected profile",
+	() => {
+		const f = fixture(
+			{ type: "cmd", actions: [{ type: "text", value: "echo synthetic" }] },
+			false,
+			0,
+			{
+				executeOwned: () =>
+					Effect.sleep(1000).pipe(
+						Effect.zipRight(Effect.fail(new HostActionFailed("synthetic"))),
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const pending = yield* r.prepareActivation("device", "1,1", "press");
+			f.switch();
+			yield* TestClock.adjust(1000);
+			yield* Effect.either(pending);
+			expect(
+				f.feedback.filter((s) => s.profileId === "q" && s.alert === 1),
+			).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"review: unsafe title expansion rejects a sequence before its earlier host step",
+	() => {
+		const f = fixture({
+			type: "multiActions",
+			title: {
+				...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config
+					.title,
+				text: "bad\ntitle",
+			},
+			subActions: [
+				{ config: { type: "hotkey", actions: [{ type: "key", value: "a" }] } },
+				{
+					config: {
+						type: "website",
+						actions: [{ type: "url", value: "https://example.org/{title}" }],
+					},
+				},
+			],
+		});
+		return Effect.gen(function* () {
+			expect((yield* Effect.either(press))._tag).toBe("Left");
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

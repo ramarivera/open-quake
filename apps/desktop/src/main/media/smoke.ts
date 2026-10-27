@@ -296,7 +296,7 @@ async function smoke(): Promise<void> {
 	registerMedia(
 		runtime,
 		() => management,
-		undefined,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
 		true,
 		() => panel,
 		undefined,
@@ -1820,25 +1820,38 @@ async function smoke(): Promise<void> {
 		pages: [
 			{
 				id: "1",
-				keys: ["timer", "pageNo", "website", "website"].map((type, index) => ({
-					...keyBase,
-					keyCode: `1,${index + 1}`,
-					childrenName: type,
-					config: {
-						...keyBase.config,
-						type,
-						actions:
-							type === "timer"
-								? [
-										{ type: "time", value: 1000 },
-										{ type: "sound", value: "" },
-										{ type: "callback", value: 1 },
-									]
-								: type === "website"
-									? [{ type: "url", value: "https://example.org/" }]
-									: [],
-					},
-				})),
+				keys: ["timer", "pageNo", "website", "website", "multiActions"].map(
+					(type, index) => ({
+						...keyBase,
+						keyCode: `1,${index + 1}`,
+						childrenName: type,
+						config: {
+							...keyBase.config,
+							type,
+							...(type === "multiActions"
+								? {
+										subActions: [
+											{
+												isPlugin: true,
+												pluginId: "unavailable-smoke-plugin",
+												config: { type: "synthetic", actions: [] },
+											},
+										],
+									}
+								: {}),
+							actions:
+								type === "timer"
+									? [
+											{ type: "time", value: 1000 },
+											{ type: "sound", value: "" },
+											{ type: "callback", value: 1 },
+										]
+									: type === "website"
+										? [{ type: "url", value: "https://example.org/" }]
+										: [],
+						},
+					}),
+				),
 			},
 		],
 	};
@@ -1892,6 +1905,20 @@ async function smoke(): Promise<void> {
 			panel,
 			`document.documentElement.lang === '${language}'`,
 		);
+		await profiles.activate("1,5");
+		await waitForVoice(
+			panel,
+			`!!document.querySelector('[data-key-code="1,5"] [data-kind="invalid"]') && !!document.querySelector('[data-key-code="1,5"] [role="progressbar"]')`,
+		);
+		assert.equal(
+			await panel.webContents.executeJavaScript(`(() => {
+            const slot=document.querySelector('[data-key-code="1,5"][data-state="tile"]');
+            const alert=slot.querySelector('[data-kind="invalid"]');
+            const progress=slot.querySelector('[role="progressbar"]');
+            return Number(getComputedStyle(alert).zIndex)>Number(getComputedStyle(progress).zIndex);
+        })()`),
+			true,
+		);
 		await panel.webContents.executeJavaScript(
 			"document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))",
 		);
@@ -1909,7 +1936,7 @@ async function smoke(): Promise<void> {
 		0,
 	);
 	process.stdout.write(
-		"Key runtime smoke PASS: owned timer callback and zero-clear, page indicator, scoped progress/checkmark, EN/DE captures. No native host action.\n",
+		"Key runtime smoke PASS: owned timer callback and zero-clear, page indicator, scoped progress/checkmark and visible failed sequence above progress, EN/DE captures. No native host action.\n",
 	);
 	removeDeviceReady();
 	unregisterHardware();

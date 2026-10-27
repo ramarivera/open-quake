@@ -206,6 +206,11 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 		const progress = view.container.querySelector('[role="progressbar"]');
 		if (!progress) throw new Error("Missing progress");
 		expect(getComputedStyle(progress).backgroundColor).toBe("#0a0a1a");
+		const failure = view.container.querySelector('[data-kind="invalid"]');
+		if (!failure) throw new Error("Missing invalid alert");
+		expect(Number(getComputedStyle(failure).zIndex)).toBeGreaterThan(
+			Number(getComputedStyle(progress).zIndex),
+		);
 		expect(progress.firstElementChild?.getAttribute("style")).toContain(
 			"width: 42%;",
 		);
@@ -352,6 +357,26 @@ it("SCREEN-038 MGMT-172: targeted artwork is immutable and page indicator follow
 			keyCode: "1,1",
 			resourceId: replacement,
 		};
+		await act(async () => {
+			await runtime.runPromise(KeyRuntime.displayEvent(event));
+		});
+		expect(image("1,1")).toBe(replacement);
+		for (const resourceId of [
+			"https://external.invalid/image.png",
+			"file:///private/image.png",
+			"data:image/svg+xml," +
+				encodeURIComponent(
+					'<svg xmlns="http://www.w3.org/2000/svg"><image href="https://external.invalid/image.png"/></svg>',
+				),
+		]) {
+			await act(async () => {
+				await runtime.runPromise(
+					KeyRuntime.displayEvent({ ...event, resourceId }),
+				);
+			});
+			expect(image("1,1") ?? "").toBe("");
+			expect(image("1,2")).toBe(icon);
+		}
 		await act(async () => {
 			await runtime.runPromise(KeyRuntime.displayEvent(event));
 		});

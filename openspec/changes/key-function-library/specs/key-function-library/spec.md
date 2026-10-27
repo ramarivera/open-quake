@@ -149,7 +149,7 @@ The saved-key consumer SHALL dispatch close, cmd, managementCenter, screenshot a
 - **AND** Close SHALL match exact executable identity and recheck the PID before termination.
 - **AND** Cmd SHALL use the profile command approval owner, bind approval to exact saved content and require approval again after edits.
 - **AND** Opening an existing app SHALL focus it without another launch.
-- **AND** Screenshot SHALL capture all displays to Pictures as screenshot-<ms>-<i>.png; Windows command+l SHALL call LockWorkStation.
+- **AND** Screenshot SHALL capture all displays to Pictures with collision-resistant screenshot-<ms>-<capture>-<i>.png names and exclusive creation; Windows command+l SHALL call LockWorkStation.
 
 ### Requirement: Ordered saved composite execution
 MAIN-076, MGMT-163, MGMT-206 and MGMT-210 sequences SHALL accept subActions-only imports, validate every step before execution, await native and plugin completion in order, apply each gap with default 100 ms, and stop on cancellation or the first failure.
@@ -181,3 +181,27 @@ MAIN-077, MAIN-078, MGMT-142 and MGMT-170 SHALL reuse allocated profile pages fo
 #### Scenario: Nested folders and default profile use the committed selection
 - **WHEN** saved folder and Back keys navigate nested allocated pages, or a slide or switchProfile key changes selection
 - **THEN** the existing selection owner commits the target once, restores its runtime state, and leaves selection unchanged for stale destinations
+
+### Requirement: Native action recovery and ownership
+Native actions SHALL preserve clipboard data on failed setup and interruption, canonicalize application filesystem identity before matching, and keep command approval bound to the current saved revision and device session.
+
+#### Scenario: Failed paste setup preserves data
+- **WHEN** clipboard clear or temporary write fails after a snapshot, or paste work is interrupted
+- **THEN** cleanup restores the snapshot while the clipboard still belongs to that paste and returns typed scrubbed failures
+- **AND** concurrent clipboard edits remain intact
+
+#### Scenario: Saved command revision replaces approval
+- **WHEN** a command is edited away and back, imported or restored into a replacement revision, or activated in a different device session
+- **THEN** the shared direct and sequence command owner requires confirmation again
+- **AND** repeated activations within the same approved saved revision and session reuse approval
+
+#### Scenario: Canonical applications and explicit Linux focus limits
+- **WHEN** Open or Close targets a symlink or a differently cased path on a case-insensitive volume
+- **THEN** matching uses filesystem identity and rechecks the exact PID before focus or termination
+- **AND** distinct identities on case-sensitive volumes remain distinct
+- **AND** Linux focus reports unsupported outside X11 or without xdotool and never launches a duplicate as fallback
+
+#### Scenario: Sequence normalization and replacement cleanup
+- **WHEN** a sequence includes a website template or an edited timer revision replaces running work
+- **THEN** website steps normalize against the parent title before any host effect, unsafe schemes reject the entire sequence, and the first activation starts the new timer
+- **AND** clearing expired zero retires pending alarm work so the next activation starts a timer

@@ -43,6 +43,11 @@ export interface NativeApplicationPort {
 		reference: string,
 		signal?: AbortSignal,
 	) => Promise<string>;
+	readonly sameApplication?: (
+		wanted: string,
+		actual: string,
+		signal?: AbortSignal,
+	) => Promise<boolean>;
 	readonly list: (
 		signal?: AbortSignal,
 	) => Promise<readonly { readonly pid: number; readonly path: string }[]>;
@@ -88,19 +93,25 @@ export async function runApplicationAction(
 		? await port.resolve(reference, signal)
 		: reference;
 	signal?.throwIfAborted();
-	const matches = (await port.list(signal)).filter(
-		(p) =>
-			Number.isSafeInteger(p.pid) &&
-			p.pid > 0 &&
-			exactApplication(platform, resolved, p.path),
-	);
+	const same = (actual: string) =>
+		port.sameApplication
+			? port.sameApplication(resolved, actual, signal)
+			: Promise.resolve(exactApplication(platform, resolved, actual));
+	const matches: { readonly pid: number; readonly path: string }[] = [];
+	for (const process of await port.list(signal))
+		if (
+			Number.isSafeInteger(process.pid) &&
+			process.pid > 0 &&
+			(await same(process.path))
+		)
+			matches.push(process);
 	signal?.throwIfAborted();
 	if (action === "open") {
 		const match = matches[0];
 		if (match) {
 			const identity = await port.identity(match.pid, signal);
 			signal?.throwIfAborted();
-			if (identity && exactApplication(platform, resolved, identity)) {
+			if (identity && (await same(identity))) {
 				await port.focus(match.pid, reference, signal);
 				return;
 			}
@@ -111,7 +122,7 @@ export async function runApplicationAction(
 	for (const match of matches) {
 		const identity = await port.identity(match.pid, signal);
 		signal?.throwIfAborted();
-		if (identity && exactApplication(platform, resolved, identity))
+		if (identity && (await same(identity)))
 			await port.terminate(match.pid, force, signal);
 	}
 }

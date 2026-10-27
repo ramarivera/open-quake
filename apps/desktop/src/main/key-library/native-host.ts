@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
-import { readdir, readlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readdir, readlink, realpath, stat, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { app, desktopCapturer, screen, shell } from "electron";
+import { KeyFunctionUnavailable } from "../../../../../packages/device/src/actions/action-errors.js";
 import type { NativeApplicationPort } from "../profiles/native-actions";
 
 const run = promisify(execFile);
@@ -74,8 +76,38 @@ async function processList(
 }
 export const nativeApplicationPort: NativeApplicationPort = {
 	list: processList,
+	sameApplication: async (wanted, actual, signal) => {
+		signal?.throwIfAborted();
+		if (platform() === "win32")
+			return (
+				wanted.replaceAll("\\", "/").toLowerCase() ===
+				actual.replaceAll("\\", "/").toLowerCase()
+			);
+		const bundle = (path: string) => {
+			const at = path.toLowerCase().indexOf(".app/");
+			return platform() === "darwin" && at >= 0 ? path.slice(0, at + 4) : path;
+		};
+		try {
+			const [left, right] = await Promise.all([
+				stat(bundle(wanted)),
+				stat(bundle(actual)),
+			]);
+			signal?.throwIfAborted();
+			return left.dev === right.dev && left.ino === right.ino;
+		} catch (cause) {
+			if (
+				typeof cause === "object" &&
+				cause !== null &&
+				"code" in cause &&
+				["ENOENT", "ESRCH", "EACCES", "EPERM"].includes(String(cause.code))
+			)
+				return false;
+			throw cause;
+		}
+	},
 	resolve: async (reference, signal) => {
-		if (!/^app:/i.test(reference)) return reference;
+		if (!/^app:/i.test(reference))
+			return platform() === "win32" ? reference : realpath(reference);
 		if (platform() !== "darwin")
 			throw new Error("Bundle references require macOS");
 		const { stdout } = await run(
@@ -107,18 +139,35 @@ export const nativeApplicationPort: NativeApplicationPort = {
 			return;
 		}
 		if (platform() === "linux") {
-			await run(
-				"xdotool",
-				[
-					"search",
-					"--onlyvisible",
-					"--pid",
-					String(pid),
-					"windowactivate",
-					"--sync",
-				],
-				{ signal },
-			);
+			if (
+				process.env.XDG_SESSION_TYPE !== "x11" ||
+				!process.env.DISPLAY ||
+				process.env.WAYLAND_DISPLAY
+			)
+				throw new KeyFunctionUnavailable("adapter-missing");
+			try {
+				await run(
+					"xdotool",
+					[
+						"search",
+						"--onlyvisible",
+						"--pid",
+						String(pid),
+						"windowactivate",
+						"--sync",
+					],
+					{ signal },
+				);
+			} catch (cause) {
+				if (
+					typeof cause === "object" &&
+					cause !== null &&
+					"code" in cause &&
+					cause.code === "ENOENT"
+				)
+					throw new KeyFunctionUnavailable("adapter-missing");
+				throw cause;
+			}
 			return;
 		}
 		const k = await import("koffi");
@@ -199,9 +248,10 @@ export async function captureScreenshots(port: ScreenshotPort): Promise<void> {
 	);
 	const images = await port.capture(size);
 	const epoch = port.now();
+	const capture = randomUUID();
 	for (const [index, image] of images.entries())
 		await port.write(
-			join(port.pictures(), `screenshot-${epoch}-${index}.png`),
+			join(port.pictures(), `screenshot-${epoch}-${capture}-${index}.png`),
 			image,
 		);
 }
@@ -212,7 +262,7 @@ export const screenshotPort: ScreenshotPort = {
 			await desktopCapturer.getSources({ types: ["screen"], thumbnailSize })
 		).map((source) => source.thumbnail.toPNG()),
 	pictures: () => app.getPath("pictures"),
-	write: writeFile,
+	write: (path, bytes) => writeFile(path, bytes, { flag: "wx" }),
 	now: Date.now,
 };
 export async function lockWorkstation(): Promise<void> {

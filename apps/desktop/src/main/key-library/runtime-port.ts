@@ -1,5 +1,5 @@
 import { platform } from "node:os";
-import { Effect, Layer, Option, Queue, Schema } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Queue, Schema } from "effect";
 import { clipboard, shell } from "electron";
 import type {
 	ActionHostAdapters,
@@ -15,6 +15,7 @@ import {
 import {
 	ActionSnapshotFailed,
 	HostActionFailed,
+	KeyFunctionUnavailable,
 } from "../../../../../packages/device/src/actions/action-errors.js";
 import { executeActionLeaf } from "../../../../../packages/device/src/actions/action-service.js";
 import {
@@ -120,9 +121,13 @@ export const desktopKeyRuntimePort = (
 							for (const [deviceId, selection] of Object.entries(
 								envelope.activeByDevice,
 							)) {
-								const page = envelope.profiles
-									.find((p) => p.id === selection.profileId)
-									?.pages.find((p) => p.id === selection.pageId);
+								const profile = envelope.profiles.find(
+									(p) => p.id === selection.profileId,
+								);
+								if (!profile) continue;
+								const page = profile.pages.find(
+									(p) => p.id === selection.pageId,
+								);
 								for (const key of page?.keys ?? [])
 									if (
 										key.config.display &&
@@ -132,6 +137,7 @@ export const desktopKeyRuntimePort = (
 											deviceId,
 											...selection,
 											keyCode: key.keyCode,
+											revision: profile.revision,
 											volume: reading.level,
 											muted: reading.muted,
 											...(key.config.type === "mute"
@@ -158,7 +164,10 @@ export const desktopKeyRuntimePort = (
 								"text/rtf",
 								"image/png",
 							]);
-							const formats = clipboard.availableFormats();
+							const formats = yield* Effect.try({
+								try: () => clipboard.availableFormats(),
+								catch: (cause) => new HostActionFailed(cause),
+							});
 							if (formats.some((format) => !supported.has(format)))
 								return yield* Effect.fail(
 									new HostActionFailed("unsupported-clipboard-format"),
@@ -172,30 +181,52 @@ export const desktopKeyRuntimePort = (
 								}),
 								catch: (cause) => new HostActionFailed(cause),
 							});
-							yield* Effect.acquireUseRelease(
-								Effect.try({
-									try: () => {
-										clipboard.clear();
-										clipboard.writeText(text);
-									},
-									catch: (cause) => new HostActionFailed(cause),
+							yield* Effect.uninterruptibleMask((restore) =>
+								Effect.gen(function* () {
+									let installed = false;
+									const result = yield* Effect.exit(
+										restore(
+											Effect.try({
+												try: () => {
+													clipboard.clear();
+													clipboard.writeText(text);
+													installed = true;
+												},
+												catch: (cause) => new HostActionFailed(cause),
+											}).pipe(
+												Effect.zipRight(
+													keyboard.pressChord(
+														process.platform === "darwin"
+															? "command+v"
+															: "control+v",
+													),
+												),
+												Effect.zipRight(Effect.sleep(50)),
+											),
+										),
+									);
+									const cleanup = yield* Effect.exit(
+										Effect.try({
+											try: () => {
+												const formats = clipboard.availableFormats();
+												const ours =
+													clipboard.readText() === text &&
+													formats.every((format) => format === "text/plain");
+												// Failed clear/write may leave an empty clipboard. Successful
+												// paste cleanup never overwrites a concurrent user edit.
+												if (ours || (!installed && formats.length === 0))
+													clipboard.write(before);
+											},
+											catch: (cause) => new HostActionFailed(cause),
+										}),
+									);
+									if (Exit.isFailure(result) && Exit.isFailure(cleanup))
+										return yield* Effect.failCause(
+											Cause.sequential(result.cause, cleanup.cause),
+										);
+									yield* cleanup;
+									yield* result;
 								}),
-								() =>
-									keyboard
-										.pressChord(
-											process.platform === "darwin" ? "command+v" : "control+v",
-										)
-										.pipe(Effect.zipRight(Effect.sleep(50))),
-								() =>
-									Effect.sync(() => {
-										if (
-											clipboard.readText() === text &&
-											clipboard
-												.availableFormats()
-												.every((format) => format === "text/plain")
-										)
-											clipboard.write(before);
-									}),
 							);
 						}).pipe(textLock.withPermits(1));
 					}),
@@ -214,7 +245,10 @@ export const desktopKeyRuntimePort = (
 					launchApplication: Effect.fn("DesktopKeys.launchApplication")(
 						function* (
 							reference: string,
-						): Effect.fn.Return<void, HostActionFailed> {
+						): Effect.fn.Return<
+							void,
+							HostActionFailed | KeyFunctionUnavailable
+						> {
 							if (mock) return;
 							yield* Effect.tryPromise({
 								try: (signal) =>
@@ -230,7 +264,10 @@ export const desktopKeyRuntimePort = (
 										false,
 										signal,
 									),
-								catch: (cause) => new HostActionFailed(cause),
+								catch: (cause) =>
+									cause instanceof KeyFunctionUnavailable
+										? cause
+										: new HostActionFailed(cause),
 							});
 						},
 					),
@@ -277,7 +314,10 @@ export const desktopKeyRuntimePort = (
 											config.actions[1].value === true,
 										signal,
 									),
-								catch: (cause) => new HostActionFailed(cause),
+								catch: (cause) =>
+									cause instanceof KeyFunctionUnavailable
+										? cause
+										: new HostActionFailed(cause),
 							});
 							return;
 						}

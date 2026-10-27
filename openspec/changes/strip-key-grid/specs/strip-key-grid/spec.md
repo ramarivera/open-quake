@@ -406,3 +406,15 @@ MAIN-082 and SCREEN-108 SHALL accept only known management tabs from an owned pa
 #### Scenario: Multi-screen notification has no binding side effect
 - **WHEN** a multi-screen alert names one or several serials including an unknown serial
 - **THEN** no display binding, saved selection or window visibility changes
+
+### Requirement: Feedback lifetime and failure visibility
+Feedback SHALL remain bound to the original activation, and terminal failure alerts SHALL remain visible above progress.
+
+#### Scenario: Reset and media updates preserve current feedback
+- **WHEN** old expiry work survives a reset or media observations arrive for a current saved key
+- **THEN** old expiry work cannot clear new feedback and revision-scoped media updates preserve current artwork and alerts
+- **AND** a deferred action failure cannot mark an unrelated selected cell
+
+#### Scenario: Failed sequence and untrusted artwork
+- **WHEN** a sequence emits INVALID with completed progress or a display event supplies external artwork
+- **THEN** the alert paints above progress and artwork resolves only through the existing trusted icon owner

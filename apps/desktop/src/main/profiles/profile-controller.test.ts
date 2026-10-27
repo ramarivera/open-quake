@@ -583,6 +583,7 @@ for (const nested of [false, true]) {
 						}),
 					);
 				yield* save("echo first");
+				yield* (yield* ProfileSwitching).connect("device", base.id);
 				const runtimeLayer = KeyRuntime.DefaultWithoutDependencies.pipe(
 					Layer.provide(
 						Layer.succeed(KeyRuntimePort, {
@@ -629,6 +630,60 @@ for (const nested of [false, true]) {
 					expect(prompts).toBe(3);
 					expect(executed).toContain("echo changed");
 					if (nested) expect(executed.at(-1)).toBe("after-command");
+					yield* save("echo first");
+					yield* tap;
+					expect(prompts).toBe(4);
+					yield* tap;
+					expect(prompts).toBe(4);
+					// Restores/imports may reuse a saved revision and approval list.
+					const approvedSnapshot = yield* manager.read();
+					yield* save("echo temporary");
+					yield* repo.transact(() => Effect.succeed(approvedSnapshot));
+					yield* tap;
+					expect(prompts).toBe(5);
+					expect(
+						(yield* manager.read()).profiles.find((p) => p.id === base.id)
+							?.revision,
+					).toBe(
+						approvedSnapshot.profiles.find((p) => p.id === base.id)?.revision,
+					);
+					const switching = yield* ProfileSwitching;
+					yield* switching.disconnect("device");
+					yield* switching.connect("device", base.id);
+					yield* tap;
+					expect(prompts).toBe(6);
+					yield* tap;
+					expect(prompts).toBe(6);
+					const committed = (yield* manager.read()).profiles
+						.find((p) => p.id === base.id)
+						?.pages[0].keys.find((k) => k.keyCode === key.keyCode);
+					if (!committed) throw new Error("Missing restored key");
+					const commandKey = nested
+						? Schema.decodeUnknownSync(ProfileKey)({
+								...Schema.encodeSync(ProfileKey)(committed),
+								config: {
+									...Schema.encodeSync(ProfileKey)(committed).config,
+									type: "cmd",
+									actions: [{ type: "text", value: "echo first" }],
+								},
+							})
+						: committed;
+					yield* switching.connect("other-device", base.id);
+					const current = (yield* manager.read()).profiles.find(
+						(p) => p.id === base.id,
+					);
+					if (!current) throw new Error("Missing command profile");
+					expect(
+						yield* owner.runKeyCommand(commandKey, {
+							deviceId: "other-device",
+							profileId: base.id,
+							pageId: page.id,
+							revision: current.revision,
+						}),
+					).toBe(true);
+					expect(prompts).toBe(7);
+					yield* tap;
+					expect(prompts).toBe(7);
 				}).pipe(Effect.provide(runtimeLayer));
 			}).pipe(Effect.provide(layer()));
 		},

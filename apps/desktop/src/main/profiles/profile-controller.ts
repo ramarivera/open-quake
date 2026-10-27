@@ -1,6 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Effect, Array as EffectArray, Option, Schema } from "effect";
-import { MultiActionConfig } from "../../../../../packages/device/src/actions/action-contracts.js";
+import {
+	MultiActionConfig,
+	normalizeSequenceWebsites,
+} from "../../../../../packages/device/src/actions/action-contracts.js";
 import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
@@ -69,6 +72,11 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		const manager = yield* ProfileManager;
 		const repository = yield* ProfileRepository;
 		const switching = yield* ProfileSwitching;
+		const approvalLifetime = randomUUID();
+		const approvalSessions = new Map<
+			string,
+			{ readonly id: string; readonly owns: () => boolean }
+		>();
 		let progress: ThumbnailProgress = {
 			running: false,
 			done: 0,
@@ -213,7 +221,10 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						(a) => a.type === "text" && a.value === command,
 					);
 				const nested = Schema.decodeUnknownEither(MultiActionConfig)(
-					saved ? Schema.encodeSync(ProfileKey)(saved).config : undefined,
+					normalizeSequenceWebsites(
+						saved ? Schema.encodeSync(ProfileKey)(saved).config : undefined,
+						saved?.config.title.text ?? "",
+					),
 				);
 				const nestedCommand =
 					nested._tag === "Right" &&
@@ -233,18 +244,32 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 							selection.pageId === activation.pageId))
 				);
 			};
+			let session = approvalSessions.get(activation.deviceId);
+			if (!session?.owns()) {
+				const ownsSession =
+					activation.deviceId === "desktop-preview"
+						? () => true
+						: yield* switching.sessionOwnership(activation.deviceId);
+				if (!ownsSession()) return false;
+				session = { id: randomUUID(), owns: ownsSession };
+				approvalSessions.set(activation.deviceId, session);
+			}
+			const ownsSession = session.owns;
+			const generation = yield* repository.contentGeneration(
+				activation.profileId,
+			);
 			const envelope = yield* manager.read();
-			if (!owns(envelope)) return false;
+			if (!owns(envelope) || !ownsSession()) return false;
 			const digest = createHash("sha256")
 				.update(
-					`${activation.profileId}\0${activation.pageId}\0${key.keyCode}\0${command}`,
+					`${approvalLifetime}\0${session.id}\0${activation.deviceId}\0${activation.profileId}\0${activation.pageId}\0${activation.revision}\0${generation}\0${key.keyCode}\0${command}`,
 				)
 				.digest("hex");
 			if (!managerState(envelope).approvedCommands.includes(digest)) {
 				if (!(yield* native(() => port.confirm("Run command?", command))))
 					return false;
 				yield* repository.transact((current) => {
-					if (!owns(current))
+					if (!owns(current) || !ownsSession())
 						return Effect.fail(ProfileWriteFailed.fromCause(undefined));
 					const state = managerState(current);
 					return Effect.succeed({
@@ -259,7 +284,13 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 					});
 				});
 			}
-			if (!owns(yield* manager.read())) return false;
+			if (
+				!owns(yield* manager.read()) ||
+				!ownsSession() ||
+				generation !==
+					(yield* repository.contentGeneration(activation.profileId))
+			)
+				return false;
 			yield* native(() => port.execute(command));
 			return true;
 		});

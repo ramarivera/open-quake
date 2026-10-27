@@ -650,6 +650,7 @@ it.each(["mute", "vol"])(
 			deviceId: "device",
 			profileId: "p",
 			pageId: "one",
+			revision: 0,
 			keyCode: "1,1",
 			volume: 0,
 			muted: true,
@@ -783,8 +784,8 @@ it("MAIN-097: screenshots size all displays and save exact indexed names without
 	});
 	expect(capture).toHaveBeenCalledWith({ width: 200, height: 120 });
 	expect(writes.map((w) => w.path)).toEqual([
-		"/Pictures/screenshot-123-0.png",
-		"/Pictures/screenshot-123-1.png",
+		expect.stringMatching(/^\/Pictures\/screenshot-123-[a-f0-9-]+-0\.png$/),
+		expect.stringMatching(/^\/Pictures\/screenshot-123-[a-f0-9-]+-1\.png$/),
 	]);
 	os.platform.mockReturnValue("win32");
 	await lockWorkstation();
@@ -888,4 +889,96 @@ it("MAIN-076: desktop plugin port returns the typed unavailable error until plug
 			});
 		}).pipe(Effect.provide(layer()), Effect.scoped),
 	);
+});
+
+it.each(["clear", "write"])(
+	"review: clipboard %s failure restores the acquired snapshot with typed scrubbed cause",
+	async (kind) => {
+		const cause = Object.assign(new Error("private token=synthetic"), {
+			code: "EIO",
+		});
+		os.clear.mockImplementation(() => {
+			os.readText.mockReturnValue("");
+			os.clipboard.mockReturnValue([]);
+			if (kind === "clear") throw cause;
+		});
+		os.writeText.mockImplementation(() => {
+			throw cause;
+		});
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const port = yield* KeyRuntimePort;
+					const result = yield* Effect.either(
+						port.execute({
+							type: "text",
+							actions: [{ type: "text", value: "inserted" }],
+						}),
+					);
+					expect(result._tag).toBe("Left");
+					if (result._tag === "Left") {
+						expect(result.left).toMatchObject({
+							_tag: "HostActionFailed",
+							code: "QUAKE.ACTION.HOST_FAILED",
+						});
+						expect(result.left.originalCause).toBe(cause);
+						expect(JSON.stringify(result.left)).not.toContain("synthetic");
+					}
+				}).pipe(Effect.provide(layer()), Effect.scoped),
+			);
+			expect(os.write).toHaveBeenCalledExactlyOnceWith({
+				text: "before",
+				html: "<b>before</b>",
+				rtf: "rich",
+				image: {},
+			});
+		} finally {
+			os.clear.mockReset();
+		}
+	},
+);
+it("review: interruption after temporary clipboard write restores snapshot", async () => {
+	os.writeText.mockImplementation(() => {
+		os.readText.mockReturnValue("inserted");
+		os.clipboard.mockReturnValue(["text/plain"]);
+	});
+	await Effect.runPromise(
+		Effect.gen(function* () {
+			const port = yield* KeyRuntimePort;
+			const fiber = yield* Effect.fork(
+				port.execute({
+					type: "text",
+					actions: [{ type: "text", value: "inserted" }],
+				}),
+			);
+			yield* TestClock.adjust(0);
+			yield* Fiber.interrupt(fiber);
+			expect(os.write).toHaveBeenCalledOnce();
+		}).pipe(
+			Effect.provide(
+				layer(false, undefined, undefined, undefined, undefined, undefined, {
+					keyboard: {
+						supportedTokens: new Set(["command", "control", "v"]),
+						pressChord: () => Effect.never,
+					},
+				}),
+			),
+			Effect.provide(TestContext.TestContext),
+			Effect.scoped,
+		),
+	);
+});
+it("review: simultaneous same-clock captures never overwrite an earlier image", async () => {
+	const images = new Map<string, Uint8Array>();
+	const port = {
+		displays: () => [],
+		capture: async () => [new Uint8Array([1])],
+		pictures: () => "/Pictures",
+		now: () => 123,
+		write: async (path: string, bytes: Uint8Array) => {
+			images.set(path, bytes);
+		},
+	};
+	await Promise.all([captureScreenshots(port), captureScreenshots(port)]);
+	expect(images.size).toBe(2);
 });

@@ -1,5 +1,6 @@
 import { Either } from "effect";
 import type { ActionHostAdapters } from "./action-adapters.js";
+import { normalizeSequenceWebsites } from "./action-contracts.js";
 import { InvalidKeyAction, KeyFunctionUnavailable } from "./action-errors.js";
 import {
 	type ActionAvailability,
@@ -37,7 +38,16 @@ export function validateAction(
 		)
 	)
 		return Either.left(new InvalidKeyAction("config.actions"));
-	const decoded = entry.decode(input);
+	const decoded = entry.decode(
+		id === "multiActions"
+			? normalizeSequenceWebsites(
+					input,
+					isRecord(input.title) && typeof input.title.text === "string"
+						? input.title.text
+						: "",
+				)
+			: input,
+	);
 	if (decoded._tag === "Left")
 		return Either.left(new InvalidKeyAction("config.actions", decoded.left));
 	return Either.right(decoded.right);

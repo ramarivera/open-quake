@@ -20,6 +20,7 @@ import {
 	HotkeySwitchConfig,
 	MultiActionConfig,
 	NextPageConfig,
+	normalizeSequenceWebsites,
 	normalizeWebsiteUrl,
 	PreviousPageConfig,
 	SwitchProfileConfig,
@@ -114,6 +115,7 @@ const NoPort = Layer.succeed(KeyRuntimePort, {
 	select: () => unavailable,
 	alarm: () => unavailable,
 });
+
 export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 	"@open-quake/device/KeyRuntime",
 	{
@@ -123,10 +125,13 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const port = yield* KeyRuntimePort,
 				scope = yield* Effect.scope;
 			const states = new Map<string, KeyFeedback>();
-			const alertVersions = new Map<string, number>();
-			const progressVersions = new Map<string, number>();
+			const alertVersions = new Map<string, object>();
+			const progressVersions = new Map<string, object>();
 			const clearedAt = new Map<string, number>();
-			const timerTaps = new Map<string, number>();
+			const timerTaps = new Map<
+				string,
+				{ readonly revision: number; readonly time: number }
+			>();
 			const displayTimers = new Map<string, Fiber.RuntimeFiber<void, never>>();
 			const returnContexts = new Map<string, KeyActivation[]>();
 			const stateId = (state: KeyFeedback): string =>
@@ -147,7 +152,13 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			>();
 			const held = new Set<string>(),
 				alternates = new Map<string, 0 | 1>(),
-				running = new Map<string, Fiber.RuntimeFiber<void, never>>();
+				running = new Map<
+					string,
+					{
+						readonly revision: number;
+						readonly fiber: Fiber.RuntimeFiber<void, never>;
+					}
+				>();
 			const lock = yield* Effect.makeSemaphore(1);
 			const owned = new Map<Fiber.RuntimeFiber<void, ActionError>, string>();
 			const ownedControls = new Set<string>();
@@ -201,7 +212,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							: { revision: state.revision }),
 					};
 					if (state.alert !== undefined) {
-						const version = (alertVersions.get(id) ?? 0) + 1;
+						const version = {};
 						alertVersions.set(id, version);
 						if (state.alert === 1)
 							yield* Effect.forkIn(
@@ -221,7 +232,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						state.progress !== undefined &&
 						state.progress !== previous?.progress
 					) {
-						const version = (progressVersions.get(id) ?? 0) + 1;
+						const version = {};
 						progressVersions.set(id, version);
 						if (state.progress >= 0)
 							yield* Effect.forkIn(
@@ -554,6 +565,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					return;
 				}
 				if (type === "timer" || type === "multiActions") {
+					const obsolete = running.get(identity);
+					if (obsolete && obsolete.revision !== profile.revision) {
+						running.delete(identity);
+						timerTaps.delete(identity);
+						yield* Fiber.interrupt(obsolete.fiber);
+					}
 					if (type === "timer") {
 						const now = yield* Clock.currentTimeMillis;
 						const state = states.get(identity);
@@ -561,8 +578,16 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							state?.countdownPhase === "expired" &&
 							state.revision === profile.revision
 						) {
+							const expired = running.get(identity);
+							if (expired) {
+								running.delete(identity);
+								yield* Fiber.interrupt(expired.fiber);
+							}
 							clearedAt.set(identity, now);
-							timerTaps.set(identity, now);
+							timerTaps.set(identity, {
+								revision: profile.revision,
+								time: now,
+							});
 							yield* feedback({
 								...base,
 								countdown: -1,
@@ -573,13 +598,17 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							return;
 						}
 						const previousTap = timerTaps.get(identity);
-						if (previousTap !== undefined && now - previousTap < 600) return;
-						timerTaps.set(identity, now);
+						if (
+							previousTap?.revision === profile.revision &&
+							now - previousTap.time < 600
+						)
+							return;
+						timerTaps.set(identity, { revision: profile.revision, time: now });
 					}
 					const previous = running.get(identity);
 					if (previous) {
 						running.delete(identity);
-						yield* Fiber.interrupt(previous);
+						yield* Fiber.interrupt(previous.fiber);
 						yield* feedback({
 							...base,
 							countdown: -1,
@@ -648,8 +677,9 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								yield* port.alarm(deviceId, sound);
 						});
 					} else {
-						const decoded =
-							Schema.decodeUnknownEither(MultiActionConfig)(input);
+						const decoded = Schema.decodeUnknownEither(MultiActionConfig)(
+							normalizeSequenceWebsites(input, key.config.title.text),
+						);
 						if (decoded._tag === "Left")
 							return yield* Effect.fail(
 								new InvalidKeyAction("config.actions", decoded.left),
@@ -735,7 +765,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							),
 						scope,
 					);
-					running.set(identity, fiber);
+					running.set(identity, { revision: profile.revision, fiber });
 					return;
 				}
 				if (
@@ -1024,9 +1054,9 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				for (const [fiber, owner] of owned)
 					if (!deviceId || owner === deviceId) yield* Fiber.interrupt(fiber);
 				if (port.resetOwned) yield* port.resetOwned(deviceId);
-				for (const [key, fiber] of running)
+				for (const [key, owner] of running)
 					if (!deviceId || JSON.parse(key)[0] === deviceId) {
-						yield* Fiber.interrupt(fiber);
+						yield* Fiber.interrupt(owner.fiber);
 						running.delete(key);
 					}
 
@@ -1065,37 +1095,29 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						alternates.delete(key);
 				if (releaseError) return yield* Effect.fail(releaseError);
 			});
-			const prepareActivation = (...args: Parameters<typeof activate>) => {
-				const report = (_error: ActionError) =>
-					Effect.gen(function* () {
-						const env = yield* port.read.pipe(Effect.option);
-						if (Option.isNone(env)) return;
-						const { profile, page } = current(env.value, args[0]);
-						const expected = args[3];
-						if (
-							expected &&
-							(expected.profileId !== profile.id ||
-								expected.pageId !== page.id ||
-								expected.revision !== profile.revision)
-						)
-							return;
-						yield* feedback({
-							deviceId: args[0],
+			const prepareActivation = (...args: Parameters<typeof activate>) =>
+				Effect.gen(function* () {
+					// Physical callers omit expected. Capture their owner while input is
+					// locked, before any deferred work can outlive the selected page.
+					const env = yield* port.read;
+					const { profile, page } = current(env, args[0]);
+					const target = args[3] ??
+						contacts.get(JSON.stringify([args[0], args[1]]))?.activation ?? {
 							profileId: profile.id,
 							pageId: page.id,
 							revision: profile.revision,
+						};
+					const report = (_error: ActionError) =>
+						feedback({
+							deviceId: args[0],
+							...target,
 							keyCode: args[1],
 							alert: 1,
 						});
-					});
-				return activate(...args).pipe(
-					Effect.tapError(report),
-					lock.withPermits(1),
-					Effect.map((work) =>
-						(work ?? Effect.void).pipe(Effect.tapError(report)),
-					),
-				);
-			};
+					const work = yield* activate(...args).pipe(Effect.tapError(report));
+					return (work ?? Effect.void).pipe(Effect.tapError(report));
+				}).pipe(lock.withPermits(1));
+
 			yield* Effect.addFinalizer(() =>
 				reset().pipe(
 					Effect.retry({ times: 1 }),
