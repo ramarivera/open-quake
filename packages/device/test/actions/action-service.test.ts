@@ -4,6 +4,7 @@ import {
 	ACTION_REGISTRY,
 	ActionPermissionDenied,
 	ActionService,
+	AUDIO_OPERATIONS,
 	normalizeActionImport,
 } from "../../src/actions/index.js";
 import { nextTrackFixture, switchFixture } from "./action-fixtures.js";
@@ -499,3 +500,89 @@ it.effect("a repeat without a press stays inert until release", () => {
 		expect(h.calls).toHaveLength(1);
 	}).pipe(Effect.provide(h.layer()));
 });
+
+for (const command of AUDIO_OPERATIONS) {
+	it.effect(
+		`review: text sends ${command} through media after insertion without a keyboard adapter`,
+		() => {
+			const h = harness("text", {
+				type: "text",
+				actions: [
+					{ type: "text", value: "first\nsecond" },
+					{ type: "key", value: command },
+				],
+			});
+			return Effect.gen(function* () {
+				yield* ActionService.activate(press);
+				expect(h.calls).toEqual([
+					["text", "first\nsecond"],
+					["media", command],
+				]);
+			}).pipe(
+				Effect.provide(
+					h.layer({
+						...h.adapters,
+						keyboard: Option.none(),
+						media: Option.some({
+							supportedCommands: new Set([command]),
+							sendMedia: (value) =>
+								Effect.sync(() => {
+									h.calls.push(["media", value]);
+								}),
+						}),
+					}),
+				),
+			);
+		},
+	);
+}
+for (const mode of ["missing", "unsupported", "insert-failed"] as const) {
+	it.effect(
+		`review: text media follow-up ${mode} preserves failure and ordering`,
+		() => {
+			const h = harness("text", {
+				type: "text",
+				actions: [
+					{ type: "text", value: "must not submit" },
+					{ type: "key", value: "audio_play" },
+				],
+			});
+			const denied = new ActionPermissionDenied(new Error("synthetic"));
+			return Effect.gen(function* () {
+				const result = yield* Effect.either(ActionService.activate(press));
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					if (mode === "insert-failed")
+						expect(result.left).toMatchObject({
+							_tag: "ActionPermissionDenied",
+							code: denied.code,
+						});
+					else
+						expect(result.left).toMatchObject({
+							_tag: "KeyFunctionUnavailable",
+							reason: "unsupported-command",
+						});
+				}
+				expect(h.calls).toEqual([]);
+			}).pipe(
+				Effect.provide(
+					h.layer({
+						...h.adapters,
+						media:
+							mode === "missing"
+								? Option.none()
+								: mode === "unsupported"
+									? Option.some({
+											supportedCommands: new Set(),
+											sendMedia: () => Effect.die("unexpected media"),
+										})
+									: h.adapters.media,
+						...(mode === "insert-failed"
+							? { text: Option.some({ insertText: () => Effect.fail(denied) }) }
+							: {}),
+					}),
+				),
+			);
+		},
+	);
+}

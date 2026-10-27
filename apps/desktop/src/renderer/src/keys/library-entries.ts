@@ -6,6 +6,7 @@ import {
 } from "../../../../../../packages/device/src/actions/action-registry.js";
 import {
 	allowedInSequence,
+	isSequenceSelectable,
 	SEQUENCE_LIBRARY,
 } from "../../../../../../packages/device/src/actions/sequence-library.js";
 import {
@@ -112,10 +113,7 @@ export function functionGroups(
 			key: functionLibraryKey(id, pageNumber),
 			...(sequence
 				? {
-						disabled:
-							!Schema.is(Schema.encodedSchema(SequenceLeaf))(
-								Schema.encodeSync(ProfileKey)(functionLibraryKey(id)).config,
-							) && !["website", "hotkey", "open", "text"].includes(id),
+						disabled: !isSequenceSelectable(id),
 					}
 				: {}),
 		})),
@@ -124,7 +122,7 @@ export function functionGroups(
 		groups.push({
 			id: "functions:layout",
 			name: locale === "de" ? "Layout" : "Layout",
-			entries: ["createFolder", "pageNo", "playAudio"].map((id) => ({
+			entries: ["createFolder", "playAudio"].map((id) => ({
 				id,
 				key: functionLibraryKey(id, pageNumber),
 			})),

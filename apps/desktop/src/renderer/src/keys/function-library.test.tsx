@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Option, Schema } from "effect";
-import { act } from "react";
+import { act, createElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
 	AppLibrarySnapshot,
@@ -16,6 +16,7 @@ import {
 	functionLibraryKey,
 	legacyAiGroups,
 } from "./library-entries";
+import { SequenceEditor } from "./SequenceEditor";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -165,6 +166,37 @@ it("MGMT-119/124 composes live generated and emoji data, excludes placeholders a
 	expect(f.host.textContent).not.toContain("Smile");
 	expect(f.host.textContent).not.toContain("Save file");
 });
+it("review: sequence library and mounted editor agree on every selectable default", async () => {
+	const entries = functionGroups(true, "en").flatMap((group) => group.entries);
+	const view = await mount(
+		createElement(SequenceEditor, {
+			value: [
+				{ config: { type: "delay", actions: [{ type: "time", value: 1000 }] } },
+			],
+			onChange: () => {},
+		}),
+	);
+	try {
+		const options = [
+			...view.host.querySelectorAll<HTMLOptionElement>("select option"),
+		];
+		expect(options).toHaveLength(entries.length);
+		for (const entry of entries) {
+			const option = options.find((option) => option.value === entry.id);
+			expect(option).toBeDefined();
+			expect(option?.disabled).toBe(entry.disabled);
+		}
+		expect(options.find((option) => option.value === "cmd")?.disabled).toBe(
+			false,
+		);
+		expect(options.find((option) => option.value === "buzzer")?.disabled).toBe(
+			true,
+		);
+	} finally {
+		await view.close();
+	}
+});
+
 it("MGMT-127 searches the sequence allowlist and removes explicit plugin exclusions", () => {
 	const groups = functionGroups(true, "en");
 	const ids = groups.flatMap((group) =>
@@ -331,13 +363,16 @@ it("MGMT-127 reads the recovered pluginAction manifest through legacy import and
 	expect(library[0]?.entries[0]?.disabled).toBe(true);
 });
 
-it("MGMT-107/127 mounts the translated sequence search and keeps unavailable operations disabled", async () => {
+it("MGMT-107/127/210 offers confirmed command steps and keeps unavailable operations disabled", async () => {
 	const f = await fixture(true);
 	vi.useFakeTimers();
 	expect(f.host.querySelector('[data-library-type="multiActions"]')).toBeNull();
 	expect(
 		query(f.host, '[data-library-type="cmd"]', HTMLButtonElement).disabled,
-	).toBe(true);
+	).toBe(false);
+	await click(query(f.host, '[data-library-type="cmd"]', HTMLButtonElement));
+	expect(f.choose).toHaveBeenCalledTimes(1);
+	expect(f.choose.mock.calls[0]?.[1].key.config.type).toBe("cmd");
 	await input(
 		query(f.host, "#keys-library-search", HTMLInputElement),
 		"GERÄTEMIKROFON",
@@ -345,6 +380,14 @@ it("MGMT-107/127 mounts the translated sequence search and keeps unavailable ope
 	await act(async () => vi.advanceTimersByTimeAsync(500));
 	expect(f.host.querySelector('[data-library-type="website"]')).toBeNull();
 	expect(f.host.querySelector('[data-library-type="mic"]')).not.toBeNull();
+	const microphone = query(
+		f.host,
+		'[data-library-type="mic"]',
+		HTMLButtonElement,
+	);
+	expect(microphone.disabled).toBe(true);
+	await click(microphone);
+	expect(f.choose).toHaveBeenCalledTimes(1);
 	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
 	expect(f.host.querySelector('[data-library-type="website"]')).not.toBeNull();
 });

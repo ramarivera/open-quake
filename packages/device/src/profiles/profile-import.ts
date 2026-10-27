@@ -4,6 +4,7 @@ import {
 	legacyAssistantState,
 	migrateLegacyAiConfig,
 } from "../../../edge/src/ai/provider-catalog.js";
+import { normalizeActionImport } from "../actions/action-import.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
@@ -90,12 +91,19 @@ export function inspectProfileImport(
 	) => diagnostics.push({ code, path, blocking });
 	const normalizeKey = (input: unknown, path: string, pageId?: string) => {
 		const source = record(input);
-		const config = record(source?.config);
+		const normalized = source
+			? record(normalizeActionImport(source).normalized)
+			: undefined;
+		const config = record(normalized?.config);
 		if (!source || !config) {
 			report("invalid-field", path, true);
 			return input;
 		}
 		const next = { ...config };
+		// Keep website templates editable; only validation and execution expand them.
+		const sourceActions = record(source.config)?.actions;
+		if (config.type === "website" && sourceActions !== undefined)
+			next.actions = sourceActions;
 		if (typeof config.errorCode === "number") {
 			const diagnosticCode = legacyDiagnosticCode(config.errorCode);
 			if (diagnosticCode)
@@ -135,8 +143,8 @@ export function inspectProfileImport(
 			}
 		}
 		let unsupported = record(source.compatibility)?.unsupported === true;
-		if (Array.isArray(config.actions))
-			next.actions = config.actions.flatMap((action, index) => {
+		if (Array.isArray(next.actions))
+			next.actions = next.actions.flatMap((action, index) => {
 				const a = record(action);
 				if (
 					action === null ||
@@ -183,7 +191,7 @@ export function inspectProfileImport(
 			}
 		}
 		const candidate = {
-			...source,
+			...normalized,
 			...(source.childrenName === "" || source.childrenName === null
 				? { childrenName: undefined }
 				: {}),

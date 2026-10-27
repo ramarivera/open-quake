@@ -30,3 +30,51 @@ Evidence for tasks 1.1–1.4 is recorded in `verification.md`. Parent owns Beads
 ## 4. Integration close-out
 
 - [ ] 4.1 Run first-release function scenarios through management assignment, saved profile, normalized input, and host output, then repository gates; verify diagnostics omit text/URLs/private paths, validation passes, and unsupported platform/hardware results remain explicit.
+
+## 8. key-runtime burn-down
+
+- [x] 8.1 Implement saved native dispatch and sequence/plugin seam. Beads open-quake-lih.10.22 and .25; .25 remains a plugins handoff.
+- [x] 8.2 Implement scoped timer completion, debounce, zero-clear and feedback expiry. Bead open-quake-lih.10.23.
+- [x] 8.3 Implement saved nested folder/profile navigation using existing allocation and selection. Bead open-quake-lih.10.24.
+
+Key-runtime verification on 2026-10-27: 5001 root tests passed, four existing skips, six package typechecks passed, Biome had zero errors, build and both bundle checks passed. The existing hidden mock native smoke passed with EN/DE timer, page indicator, progress and checkmark captures. MAIN-076 and plugin MAIN-066 remain partial under open-quake-lih.10.25. OpenSpec 1.15 strict reports 9 passed and 38 failed from existing long-requirement warnings, tracked in open-quake-lih.23.2; the added lane requirements have no diagnostics. Physical QUAKE and native Linux/Windows acceptance remain unverified. All lane beads stay open for lead integration.
+
+## PR #127 final hosted-validation fix
+
+- [x] Reuse immutable sequence dropdown options and a compiled support predicate across rows. Bead `open-quake-lih.10.27`. Preserve the 100-operation capacity, rejection feedback, single-write save and canonical Close draft/value/force behavior. Verification lives in the bead and supplied scratch directory; hosted validation remains for the lead.
+
+## PR #127 authorized residual continuation
+
+- [x] Validate sequence audio through the soundboard owner before host effects, renew equal-percentage progress expiry across revisions, and route optional text media follow-ups through the shared hotkey owner. Bead `open-quake-lih.10.28`. Focused fake regressions cover malformed sound payloads, valid playback/empty stop ordering, absent preflight, both progress lifetimes, supported media commands and failure-before-insertion behavior. Parent owns current-head CI/review acceptance; the bead stays in progress.
+
+Continuation verification: 110 focused device tests and 56 desktop adapter/soundboard tests passed; the new regressions fail against the original source. Device and desktop typechecks, repository lint and desktop build passed. Ordinary validation passes both owning changes with the existing length warnings; strict baseline remains tracked in `open-quake-lih.23.2`. No native input, device, audible playback or provider tests ran. The sequence-editor capacity optimization and assertions are unchanged.
+
+## PR #127 second and final continuation
+
+- [x] Wire the existing action import normalizer into profile inspection before validation, preserve inert original compatibility data, and prove supported website imports execute normalized safe URLs through the real profile service and desktop adapter. Bead `open-quake-lih.10.28`; parent owns remote gates.
+
+Second-continuation verification: 184 focused device tests and 64 desktop adapter/soundboard/mounted-renderer tests passed, plus the unchanged 100/101 capacity consumer regression. Seven regressions failed on the old source before implementation. Device and desktop typechecks, repository lint, desktop build and ordinary validation of both owning changes passed. Existing strict OpenSpec length-warning baseline remains open. No real host input, HID, microphone, audible playback, provider calls or visible apps ran. Parent owns current-head CI/review acceptance; the bead remains open. Logs and the three-entry proposed reply plan are under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/continuation2/`.
+
+## PR #127 authorized extra batch
+
+- [x] Retire display countdown ownership before native timer activation and normalize valid host:port URLs through sequence preflight and real profile import/desktop dispatch. Bead `open-quake-lih.10.29`. Parent owns remote gates; no merge or additional review loop.
+
+Extra-batch verification: 94 device action/runtime tests and 60 desktop adapter/mounted-renderer/sequence-editor tests passed. The unchanged 100/101 capacity consumer and existing mute alternate-visual consumer each passed separately. Nine finding-specific cases failed against old source, including the timer remaining running across the old display deadline. Device/desktop typechecks, scoped Biome and production desktop build passed. Ordinary owner-spec validation passes with existing length warnings; scoped Biome retains three existing template-placeholder warnings. No native device, host input, microphone, audio, provider, visible app, Installer or release tests ran. Parent owns replies, resolutions and remote gates; `open-quake-lih.10.29` stays open. Evidence is in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/extra-batch/`.
+
+## PR #127 repeated Windows focus correction
+
+- [x] Cache the Windows enumeration callback type across activations and retain per-call callback cleanup. Bead `open-quake-lih.10.30`. The production focus regression uses the real persistent Koffi type registry with fake Windows calls, reproducing the duplicate-type failure on the second activation before the fix. It also checks callback cleanup after an aborted activation. Actual Windows focus remains unverified.
+
+Verification: all 62 native-host and desktop runtime-port tests pass, desktop typecheck and scoped Biome pass, and owner-spec validation passes with the three existing length warnings. No Windows window was enumerated or focused during these tests.
+
+## PR #127 CodeRabbit correctness follow-up
+
+- [x] Preserve canonical owned-action errors at the production promise boundary, substitute website titles literally in one pass, and share registry-based sequence selection rules. Bead `open-quake-lih.10.31`. Regressions cover all six canonical error identities, generic failure scrubbing, replacement-pattern titles and agreement between the mounted editor and function library. Native effects remain faked; hosted checks and review remain parent-owned.
+
+Verification: 101 device and 73 desktop focused tests passed, plus the unchanged mounted 100/101-capacity test. Six error-identity cases and six title cases failed on the old implementation. Device/desktop typechecks, scoped Biome, production desktop build and ordinary owner-spec validation passed. Existing template-placeholder lint warnings and three long-requirement warnings remain. No real host command, browser, input or device action ran.
+
+## PR #127 imported website expansion correction
+
+- [x] Preserve the editable website template in production profile imports while validating an expanded copy. Bead `open-quake-lih.10.32`. Actual ProfileService import and desktop dispatch regressions cover all three placeholder forms with placeholder-shaped titles, retain inert original JSON, and assert one correct URL per activation with no host effect during import. Those three cases reproduced double expansion before the fix. Hosted gates remain parent-owned; native effects are faked.
+
+Verification: 142 device tests and 63 desktop adapter tests pass, including export/reimport and activation of the retained template. Device/desktop typechecks, scoped Biome and ordinary owner-spec validation pass. The three inherited long-requirement warnings remain. No actual browser, command, input or device action ran.

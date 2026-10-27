@@ -659,6 +659,49 @@ describe("desktop window lifecycle", () => {
 		});
 	});
 
+	it("MAIN-082 SCREEN-108: saved-key management port restores and recreates one window at the requested tab", async () => {
+		const actions = vi.mocked(registerProfiles).mock.calls[0]?.[11];
+		if (
+			!actions ||
+			typeof actions !== "object" ||
+			!("management" in actions) ||
+			typeof actions.management !== "function"
+		)
+			throw new Error("Missing saved-key management composition");
+		const { management } = windows();
+		management.isMinimized.mockReturnValue(true);
+		actions.management("keys");
+		const ready = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_READY,
+		)?.[1];
+		if (!ready) throw new Error("Missing renderer ready owner");
+		ready({
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		});
+		await vi.waitFor(() => expect(management.restore).toHaveBeenCalledOnce());
+		expect(management.webContents.send).toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"keys",
+		);
+		const count = electron.BrowserWindow.windows.length;
+		management.destroy();
+		actions.management("settings");
+		await vi.waitFor(() =>
+			expect(electron.BrowserWindow.windows).toHaveLength(count + 1),
+		);
+		const replacement = electron.BrowserWindow.windows.at(-1);
+		if (!replacement) throw new Error("Missing replacement");
+		ready({
+			sender: replacement.webContents,
+			senderFrame: replacement.webContents.mainFrame,
+		});
+		expect(replacement.webContents.send).toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"settings",
+		);
+	});
+
 	it("SETTINGS-064: saved locale refreshes the native Dock menu and Settings activates the existing management route", async () => {
 		const { management } = windows();
 		const handler = electron.ipcMain.handle.mock.calls.find(

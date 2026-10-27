@@ -1,10 +1,9 @@
-import { execFile } from "node:child_process";
 import { platform } from "node:os";
-import { promisify } from "node:util";
-import { Effect, Layer, Option, Queue, Schema } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Queue, Schema } from "effect";
 import { clipboard, shell } from "electron";
 import type {
 	ActionHostAdapters,
+	KeyboardActionAdapter,
 	MediaActionAdapter,
 } from "../../../../../packages/device/src/actions/action-adapters.js";
 import {
@@ -14,14 +13,19 @@ import {
 	MediaCommand,
 } from "../../../../../packages/device/src/actions/action-contracts.js";
 import {
+	ActionApplicationMissing,
+	ActionPermissionDenied,
 	ActionSnapshotFailed,
 	HostActionFailed,
+	InvalidKeyAction,
+	KeyFunctionUnavailable,
 } from "../../../../../packages/device/src/actions/action-errors.js";
 import { executeActionLeaf } from "../../../../../packages/device/src/actions/action-service.js";
 import {
 	type KeyActivation,
 	type KeyFeedback,
 	KeyRuntimePort,
+	unavailablePluginAction,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { encodeDeviceChord } from "../../../../../packages/device/src/hardware/hardware-invariants.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
@@ -29,9 +33,41 @@ import type { HardwareSession } from "../../../../../packages/device/src/hardwar
 import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileKey as ProfileKeySchema } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import {
+	type NativeApplicationPort,
+	runApplicationAction,
+} from "../profiles/native-actions";
+import { validateSequenceAudio } from "../soundboard/key-actions";
 import { playKeyAlarm } from "./alarm";
+import {
+	captureScreenshots,
+	lockWorkstation,
+	nativeApplicationPort,
+	type ScreenshotPort,
+	screenshotPort,
+} from "./native-host";
 
-const runFile = promisify(execFile);
+const isActionError = Schema.is(
+	Schema.Union(
+		ActionApplicationMissing,
+		ActionPermissionDenied,
+		ActionSnapshotFailed,
+		HostActionFailed,
+		InvalidKeyAction,
+		KeyFunctionUnavailable,
+	),
+);
+export interface DesktopKeyRuntimeActions {
+	readonly keyboard?: KeyboardActionAdapter;
+	readonly application?: NativeApplicationPort;
+	readonly screenshots?: ScreenshotPort;
+	readonly lock?: () => Promise<void>;
+	readonly management?: (
+		tab: "profiles" | "keys" | "agents" | "settings" | undefined,
+	) => void;
+	readonly plugin?: KeyRuntimePort["Type"]["executePlugin"];
+	readonly timerCompleted?: KeyRuntimePort["Type"]["timerCompleted"];
+}
 
 export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
@@ -44,17 +80,35 @@ export const desktopKeyRuntimePort = (
 	) => Promise<boolean>,
 	mediaActions?: MediaActionAdapter,
 	resetOwned?: (deviceId?: string) => Promise<void>,
+	runtimeActions: DesktopKeyRuntimeActions = {},
 ) =>
 	Layer.scoped(
 		KeyRuntimePort,
 		Effect.gen(function* () {
 			const profiles = yield* ProfileService;
-			const keyboard = {
+			const keyboard = runtimeActions.keyboard ?? {
 				supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),
 				pressChord: Effect.fn("DesktopKeys.pressChord")(function* (
 					chord: string,
 				) {
 					if (mock) return;
+					if (chord === "printscreen") {
+						yield* Effect.tryPromise({
+							try: () =>
+								captureScreenshots(
+									runtimeActions.screenshots ?? screenshotPort,
+								),
+							catch: (cause) => new HostActionFailed(cause),
+						});
+						return;
+					}
+					if (chord === "command+l" && platform() === "win32") {
+						yield* Effect.tryPromise({
+							try: () => (runtimeActions.lock ?? lockWorkstation)(),
+							catch: (cause) => new HostActionFailed(cause),
+						});
+						return;
+					}
 					const session = hardware();
 					if (!session)
 						return yield* Effect.fail(
@@ -82,9 +136,13 @@ export const desktopKeyRuntimePort = (
 							for (const [deviceId, selection] of Object.entries(
 								envelope.activeByDevice,
 							)) {
-								const page = envelope.profiles
-									.find((p) => p.id === selection.profileId)
-									?.pages.find((p) => p.id === selection.pageId);
+								const profile = envelope.profiles.find(
+									(p) => p.id === selection.profileId,
+								);
+								if (!profile) continue;
+								const page = profile.pages.find(
+									(p) => p.id === selection.pageId,
+								);
 								for (const key of page?.keys ?? [])
 									if (
 										key.config.display &&
@@ -94,6 +152,7 @@ export const desktopKeyRuntimePort = (
 											deviceId,
 											...selection,
 											keyCode: key.keyCode,
+											revision: profile.revision,
 											volume: reading.level,
 											muted: reading.muted,
 											...(key.config.type === "mute"
@@ -120,7 +179,10 @@ export const desktopKeyRuntimePort = (
 								"text/rtf",
 								"image/png",
 							]);
-							const formats = clipboard.availableFormats();
+							const formats = yield* Effect.try({
+								try: () => clipboard.availableFormats(),
+								catch: (cause) => new HostActionFailed(cause),
+							});
 							if (formats.some((format) => !supported.has(format)))
 								return yield* Effect.fail(
 									new HostActionFailed("unsupported-clipboard-format"),
@@ -134,27 +196,52 @@ export const desktopKeyRuntimePort = (
 								}),
 								catch: (cause) => new HostActionFailed(cause),
 							});
-							yield* Effect.acquireUseRelease(
-								Effect.try({
-									try: () => clipboard.writeText(text),
-									catch: (cause) => new HostActionFailed(cause),
+							yield* Effect.uninterruptibleMask((restore) =>
+								Effect.gen(function* () {
+									let installed = false;
+									const result = yield* Effect.exit(
+										restore(
+											Effect.try({
+												try: () => {
+													clipboard.clear();
+													clipboard.writeText(text);
+													installed = true;
+												},
+												catch: (cause) => new HostActionFailed(cause),
+											}).pipe(
+												Effect.zipRight(
+													keyboard.pressChord(
+														process.platform === "darwin"
+															? "command+v"
+															: "control+v",
+													),
+												),
+												Effect.zipRight(Effect.sleep(50)),
+											),
+										),
+									);
+									const cleanup = yield* Effect.exit(
+										Effect.try({
+											try: () => {
+												const formats = clipboard.availableFormats();
+												const ours =
+													clipboard.readText() === text &&
+													formats.every((format) => format === "text/plain");
+												// Failed clear/write may leave an empty clipboard. Successful
+												// paste cleanup never overwrites a concurrent user edit.
+												if (ours || (!installed && formats.length === 0))
+													clipboard.write(before);
+											},
+											catch: (cause) => new HostActionFailed(cause),
+										}),
+									);
+									if (Exit.isFailure(result) && Exit.isFailure(cleanup))
+										return yield* Effect.failCause(
+											Cause.sequential(result.cause, cleanup.cause),
+										);
+									yield* cleanup;
+									yield* result;
 								}),
-								() =>
-									keyboard
-										.pressChord(
-											process.platform === "darwin" ? "command+v" : "control+v",
-										)
-										.pipe(Effect.zipRight(Effect.sleep(150))),
-								() =>
-									Effect.sync(() => {
-										if (
-											clipboard.readText() === text &&
-											clipboard
-												.availableFormats()
-												.every((format) => format === "text/plain")
-										)
-											clipboard.write(before);
-									}),
 							);
 						}).pipe(textLock.withPermits(1));
 					}),
@@ -173,32 +260,41 @@ export const desktopKeyRuntimePort = (
 					launchApplication: Effect.fn("DesktopKeys.launchApplication")(
 						function* (
 							reference: string,
-						): Effect.fn.Return<void, HostActionFailed> {
+						): Effect.fn.Return<
+							void,
+							HostActionFailed | KeyFunctionUnavailable
+						> {
 							if (mock) return;
-							if (reference.slice(0, 4).toLowerCase() === "app:") {
-								if (platform() !== "darwin")
-									return yield* Effect.fail(
-										new HostActionFailed(
-											"application-reference-platform-unavailable",
-										),
-									);
-								yield* Effect.tryPromise({
-									try: () =>
-										runFile("/usr/bin/open", ["-b", reference.slice(4)]),
-									catch: (cause) => new HostActionFailed(cause),
-								});
-								return;
-							}
-							const error = yield* Effect.tryPromise({
-								try: () => shell.openPath(reference),
-								catch: (cause) => new HostActionFailed(cause),
+							yield* Effect.tryPromise({
+								try: (signal) =>
+									runApplicationAction(
+										runtimeActions.application ?? nativeApplicationPort,
+										platform() === "darwin"
+											? "darwin"
+											: platform() === "win32"
+												? "win32"
+												: "linux",
+										reference,
+										"open",
+										false,
+										signal,
+									),
+								catch: (cause) =>
+									cause instanceof KeyFunctionUnavailable
+										? cause
+										: new HostActionFailed(cause),
 							});
-							if (error) return yield* Effect.fail(new HostActionFailed(error));
 						},
 					),
 				}),
 			};
 			return {
+				validateSequenceAudio: (config) =>
+					validateSequenceAudio(config).pipe(
+						Effect.mapError(
+							(cause) => new InvalidKeyAction("config.actions", cause),
+						),
+					),
 				read: profiles.loadProfiles().pipe(
 					Effect.map((r) => r.envelope),
 					Effect.catchTags({
@@ -211,7 +307,66 @@ export const desktopKeyRuntimePort = (
 							Effect.fail(new ActionSnapshotFailed(c)),
 					}),
 				),
-				execute: (config) => executeActionLeaf(config, adapters),
+				execute: (config) =>
+					Effect.gen(function* () {
+						if (config.type === "managementCenter") {
+							if (mock) return;
+							if (!runtimeActions.management)
+								return yield* new HostActionFailed("management-unavailable");
+							yield* Effect.sync(() =>
+								runtimeActions.management?.(config.actions[0]?.value),
+							);
+							return;
+						}
+						if (config.type === "close") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: (signal) =>
+									runApplicationAction(
+										runtimeActions.application ?? nativeApplicationPort,
+										platform() === "darwin"
+											? "darwin"
+											: platform() === "win32"
+												? "win32"
+												: "linux",
+										config.actions[0].value,
+										"close",
+										config.actions[1].value === 1 ||
+											config.actions[1].value === true,
+										signal,
+									),
+								catch: (cause) =>
+									cause instanceof KeyFunctionUnavailable
+										? cause
+										: new HostActionFailed(cause),
+							});
+							return;
+						}
+						if (config.type === "screenshot") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: () =>
+									captureScreenshots(
+										runtimeActions.screenshots ?? screenshotPort,
+									),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							return;
+						}
+						if (config.type === "lock") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: () => (runtimeActions.lock ?? lockWorkstation)(),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							return;
+						}
+						yield* executeActionLeaf(config, adapters);
+					}),
+				executePlugin: runtimeActions.plugin ?? unavailablePluginAction,
+				...(runtimeActions.timerCompleted
+					? { timerCompleted: runtimeActions.timerCompleted }
+					: {}),
 				holdHotkey: (key) =>
 					Effect.gen(function* () {
 						const decoded = Schema.decodeUnknownEither(HotkeyConfig)(
@@ -220,6 +375,13 @@ export const desktopKeyRuntimePort = (
 						if (decoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(decoded.left));
 						const chord = decoded.right.actions[0].value;
+						if (
+							chord === "printscreen" ||
+							(chord === "command+l" && platform() === "win32")
+						) {
+							yield* keyboard.pressChord(chord);
+							return Effect.void;
+						}
 						if (Schema.is(MediaCommand)(chord)) {
 							yield* executeActionLeaf(
 								{ type: "hotkey", actions: [{ type: "key", value: chord }] },
@@ -256,7 +418,8 @@ export const desktopKeyRuntimePort = (
 						? Effect.succeed(false)
 						: Effect.tryPromise({
 								try: (signal) => executeOwned(key, signal, activation),
-								catch: (cause) => new HostActionFailed(cause),
+								catch: (cause) =>
+									isActionError(cause) ? cause : new HostActionFailed(cause),
 							}),
 				resetOwned: (deviceId) =>
 					resetOwned ? Effect.promise(() => resetOwned(deviceId)) : Effect.void,

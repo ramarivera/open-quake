@@ -4,6 +4,7 @@ import {
 	Array as EffectArray,
 	Fiber,
 	Layer,
+	Option,
 	Schema,
 	TestClock,
 } from "effect";
@@ -21,6 +22,7 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
+import { managerState } from "../../src/profiles/profile-manager-invariants.js";
 
 function fixture(
 	config: unknown,
@@ -96,6 +98,10 @@ function fixture(
 	);
 	return {
 		layer,
+		read: () => envelope,
+		set: (next: ProfileEnvelope) => {
+			envelope = next;
+		},
 		feedback,
 		calls,
 		fail: () => {
@@ -210,7 +216,7 @@ it.effect(
 			yield* press;
 			yield* TestClock.adjust(5000);
 			expect(f.calls).toHaveLength(1);
-			expect(f.feedback.at(-1)?.progress).toBe(100);
+			expect(f.feedback.some((s) => s.progress === 100)).toBe(true);
 		}).pipe(Effect.provide(f.layer));
 	},
 );
@@ -221,7 +227,9 @@ it.effect("sequence stops at first failure and completes progress", () => {
 		yield* press;
 		yield* TestClock.adjust(5000);
 		expect(f.calls).toHaveLength(1);
-		expect(f.feedback.at(-1)).toMatchObject({ alert: 1, progress: 100 });
+		expect(f.feedback.some((s) => s.alert === 1 && s.progress === 100)).toBe(
+			true,
+		);
 	}).pipe(Effect.provide(f.layer));
 });
 it.effect("page navigation wraps, goToPage clamps, groups wrap", () => {
@@ -409,7 +417,7 @@ for (const finalGap of [undefined, 60000])
 				expect(f.calls).toHaveLength(1);
 				yield* TestClock.adjust(1);
 				expect(f.calls).toHaveLength(2);
-				expect(f.feedback.at(-1)?.progress).toBe(100);
+				expect(f.feedback.some((s) => s.progress === 100)).toBe(true);
 				yield* press;
 				yield* TestClock.adjust(0);
 				expect(f.calls).toHaveLength(3);
@@ -438,7 +446,7 @@ it.effect(
 			yield* TestClock.adjust(1999);
 			expect(f.feedback.at(-1)?.progress).toBe(0);
 			yield* TestClock.adjust(1);
-			expect(f.feedback.at(-1)?.progress).toBe(100);
+			expect(f.feedback.some((s) => s.progress === 100)).toBe(true);
 			yield* press;
 			yield* TestClock.adjust(0);
 			expect(f.feedback.at(-1)?.progress).toBe(0);
@@ -702,3 +710,994 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+const displayTarget = {
+	deviceId: "device",
+	profileId: "p",
+	pageId: "one",
+	revision: 0,
+	keyCode: "1,1",
+};
+const timerDraft = {
+	type: "timer",
+	actions: [
+		{ type: "time", value: 1000 },
+		{ type: "callback", value: 1 },
+	],
+};
+it.effect(
+	"MAIN-075 MGMT-138: zero waits for clear, then restarts with one owned callback and debounce",
+	() => {
+		let completed = 0;
+		const f = fixture(timerDraft, false, 0, {
+			timerCompleted: () =>
+				Effect.sync(() => {
+					completed++;
+				}),
+		});
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* press;
+			yield* TestClock.adjust(599);
+			yield* press;
+			yield* TestClock.adjust(401);
+			expect(completed).toBe(1);
+			expect(f.feedback.at(-1)).toMatchObject({
+				countdownPhase: "expired",
+				timerCompleted: true,
+			});
+			yield* press;
+			expect(f.feedback.at(-1)).toMatchObject({
+				countdownPhase: "hidden",
+				countdown: -1,
+			});
+			expect(completed).toBe(1);
+			yield* TestClock.adjust(600);
+			yield* press;
+			yield* TestClock.adjust(1000);
+			expect(completed).toBe(2);
+			expect((yield* r.snapshot).at(-1)?.countdownPhase).toBe("expired");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+for (const mode of [
+	"callback-off",
+	"revision",
+	"disconnect",
+	"inactive",
+	"cancel",
+] as const) {
+	it.effect(`MGMT-138 SCREEN-048: no obsolete completion after ${mode}`, () => {
+		let completed = 0,
+			alarms = 0;
+		const f = fixture(
+			{
+				...timerDraft,
+				actions: [
+					...timerDraft.actions.filter((a) => a.type !== "callback"),
+					{ type: "callback", value: mode === "callback-off" ? 0 : 1 },
+					{ type: "sound", value: "alarm" },
+				],
+			},
+			false,
+			0,
+			{
+				timerCompleted: () =>
+					Effect.sync(() => {
+						completed++;
+					}),
+				alarm: () =>
+					Effect.sync(() => {
+						alarms++;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* press;
+			yield* TestClock.adjust(600);
+			if (mode === "revision") f.nextRevision();
+			if (mode === "inactive") f.switch();
+			if (mode === "disconnect") yield* r.reset("device");
+			if (mode === "cancel") yield* press;
+			yield* TestClock.adjust(1000);
+			expect(completed).toBe(0);
+			expect(alarms).toBe(mode === "callback-off" ? 1 : 0);
+			if (mode === "inactive") {
+				yield* r.navigate("device", 2);
+				expect(f.feedback.at(-1)).toMatchObject({
+					countdownPhase: "expired",
+					alert: 0,
+				});
+			}
+		}).pipe(Effect.provide(f.layer));
+	});
+}
+it.effect(
+	"SCREEN-046/047 MGMT-404: typed display timing, zero, -1 and 120 ms suppression",
+	() => {
+		const f = fixture(timerDraft);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const event = (time: number) =>
+				r.displayEvent({ ...displayTarget, type: "countdown", time });
+			yield* event(2000);
+			yield* TestClock.adjust(1000);
+			expect(f.feedback.at(-1)?.countdown).toBe(1000);
+			yield* event(-1);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("hidden");
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "showAlert",
+				alertType: 2,
+			});
+			yield* event(-1);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("expired");
+			yield* event(1000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("hidden");
+			yield* TestClock.adjust(119);
+			yield* event(1000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("hidden");
+			yield* TestClock.adjust(1);
+			yield* event(1000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("running");
+			yield* TestClock.adjust(1);
+			yield* event(1000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("running");
+			yield* TestClock.adjust(1000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("expired");
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "showAlert",
+				alertType: 1,
+			});
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "progress",
+				percent: 33,
+			});
+			yield* TestClock.adjust(2000);
+			expect(f.feedback.at(-1)).toMatchObject({ alert: 0, progress: 33 });
+			yield* TestClock.adjust(2999);
+			expect(f.feedback.at(-1)?.progress).toBe(33);
+			yield* TestClock.adjust(1);
+			expect(f.feedback.at(-1)?.progress).toBe(-1);
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "progress",
+				percent: 100,
+			});
+			yield* TestClock.adjust(999);
+			expect(f.feedback.at(-1)?.progress).toBe(100);
+			yield* TestClock.adjust(1);
+			expect(f.feedback.at(-1)?.progress).toBe(-1);
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "showAlert",
+				alertType: 3,
+			});
+			yield* TestClock.adjust(3000);
+			expect(f.feedback.at(-1)?.alert).toBe(3);
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "showAlert",
+				alertType: 0,
+			});
+			expect(f.feedback.at(-1)?.alert).toBe(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"SCREEN-038 MAIN-081: artwork and feedback reject unknown cells, revisions, serials and other profiles",
+	() => {
+		const f = fixture(timerDraft);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* r.panelMessage("device", {
+				...displayTarget,
+				type: "showAnimation",
+				resourceId: "data:image/png;base64,current",
+			});
+			expect(f.feedback.at(-1)?.icon).toContain("current");
+			for (const patch of [
+				{ keyCode: "9,9" },
+				{ profileId: "q" },
+				{ revision: 1 },
+				{ deviceId: "unknown" },
+			])
+				yield* r.displayEvent({
+					...displayTarget,
+					...patch,
+					type: "showAnimation",
+					resourceId: "stale",
+				});
+			expect(f.feedback).toHaveLength(1);
+			f.switch();
+			yield* r.displayEvent({
+				...displayTarget,
+				type: "showAlert",
+				alertType: 1,
+			});
+			expect(f.feedback).toHaveLength(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+const pluginSequence = {
+	type: "multiActions",
+	subActions: [
+		{
+			config: {
+				type: "delay",
+				actions: [{ type: "time", value: 200 }],
+				gap: 50,
+			},
+		},
+		{
+			isPlugin: true,
+			pluginId: "example.plugin",
+			config: { type: "example.action", actions: [], gap: 100 },
+		},
+		{
+			config: {
+				type: "close",
+				actions: [
+					{ type: "path", value: "/opt/example" },
+					{ type: "force", value: "" },
+				],
+			},
+		},
+	],
+};
+it.effect(
+	"MAIN-076 MGMT-163: subActions-only sequence awaits nested plugin, gap and feedback",
+	() => {
+		const log: string[] = [];
+		const f = fixture(pluginSequence, false, 0, {
+			executePlugin: (step, activation) =>
+				Effect.gen(function* () {
+					expect(step.pluginId).toBe("example.plugin");
+					expect(activation).toMatchObject({ ...displayTarget, stepIndex: 1 });
+					log.push("plugin-start");
+					yield* Effect.sleep(500);
+					log.push("plugin-end");
+				}),
+		});
+		return Effect.gen(function* () {
+			yield* press;
+			yield* TestClock.adjust(249);
+			expect(log).toEqual([]);
+			yield* TestClock.adjust(1);
+			expect(log).toEqual(["plugin-start"]);
+			expect(f.calls).toEqual([]);
+			yield* TestClock.adjust(500);
+			expect(log).toEqual(["plugin-start", "plugin-end"]);
+			expect(f.calls).toEqual([]);
+			expect(f.feedback.at(-1)?.progress).toBe(66);
+			yield* TestClock.adjust(100);
+			expect(f.calls[0]?.type).toBe("close");
+			expect(f.feedback.at(-1)?.progress).toBe(100);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+for (const mode of ["unavailable", "failure", "cancel"] as const) {
+	it.effect(
+		`MAIN-076: nested plugin ${mode} stops following native actions`,
+		() => {
+			let interrupted = false;
+			const f = fixture(
+				pluginSequence,
+				false,
+				0,
+				mode === "unavailable"
+					? {}
+					: {
+							executePlugin: () =>
+								(mode === "failure"
+									? Effect.fail(new HostActionFailed("plugin-failure"))
+									: Effect.sleep(10000)
+								).pipe(
+									Effect.onInterrupt(() =>
+										Effect.sync(() => {
+											interrupted = true;
+										}),
+									),
+								),
+						},
+			);
+			return Effect.gen(function* () {
+				yield* press;
+				yield* TestClock.adjust(250);
+				if (mode === "cancel") yield* press;
+				yield* TestClock.adjust(10000);
+				expect(f.calls).toEqual([]);
+				expect(interrupted).toBe(mode === "cancel");
+				if (mode !== "cancel")
+					expect(f.feedback.some((s) => s.alert === 1)).toBe(true);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"MAIN-082 SCREEN-108/109: panel messages dispatch known management tabs and leave multi-screen alerts inert",
+	() => {
+		const f = fixture(timerDraft);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* r.panelMessage("device", {
+				type: "functionKeyPressed",
+				functionName: "managementCenter",
+				tabType: "keys",
+			});
+			expect(f.calls).toEqual([
+				{
+					type: "managementCenter",
+					actions: [{ type: "tabType", value: "keys" }],
+				},
+			]);
+			for (const serials of [["device"], ["device", "other", "unknown"]])
+				yield* r.panelMessage("device", {
+					type: "globalAlert",
+					alertType: "multi-screen",
+					serials,
+				});
+			yield* r.panelMessage("unknown", {
+				type: "functionKeyPressed",
+				functionName: "managementCenter",
+			});
+			expect(
+				(yield* Effect.either(
+					r.panelMessage("device", {
+						type: "functionKeyPressed",
+						functionName: "managementCenter",
+						tabType: "unknown",
+					}),
+				))._tag,
+			).toBe("Left");
+			expect(f.calls).toHaveLength(1);
+			expect(f.selection()).toEqual({ profileId: "p", pageId: "one" });
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+function savedNavigation(
+	type: string,
+	actions: readonly { type: string; value: string | number }[] = [],
+): typeof ProfileKey.Encoded {
+	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	return {
+		...empty,
+		childrenName: type,
+		config: { ...empty.config, type, actions },
+	};
+}
+it.effect(
+	"MAIN-077 MGMT-142: nested allocated folders and emoji Back restore the saved path; stale return cannot jump",
+	() => {
+		const f = fixture({
+			type: "createFolder",
+			actions: [{ type: "folder", value: "folder-a" }],
+		});
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				profiles: [
+					{
+						...raw.profiles[0],
+						pages: [
+							raw.profiles[0].pages[0],
+							{
+								id: "folder-a",
+								keys: [
+									savedNavigation("emojiFolder", [
+										{ type: "emojiFolderId", value: "folder-b" },
+									]),
+								],
+							},
+							{ id: "folder-b", keys: [savedNavigation("emojiBack")] },
+						],
+					},
+					raw.profiles[1],
+				],
+			}),
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.pageId).toBe("folder-a");
+			yield* press;
+			expect(f.selection()?.pageId).toBe("folder-b");
+			yield* press;
+			expect(f.selection()?.pageId).toBe("folder-a");
+			// Replace the current folder entry with Back to return to root.
+			const env = f.read();
+			f.set({
+				...env,
+				profiles: EffectArray.map(env.profiles, (p) => ({
+					...p,
+					pages: EffectArray.map(p.pages, (page) =>
+						page.id === "folder-a"
+							? {
+									...page,
+									keys: [
+										Schema.decodeUnknownSync(ProfileKey)(
+											savedNavigation("back"),
+										),
+									],
+								}
+							: page,
+					),
+				})),
+			});
+			yield* press;
+			expect(f.selection()?.pageId).toBe("one");
+			yield* press;
+			f.nextRevision();
+			const r = yield* KeyRuntime;
+			expect(
+				(yield* Effect.either(r.activate("device", "1,1", "press")))._tag,
+			).toBe("Left");
+			yield* r.activate("device", "1,1", "release");
+			expect(f.selection()?.pageId).toBe("folder-a");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+for (const ref of ["q", "-1", "-2", "0"]) {
+	it.effect(
+		`MAIN-078 MGMT-170: saved switchProfile ${ref} respects explicit page and startup default`,
+		() => {
+			const f = fixture({
+				type: "switchProfile",
+				actions: [
+					{ type: "profile", value: ref },
+					{ type: "page", value: 1 },
+				],
+			});
+			f.set({
+				...f.read(),
+				manager: Option.some({
+					...managerState(f.read()),
+					startup: Option.some("q"),
+				}),
+			});
+			return Effect.gen(function* () {
+				yield* press;
+				expect(f.selection()).toEqual({ profileId: "q", pageId: "one" });
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"MAIN-078: all device slide directions wrap and skip empty groups",
+	() => {
+		const f = fixture(timerDraft);
+		const raw = Schema.encodeSync(ProfileEnvelope)(f.read());
+		f.set(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...raw,
+				profiles: [
+					...raw.profiles,
+					{
+						id: "empty",
+						name: "1 Empty",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+				],
+			}),
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			for (const [direction, profileId, pageId] of [
+				[0, "p", "two"],
+				[1, "p", "one"],
+				[2, "q", "one"],
+				[3, "p", "one"],
+			] as const) {
+				yield* r.panelMessage("device", { type: "slide", direction });
+				expect(f.selection()).toEqual({ profileId, pageId });
+			}
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"MGMT-206: close and soundboard steps enter the same existing owners in order",
+	() => {
+		const log: string[] = [];
+		const f = fixture(
+			{
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "close",
+							actions: [
+								{ type: "path", value: "/app" },
+								{ type: "force", value: "" },
+							],
+							gap: 0,
+						},
+					},
+					{
+						config: {
+							type: "playAudioLegacy",
+							actions: [{ type: "sound", value: "/sound.wav" }],
+							gap: 0,
+						},
+					},
+					{ config: { type: "stopAudio", actions: [], gap: 0 } },
+				],
+			},
+			false,
+			0,
+			{
+				validateSequenceAudio: () => Effect.void,
+				executeOwned: (key) =>
+					Effect.sync(() => {
+						log.push(key.config.type);
+						return true;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.calls[0]?.type).toBe("close");
+			expect(log).toEqual(["playAudioLegacy", "stopAudio"]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const url of [
+	"example.org/{title}",
+	"https://example.org/" + "$" + "{title}",
+	"javascript:alert(1)",
+	"file:///private/data",
+]) {
+	it.effect(
+		`review: sequence normalizes ${url} before all host effects`,
+		() => {
+			const unsafe = /^(javascript|file):/.test(url);
+			const f = fixture({
+				type: "multiActions",
+				title: {
+					...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config
+						.title,
+					text: "hello",
+				},
+				subActions: [
+					{
+						config: {
+							type: "hotkey",
+							actions: [{ type: "key", value: "a" }],
+							gap: 0,
+						},
+					},
+					{
+						config: {
+							type: "website",
+							actions: [{ type: "url", value: url }],
+							gap: 0,
+						},
+					},
+				],
+			});
+			return Effect.gen(function* () {
+				const result = yield* Effect.either(press);
+				yield* TestClock.adjust(0);
+				if (unsafe) {
+					expect(result._tag).toBe("Left");
+					expect(f.calls).toEqual([]);
+				} else {
+					expect(result._tag).toBe("Right");
+					expect(f.calls).toHaveLength(2);
+					expect(f.calls[1]).toEqual({
+						type: "website",
+						actions: [
+							{
+								type: "url",
+								value: url.startsWith("https:")
+									? "https://example.org/hello"
+									: "http://example.org/hello",
+							},
+						],
+					});
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"review: new timer revision starts immediately and retires old callback work",
+	() => {
+		let completed = 0;
+		const f = fixture(
+			{
+				...timerDraft,
+				actions: [
+					{ type: "time", value: 2000 },
+					{ type: "callback", value: 1 },
+				],
+			},
+			false,
+			0,
+			{
+				timerCompleted: () =>
+					Effect.sync(() => {
+						completed++;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* press;
+			yield* TestClock.adjust(100);
+			f.nextRevision();
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.feedback.at(-1)).toMatchObject({
+				revision: 1,
+				countdownPhase: "running",
+				endAt: 2100,
+			});
+			yield* TestClock.adjust(1900);
+			expect(completed).toBe(0);
+			yield* TestClock.adjust(100);
+			expect(completed).toBe(1);
+			expect((yield* r.snapshot).at(-1)?.revision).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: clearing expired timer interrupts alarm and next tap restarts",
+	() => {
+		let stopped = 0;
+		const f = fixture(
+			{
+				...timerDraft,
+				actions: [
+					...timerDraft.actions.filter((a) => a.type !== "sound"),
+					{ type: "sound", value: "synthetic.wav" },
+				],
+			},
+			false,
+			0,
+			{
+				alarm: () =>
+					Effect.never.pipe(
+						Effect.ensuring(
+							Effect.sync(() => {
+								stopped++;
+							}),
+						),
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* press;
+			yield* TestClock.adjust(2000);
+			expect(f.feedback.at(-1)?.countdownPhase).toBe("expired");
+			yield* press;
+			expect(stopped).toBe(1);
+			yield* TestClock.adjust(600);
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.feedback.at(-1)).toMatchObject({
+				countdownPhase: "running",
+				endAt: 3600,
+			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: reset expiry cannot clear replacement alert or progress",
+	() => {
+		const f = fixture(timerDraft);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const target = {
+				deviceId: "device",
+				profileId: "p",
+				pageId: "one",
+				revision: 0,
+				keyCode: "1,1",
+			};
+			const update = Effect.gen(function* () {
+				yield* r.displayEvent({ ...target, type: "showAlert", alertType: 1 });
+				yield* r.displayEvent({ ...target, type: "progress", percent: 100 });
+			});
+			yield* update;
+			yield* TestClock.adjust(500);
+			yield* r.reset("device");
+			yield* update;
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.progress).toBe(100);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.progress).toBe(-1);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.alert).toBe(1);
+			yield* TestClock.adjust(500);
+			expect(f.feedback.at(-1)?.alert).toBe(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"review: physical deferred failure never marks the newly selected profile",
+	() => {
+		const f = fixture(
+			{ type: "cmd", actions: [{ type: "text", value: "echo synthetic" }] },
+			false,
+			0,
+			{
+				executeOwned: () =>
+					Effect.sleep(1000).pipe(
+						Effect.zipRight(Effect.fail(new HostActionFailed("synthetic"))),
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const pending = yield* r.prepareActivation("device", "1,1", "press");
+			f.switch();
+			yield* TestClock.adjust(1000);
+			yield* Effect.either(pending);
+			expect(
+				f.feedback.filter((s) => s.profileId === "q" && s.alert === 1),
+			).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"review: unsafe title expansion rejects a sequence before its earlier host step",
+	() => {
+		const f = fixture({
+			type: "multiActions",
+			title: {
+				...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config
+					.title,
+				text: "bad\ntitle",
+			},
+			subActions: [
+				{ config: { type: "hotkey", actions: [{ type: "key", value: "a" }] } },
+				{
+					config: {
+						type: "website",
+						actions: [{ type: "url", value: "https://example.org/{title}" }],
+					},
+				},
+			],
+		});
+		return Effect.gen(function* () {
+			expect((yield* Effect.either(press))._tag).toBe("Left");
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const percent of [33, 100]) {
+	it.effect(
+		`review: same progress in a new revision owns its ${percent < 100 ? 5000 : 1000}ms expiry`,
+		() => {
+			const f = fixture(timerDraft);
+			return Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				yield* runtime.displayEvent({
+					...displayTarget,
+					type: "progress",
+					percent,
+				});
+				yield* TestClock.adjust(500);
+				f.nextRevision();
+				const replacement = {
+					...displayTarget,
+					revision: 1,
+					type: "progress",
+					percent,
+				};
+				yield* runtime.displayEvent(replacement);
+				const lifetime = percent < 100 ? 5000 : 1000;
+				yield* TestClock.adjust(lifetime - 500);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					progress: percent,
+				});
+				// Same-revision repeats don't extend inactivity indefinitely.
+				yield* runtime.displayEvent(replacement);
+				yield* TestClock.adjust(499);
+				expect(f.feedback.at(-1)?.progress).toBe(percent);
+				yield* TestClock.adjust(1);
+				expect(f.feedback.at(-1)).toMatchObject({ revision: 1, progress: -1 });
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+it.effect(
+	"review: missing soundboard preflight rejects before any sequence host effect",
+	() => {
+		const owned: string[] = [];
+		const f = fixture(
+			{
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "text",
+							actions: [{ type: "text", value: "must not paste" }],
+						},
+					},
+					{ config: { type: "stopAudio", actions: [] } },
+				],
+			},
+			false,
+			0,
+			{
+				executeOwned: (key) =>
+					Effect.sync(() => {
+						owned.push(key.config.type);
+						return true;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const result = yield* Effect.either(press);
+			expect(result._tag).toBe("Left");
+			if (result._tag === "Left")
+				expect(result.left).toMatchObject({
+					_tag: "KeyFunctionUnavailable",
+					reason: "owning-runtime",
+				});
+			yield* TestClock.adjust(1000);
+			expect(f.calls).toEqual([]);
+			expect(owned).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const prior of [
+	"expired",
+	"cleared",
+	"owned-running",
+	"display-running",
+] as const) {
+	it.effect(
+		`continuation2: replacement countdown ignores ${prior} revision ownership`,
+		() => {
+			let callbacks = 0;
+			const f = fixture(timerDraft, false, 0, {
+				timerCompleted: () =>
+					Effect.sync(() => {
+						callbacks++;
+					}),
+			});
+			return Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				const event = (time: number, revision = 0) =>
+					runtime.displayEvent({
+						...displayTarget,
+						type: "countdown",
+						time,
+						revision,
+					});
+				if (prior === "owned-running") yield* press;
+				else yield* event(prior === "display-running" ? 1000 : 0);
+				if (prior === "cleared") yield* event(1000);
+				yield* TestClock.adjust(50);
+				f.nextRevision();
+				yield* event(2000, 1);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 2000,
+					countdownPhase: "running",
+					endAt: 2050,
+				});
+				yield* TestClock.adjust(1000);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 1000,
+					countdownPhase: "running",
+				});
+				yield* TestClock.adjust(1000);
+				expect(f.feedback.at(-1)).toMatchObject({
+					revision: 1,
+					countdown: 0,
+					countdownPhase: "expired",
+				});
+				expect(callbacks).toBe(0);
+				expect(f.calls).toEqual([]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+
+it.effect(
+	"PR127: native countdown retires the earlier display writer before taking ownership",
+	() => {
+		let completed = 0;
+		const f = fixture(
+			{
+				type: "timer",
+				actions: [
+					{ type: "time", value: 10000 },
+					{ type: "callback", value: 1 },
+				],
+			},
+			false,
+			0,
+			{
+				timerCompleted: () =>
+					Effect.sync(() => {
+						completed++;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.displayEvent({
+				...displayTarget,
+				type: "countdown",
+				time: 2000,
+			});
+			yield* TestClock.adjust(500);
+			yield* press;
+			yield* TestClock.adjust(0);
+			const nativeStart = f.feedback.length;
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdown: 10000,
+				countdownPhase: "running",
+				endAt: 10500,
+			});
+			yield* TestClock.adjust(2000);
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdown: 8000,
+				countdownPhase: "running",
+				endAt: 10500,
+			});
+			expect(
+				f.feedback
+					.slice(nativeStart)
+					.some(
+						(state) =>
+							state.countdownPhase === "expired" ||
+							(state.countdown !== undefined && state.countdown < 8000),
+					),
+			).toBe(false);
+			expect(completed).toBe(0);
+			yield* TestClock.adjust(8000);
+			expect((yield* runtime.snapshot).at(-1)).toMatchObject({
+				countdownPhase: "expired",
+				timerCompleted: true,
+			});
+			expect(completed).toBe(1);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const host of ["localhost:3000", "example.org:8080"]) {
+	it.effect(
+		`PR127: sequence normalizes scheme-less ${host} before dispatch`,
+		() => {
+			const f = fixture({
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "website",
+							actions: [{ type: "url", value: `${host}/path` }],
+						},
+					},
+				],
+			});
+			return Effect.gen(function* () {
+				yield* press;
+				yield* TestClock.adjust(100);
+				expect(f.calls).toEqual([
+					{
+						type: "website",
+						actions: [{ type: "url", value: `http://${host}/path` }],
+					},
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

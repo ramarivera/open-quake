@@ -2570,3 +2570,33 @@ it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized ed
 			?.textContent,
 	).toBe("My mute");
 });
+
+it("review: mounted Close sequence draft edits path, retains force and saves", async () => {
+	const f = await fixture();
+	await f.select();
+	const step = query(f.host, ".key-sequence-step", HTMLDivElement);
+	const select = query(step, "select", HTMLSelectElement);
+	await act(async () => {
+		select.value = "close";
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await input(
+		query(step, 'input[type="text"]', HTMLInputElement),
+		"/Applications/Synthetic.app",
+	);
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.host.textContent).toContain("Saved successfully"),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions?.[0],
+	).toMatchObject({
+		config: {
+			type: "close",
+			actions: [
+				{ type: "path", value: "/Applications/Synthetic.app" },
+				{ type: "force", value: 0 },
+			],
+		},
+	});
+});
