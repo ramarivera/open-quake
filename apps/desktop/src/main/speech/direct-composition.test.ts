@@ -236,6 +236,8 @@ async function fixture(synthesisFails = false) {
 		directory,
 		advance: (millis: number) =>
 			background.runPromise(TestClock.adjust(millis)),
+		pendingSleeps: async () =>
+			Array.from(await background.runPromise(TestClock.sleeps())),
 		closeVoice: () => voice.dispose(),
 		events,
 		reported,
@@ -362,6 +364,10 @@ describe("production direct chat to ordered speech", () => {
 			await f.send();
 			f.delta("pending fragment");
 			await vi.waitFor(() => expect(f.answer()).toBe("pending fragment"));
+			// Publication precedes speech observation and its two-second flush timer.
+			await vi.waitFor(async () =>
+				expect(await f.pendingSleeps()).toContain(2000),
+			);
 			expect(f.speechRequests).toHaveLength(0);
 			await f.advance(1999);
 			expect(f.playbacks).toHaveLength(0);
