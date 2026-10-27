@@ -1522,7 +1522,9 @@ describe("desktop main with the real device service and fake HID", () => {
 			const event = appEvent("before-quit");
 			if (event.preventDefault.mock.calls.length > 0)
 				await vi.waitFor(() =>
-					expect(electron.app.quit.mock.calls.length).toBeGreaterThan(priorQuits),
+					expect(electron.app.quit.mock.calls.length).toBeGreaterThan(
+						priorQuits,
+					),
 				);
 		} finally {
 			vi.useRealTimers();
