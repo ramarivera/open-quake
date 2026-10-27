@@ -9,6 +9,7 @@ import {
 } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import type { RuntimeCredentialResolver } from "../../../../../packages/edge/src/agent-http/runtime-ports.js";
 import { makeRuntimeHttpTransport } from "../../../../../packages/edge/src/agent-http/transport.js";
+import { VoiceRuntimeUnavailable } from "../../../../../packages/edge/src/voice/surface";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type {
 	KnobCaptureSnapshot,
@@ -177,6 +178,41 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 				),
 			),
 		);
+	const validateAssistantRoute = (route: PinnedAgentRoute) =>
+		Effect.gen(function* () {
+			// Validation runs under the voice lock. Transition cleanup needs that lock,
+			// so read the repository directly and reject its changed generation.
+			const current = yield* repository?.selected() ??
+				Effect.succeed(undefined);
+			const status = yield* registry?.read() ?? Effect.succeed(undefined);
+			return (
+				route.generation === generation &&
+				current?.connectionId === route.connectionId &&
+				current?.agentId === route.agentId &&
+				status?.generation === route.registryGeneration &&
+				status?.status === "connected" &&
+				status.connectionId === route.connectionId
+			);
+		}).pipe(Effect.catchAll(() => Effect.succeed(false)));
+	const pinAssistantRoute = Effect.fn("AgentHttp.pinAssistantRoute")(
+		function* () {
+			const current = yield* selected().pipe(
+				Effect.mapError((cause) => new VoiceRuntimeUnavailable(cause)),
+			);
+			if (!current) return undefined;
+			const status = yield* registry?.read() ?? Effect.succeed(undefined);
+			const route = {
+				connectionId: current.connectionId,
+				...(current.agentId === undefined ? {} : { agentId: current.agentId }),
+				generation,
+				registryGeneration: status?.generation ?? 0,
+			};
+			if (!(yield* validateAssistantRoute(route)))
+				return yield* new VoiceRuntimeUnavailable();
+			return route;
+		},
+	);
+
 	const validateAgentRoute = (route: PinnedAgentRoute) =>
 		Effect.gen(function* () {
 			const current = yield* selected();
@@ -223,6 +259,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 
 	const voiceOptions = {
 		validateAgentRoute,
+		validateAssistantRoute,
 		selected,
 		stream: (...args: Parameters<typeof ConversationService.Service.stream>) =>
 			service ? service.stream(...args) : Stream.fail(new RuntimeUnavailable()),
@@ -375,6 +412,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 		backend,
 		drafting,
 		pinKnobRoute,
+		pinAssistantRoute,
 		createVoiceAdapter: (
 			fallback: Parameters<typeof createAgentHttpVoiceAdapter>[1],
 			fallbackTranscript?: Parameters<typeof createAgentHttpVoiceAdapter>[2],

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, Option } from "effect";
+import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 import {
 	AgentDraftPort,
@@ -11,6 +12,7 @@ import {
 import { AgentStorage } from "../../../../../packages/edge/src/agents/agents-repository";
 import { AgentsService } from "../../../../../packages/edge/src/agents/agents-service";
 import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface/index";
+import { AGENT_CONNECTIONS_REQUEST } from "../../shared/agent-connections";
 import { voiceSurfaceLayer } from "../voice";
 import { prepareAgentHttp, registerAgentHttp } from "./index";
 
@@ -167,5 +169,114 @@ it("keeps direct voice and truthful drafting availability when HTTP acquisition 
 		await prepared.runtime.dispose();
 		await application.dispose();
 		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("PR128 production assistant route pins only the connected selected registry and rejects disconnects", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-assistant-route-"));
+	const id = randomUUID();
+	const renderer = "file:///app/index.html";
+	const frame = { url: renderer };
+	const sender = {
+		id: 72,
+		mainFrame: frame,
+		isDestroyed: () => false,
+		getURL: () => renderer,
+		send: () => {},
+	};
+	const window = {
+		isDestroyed: () => false,
+		webContents: sender,
+	} as unknown as BrowserWindow;
+	const event = { sender, senderFrame: frame } as unknown as IpcMainInvokeEvent;
+	await writeFile(
+		join(root, "connections-v1.json"),
+		JSON.stringify({
+			version: 1,
+			revision: 1,
+			cleanupRefs: [],
+			connections: [
+				{
+					id,
+					name: "Fixture",
+					kind: "hermes",
+					baseURL: "http://localhost:8642/",
+				},
+			],
+			selected: { connectionId: id },
+		}),
+	);
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async (url: string | URL | Request) => {
+			const path = String(url);
+			if (path.endsWith("/v1/capabilities"))
+				return Response.json({
+					object: "hermes.api_server.capabilities",
+					platform: "hermes-agent",
+					model: "fake",
+					features: {
+						chat_completions: true,
+						chat_completions_streaming: true,
+					},
+				});
+			if (path.endsWith("/health/detailed"))
+				return Response.json({ platform: "hermes-agent", status: "ok" });
+			throw new Error("Unexpected fake HTTP operation");
+		}),
+	);
+	const prepared = prepareAgentHttp({
+		root,
+		management: () => window,
+		renderer,
+		invalidated: async () => {},
+		publish: async () => {},
+	});
+	const registration = await prepared.standalone();
+	try {
+		expect(registration).toBeDefined();
+		expect(
+			await prepared.runtime.runPromise(
+				prepared.pinAssistantRoute().pipe(Effect.either),
+			),
+		).toMatchObject({
+			_tag: "Left",
+			left: { code: "VOICE.GRID.RUNTIME_UNAVAILABLE" },
+		});
+		const handler = vi
+			.mocked(ipcMain.handle)
+			.mock.calls.slice()
+			.reverse()
+			.find(([channel]) => channel === AGENT_CONNECTIONS_REQUEST)?.[1];
+		if (!handler) throw new Error("Missing connection request handler");
+		expect(await handler(event, { type: "test", id })).toMatchObject({
+			_tag: "success",
+			health: { status: "ready" },
+		});
+		const route = await prepared.runtime.runPromise(
+			prepared.pinAssistantRoute(),
+		);
+		expect(route).toMatchObject({ connectionId: id, generation: 0 });
+		expect(route?.registryGeneration).toBeGreaterThan(0);
+		expect(await handler(event, { type: "select" })).toMatchObject({
+			_tag: "success",
+		});
+		expect(
+			await prepared.runtime.runPromise(prepared.pinAssistantRoute()),
+		).toBeUndefined();
+		// Selecting again invalidates the old registry even before a fresh Test.
+		await handler(event, { type: "select", id });
+		expect(
+			await prepared.runtime.runPromise(
+				prepared.pinAssistantRoute().pipe(Effect.either),
+			),
+		).toMatchObject({
+			_tag: "Left",
+			left: { code: "VOICE.GRID.RUNTIME_UNAVAILABLE" },
+		});
+	} finally {
+		await registration?.dispose();
+		await prepared.runtime.dispose();
+		await rm(root, { recursive: true });
 	}
 });

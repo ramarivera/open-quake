@@ -146,3 +146,15 @@ The desktop MUST use the same session route for assistant key selection and dict
 #### Scenario: Desktop navigation moves the persona destination
 - **WHEN** the user creates a new chat or opens saved history after a key selected another session
 - **THEN** persona reads and Update use the opened destination, ordinary chats use the global persona, reopening a key session retains its local persona, and stale requests cannot replace a newer key selection
+
+
+### Requirement: Destination-aware assistant capture
+An aiChat capture SHALL check its enabled voice settings and speech readiness, then pin the selected external connection or the local direct model before microphone acquisition. External captures SHALL not require unrelated local chat credentials. Changed external connection generations SHALL reject finalized transcripts instead of rerouting them.
+
+#### Scenario: External destination without a local model
+- **WHEN** an enabled aiChat key has configured speech and a connected external runtime but no local model
+- **THEN** synthetic capture finalization reaches only the pinned external runtime
+
+#### Scenario: Selection changes during capture
+- **WHEN** the external selection changes after capture preparation
+- **THEN** the old external capture is rejected and a prepared direct capture retains its direct model

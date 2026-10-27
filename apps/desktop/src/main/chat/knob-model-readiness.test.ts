@@ -281,7 +281,7 @@ it.each(["", "qwen3.6-plus", "private-model", "explicit-model"])(
 					agentId: Option.none(),
 				}),
 			);
-			expect(prepared.directModel.profile.modelId).toBe(
+			expect(prepared.directModel?.profile.modelId).toBe(
 				modelId === "private-model" || modelId === "explicit-model"
 					? modelId
 					: "deepseek-v4-flash",

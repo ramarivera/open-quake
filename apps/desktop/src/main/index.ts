@@ -412,7 +412,10 @@ if (!app.requestSingleInstanceLock()) {
 							speech: {
 								pinAgentRoute: (snapshot) => httpModule.pinKnobRoute(snapshot),
 								prepareAssistant: (request) =>
-									assistantCapturePreparer(directChat)(request),
+									assistantCapturePreparer(
+										directChat,
+										httpModule.pinAssistantRoute,
+									)(request),
 								localResume: fileStore(
 									app.getPath("userData"),
 									"local-player-resume-v1.json",

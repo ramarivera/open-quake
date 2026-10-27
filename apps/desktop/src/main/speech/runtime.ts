@@ -61,7 +61,8 @@ export interface ProductionVoiceOptions {
 	readonly prepareAssistant?: (request: CaptureRequest) => Effect.Effect<
 		{
 			readonly assistantSettings: import("../../../../../packages/device/src/profiles/assistant-contracts").AssistantSettings;
-			readonly directModel: PinnedDirectModel;
+			readonly directModel?: PinnedDirectModel;
+			readonly agentRoute?: import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").PinnedAgentRoute;
 		},
 		VoiceRuntimeUnavailable
 	>;
@@ -287,7 +288,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 							request.knob?.route === "dkclaw"
 								? yield* options.pinAgentRoute?.(request.knob) ??
 										Effect.fail(new VoiceKnobRejected("RouteUnavailable"))
-								: undefined;
+								: prepared?.agentRoute;
 						const [directModel] = yield* Effect.all(
 							[
 								(prepared?.directModel ?? request.directModel)

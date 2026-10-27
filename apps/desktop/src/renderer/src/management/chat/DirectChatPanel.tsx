@@ -8,6 +8,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import type { TurnSnapshot } from "../../../../../../../packages/edge/src/chat/chat-contracts";
+import type { PublicModelRow } from "../../../../shared/agents";
 import type { DirectChatBridge } from "../../../../shared/chat";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { ActionDialog } from "../agent-http/ActionDialog";
@@ -20,6 +21,7 @@ import type { DirectChatModel } from "./model-scope";
 import { Prose } from "./Prose";
 import strings from "./strings.json";
 import { useAssistantSelection } from "./useAssistantSelection";
+import { useEffectiveChatModel } from "./useEffectiveChatModel";
 import "./workspace.css";
 
 export type ChatStrings = (typeof strings)["en"];
@@ -37,7 +39,8 @@ export interface QuakeRoute {
 
 export function DirectChatPanel({
 	bridge = window.quakeChat,
-	model,
+	model: fallbackModel,
+	models,
 	locale = "en",
 	sources,
 	quake,
@@ -55,6 +58,9 @@ export function DirectChatPanel({
 	readonly onRetryConfiguration?: (() => void) | undefined;
 	readonly bridge?: DirectChatBridge | undefined;
 	readonly model: DirectChatModel;
+	readonly models?:
+		| Readonly<Record<string, readonly PublicModelRow[]>>
+		| undefined;
 	readonly locale?: string;
 	/** Source switcher rendered at the top of the rail. */
 	readonly sources?: ReactNode;
@@ -67,14 +73,24 @@ export function DirectChatPanel({
 		controller.getSnapshot,
 		controller.getSnapshot,
 	);
+	const effective = useEffectiveChatModel(
+		bridge,
+		controller,
+		models,
+		fallbackModel,
+		state.sessionId,
+		state.navigating,
+	);
+	const model = effective.model;
 	const t = chatStrings(locale);
-	const settings = configurationLoading
-		? "loading"
-		: configurationError
-			? "failed"
-			: model.ready
-				? "ready"
-				: "missing";
+	const settings =
+		configurationLoading || effective.loading
+			? "loading"
+			: configurationError || effective.failed
+				? "failed"
+				: model.ready
+					? "ready"
+					: "missing";
 	const configured = settings === "ready";
 	const modelName = model.row
 		? `${model.row.provider} / ${model.row.model}`

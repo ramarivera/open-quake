@@ -23,6 +23,9 @@ import type {
 import type { AgentConnectionSelection } from "../../shared/agent-connections";
 
 export interface AgentHttpVoiceOptions {
+	readonly validateAssistantRoute?: (
+		route: PinnedAgentRoute,
+	) => Effect.Effect<boolean>;
 	readonly validateAgentRoute?: (
 		route: PinnedAgentRoute,
 	) => Effect.Effect<boolean>;
@@ -88,8 +91,11 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 
 	const send = (request: TextRequest, source: "typed" | "voice") =>
 		Effect.gen(function* () {
-			// A committed direct knob route never follows the mutable external selection.
-			if (request.knob?.route === "direct")
+			// Prepared direct captures and committed knob routes keep their destination.
+			if (
+				request.knob?.route === "direct" ||
+				(!request.knob && request.assistantSettings && request.directModel)
+			)
 				return yield* fallbackTranscript
 					? fallbackTranscript(request)
 					: fallback.sendText(request);
@@ -112,7 +118,19 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 			const selectedGeneration = options.generation();
 			return yield* lock.withPermits(1)(
 				Effect.gen(function* () {
-					if (closed || selectedGeneration !== options.generation())
+					if (
+						closed ||
+						selectedGeneration !== options.generation() ||
+						(request.agentRoute &&
+							request.agentRoute.generation !== options.generation())
+					)
+						return yield* new VoiceRuntimeUnavailable();
+					if (
+						!request.knob &&
+						request.agentRoute &&
+						!(yield* options.validateAssistantRoute?.(request.agentRoute) ??
+							Effect.succeed(false))
+					)
 						return yield* new VoiceRuntimeUnavailable();
 					// Agent.id on a QUAKE key belongs to the local workspace. Only the
 					// explicitly selected external ID may enter an HTTP request.
@@ -121,6 +139,8 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 							? fallbackTranscript(request)
 							: fallback.sendText(request);
 					yield* stop(request.serial);
+					if (selectedGeneration !== options.generation())
+						return yield* new VoiceRuntimeUnavailable();
 					const requestId = randomUUID();
 					const turnId = Schema.decodeUnknownSync(TurnId)(requestId);
 					const generation = options.generation();

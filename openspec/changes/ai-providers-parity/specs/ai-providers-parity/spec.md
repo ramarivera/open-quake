@@ -361,3 +361,15 @@ The desktop MUST use the same session route for assistant key selection and dict
 #### Scenario: Desktop navigation moves the persona destination
 - **WHEN** the user creates a new chat or opens saved history after a key selected another session
 - **THEN** persona reads and Update use the opened destination, ordinary chats use the global persona, reopening a key session retains its local persona, and stale requests cannot replace a newer key selection
+
+
+### Requirement: Effective persona composer readiness
+The desktop composer SHALL derive model readiness from the persona for its opened conversation, using the same main-scope or default-catalog selection as host admission. It SHALL keep missing credentials disabled and discard reads from obsolete navigation or catalog revisions.
+
+#### Scenario: Explicit persona overrides a keyless main model
+- **WHEN** the global or selected-session persona chooses a credentialed default-catalog row while the main default has no credential
+- **THEN** the mounted composer permits editing and submission using that persona without changing the saved main model
+
+#### Scenario: Persona destination or credentials change
+- **WHEN** the user updates the persona, opens New chat or history, or receives a catalog update
+- **THEN** readiness follows the opened destination and current catalog, and late reads cannot restore obsolete readiness

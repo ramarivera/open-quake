@@ -181,3 +181,45 @@ final tests, and the interrupted overbroad test invocation remain in scratch.
 Bead open-quake-lih.15.17 stays in progress for parent acceptance. This lane
 doesn't reply, resolve, retrigger review, watch or merge. Real device input,
 microphone, audio playback, providers and Linux remain unverified.
+
+
+## PR128 destination and composer residuals
+
+- [x] Make aiChat capture preparation follow its actual direct or external destination while retaining voice/speech admission, capture cancellation and connection generations. Regress the production composition with fakes. Bead open-quake-lih.15.18.
+- [x] Derive mounted composer readiness from its current global or selected-session persona and catalog, retaining navigation epochs and stale-response guards. Cover persona updates and key/history navigation. Bead open-quake-lih.15.18.
+- [ ] Push one tested batch and hand current-head CI/review acceptance to the parent. Keep the bead open until remote gates are accepted. Bead open-quake-lih.15.18.
+
+
+PR128 continuation implements both source-confirmed residuals on
+open-quake-lih.15.18. The capture owner reads enabled key voice settings, then
+pins either the connected HTTP selection and registry generation or the local
+model. External capture no longer acquires unrelated local credentials.
+Finalized transcripts revalidate external ownership under the adapter lock;
+prepared direct captures retain their local destination. Early release interrupts
+preparation and frees the reservation before another capture.
+
+AgentsPage passes the current model catalog through Workspace to the mounted
+composer. Its effective model follows the host-owned global or session persona,
+including explicit default-catalog rows, and retains credential gating. Reads
+check navigation epoch, session identity, selection generation and catalog
+identity. Polling observes subsequent persona Update without changing the global
+model. The composer displays the effective provider/model and refuses missing or
+failed configuration.
+
+Focused verification passes 82 tests in nine files, plus 13 targeted transport
+regressions for prior history/direct-route distinctions, persona/RPC ownership
+and dictation. The three changed ownership/composition files also pass 31 tests
+after final lock/generation hardening. Six package typecheck tasks pass, with
+unchanged packages cached; desktop types rerun after the final test fixture fix.
+Desktop build and both headless bundle modes pass. Biome has zero errors and the
+existing 16 warnings/two infos. Both owning OpenSpec changes validate with their
+inherited requirement-length warnings, tracked by open-quake-lih.23.2; the new
+requirements do not add warnings. The full root suite and native UI were not run.
+All providers, capture, playback, HTTP health and equipment in these checks use
+fakes. Real device/HID/input/microphone/audio/provider/Linux acceptance remains
+unverified.
+
+The bead remains in progress for parent acceptance of the pushed SHA and remote
+CI/review. This is one authorized batched continuation; this lane does not reply,
+resolve, retrigger reviews, watch or merge. Evidence is retained under
+/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/assistant-routing/continuation/.

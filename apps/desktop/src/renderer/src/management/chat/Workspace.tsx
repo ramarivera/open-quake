@@ -8,6 +8,7 @@ import {
 import type { RuntimeConnectionView } from "../../../../../../../packages/edge/src/agent-http/runtime-contracts";
 import type { AgentConnectionsBridge } from "../../../../shared/agent-connections";
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
+import type { PublicModelRow } from "../../../../shared/agents";
 import type { DirectChatBridge } from "../../../../shared/chat";
 import { ActionDialog } from "../agent-http/ActionDialog";
 import { ConnectionSheet } from "../agent-http/ConnectionSheet";
@@ -31,6 +32,7 @@ type Sheet =
  */
 export function ConversationWorkspace({
 	model,
+	models,
 	configurationLoading = false,
 	configurationError,
 	onRetryConfiguration,
@@ -41,6 +43,9 @@ export function ConversationWorkspace({
 	conversationsBridge,
 }: {
 	readonly model: DirectChatModel;
+	readonly models?:
+		| Readonly<Record<string, readonly PublicModelRow[]>>
+		| undefined;
 	/** Model settings are still being read; readiness is not known yet. */
 	readonly configurationLoading?: boolean;
 	/** Model settings couldn't be read; distinct from "not configured". */
@@ -313,6 +318,7 @@ export function ConversationWorkspace({
 					(typeof window === "undefined" ? undefined : window.quakeChat)
 				}
 				model={model}
+				models={models}
 				configurationLoading={configurationLoading}
 				configurationError={configurationError}
 				onRetryConfiguration={onRetryConfiguration}

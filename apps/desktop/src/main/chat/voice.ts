@@ -10,7 +10,11 @@ import {
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
-import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
+import type {
+	CaptureRequest,
+	PinnedAgentRoute,
+	TextRequest,
+} from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { DirectChat } from "./host";
 
 const sessionRoute = (
@@ -384,10 +388,14 @@ export const createDirectChatVoice = (
 
 /** Called inside the capture owner, so release/cancel interrupts preflight before microphone IO. */
 export const assistantCapturePreparer =
-	(host: DirectChat) =>
 	(
-		request: import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").CaptureRequest,
+		host: DirectChat,
+		pinExternal: () => Effect.Effect<
+			PinnedAgentRoute | undefined,
+			VoiceRuntimeUnavailable
+		> = () => Effect.succeed(undefined),
 	) =>
+	(request: CaptureRequest) =>
 		Effect.tryPromise({
 			try: (signal) =>
 				host.runtime.runPromise(
@@ -398,6 +406,8 @@ export const assistantCapturePreparer =
 						);
 						if (!settings?.enableVoiceInput)
 							return yield* new VoiceRuntimeUnavailable();
+						const agentRoute = yield* pinExternal();
+						if (agentRoute) return { assistantSettings: settings, agentRoute };
 						yield* host.preflight();
 						const directModel = yield* host.pinKnobModel(
 							settings.modelRowId,
