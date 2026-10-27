@@ -327,6 +327,18 @@
 .meeting-settings .meeting-checkbox input {
 	width: auto;
 }
+.meeting-audio-setup {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-block: 12px;
+}
+.meeting-audio-setup > p,
+.meeting-audio-setup > .meeting-checkbox {
+	flex-basis: 100%;
+	margin: 0;
+}
 @container (max-width: 980px) {
 	.meeting-workspace {
 		grid-template-columns: 202px minmax(0, 1fr);

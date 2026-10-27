@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
-import { editKeyTitle } from "./key-editing-invariants.js";
+import { editKeyTitle, keyTitle } from "./key-editing-invariants.js";
 import { KeyEditing } from "./key-editing-service.js";
 import {
 	createEmptyProfileKey,
@@ -609,3 +609,83 @@ it("retains source indices after null slots and imports canonical profiles", () 
 	);
 	expect(imported.profile?.pages[0].keys.length).toBe(2);
 });
+
+it.effect(
+	"AI-334 saves alternate meeting viewer spans through the real editor and reload",
+	() => {
+		const f = fixture([
+			encodedKey("1,1", {
+				type: "liveAudioTranslateDisplay",
+				size: [5, 2],
+				actions: [],
+			}),
+		]);
+		return Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			const result = yield* editor.preview(
+				target,
+				encodedKey("1,1", {
+					type: "liveAudioTranslateDisplay",
+					size: [3, 1],
+					actions: [],
+				}),
+			);
+			expect(result._tag).not.toBe("rejected");
+			yield* editor.save(target.token);
+			const restarted = Schema.decodeUnknownSync(ProfileEnvelope)(
+				encodeProfileEnvelope(f.stored()),
+			);
+			const saved = restarted.profiles[0].pages[0].keys[0];
+			expect(saved?.config.size).toEqual([3, 1]);
+			expect(saved && occupiedCells(saved)).toEqual(["1,1", "1,2", "1,3"]);
+			expect(f.writes()).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MGMT-413 full key replacement persists an optional-field deletion instead of merging it back",
+	() => {
+		const title = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"))
+			.config.title;
+		const f = fixture([
+			encodedKey("1,1", { title: { ...title, resourceId: "legacy-label" } }),
+		]);
+		return Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			const result = yield* editor.preview(
+				target,
+				encodedKey("1,1", { title }),
+			);
+			expect(result._tag).not.toBe("rejected");
+			yield* editor.save(target.token);
+			const saved = Schema.encodeSync(ProfileEnvelope)(f.stored());
+			expect(
+				saved.profiles[0].pages[0].keys[0]?.config.title.resourceId,
+			).not.toBe("legacy-label");
+			expect(f.writes()).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MGMT-259 editor saves a user title equal to its English default without relocalizing after restart",
+	() => {
+		const f = fixture([encodedKey("1,1")]);
+		return Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			const source = f.stored().profiles[0].pages[0].keys[0];
+			if (!source) throw new Error("missing key");
+			const edited = editKeyTitle(source, "Hotkey");
+			yield* editor.preview(target, Schema.encodeSync(ProfileKey)(edited));
+			yield* editor.save(target.token);
+			const restarted = Schema.decodeUnknownSync(ProfileEnvelope)(
+				encodeProfileEnvelope(f.stored()),
+			);
+			const saved = restarted.profiles[0].pages[0].keys[0];
+			if (!saved) throw new Error("missing saved key");
+			expect(keyTitle(saved, "de")).toBe("Hotkey");
+			expect(saved.config.userModifiedTitle).toBe(true);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

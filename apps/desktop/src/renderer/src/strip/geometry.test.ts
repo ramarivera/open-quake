@@ -249,7 +249,7 @@ describe("DK-Suite geometry", () => {
 
 	it("hides the placeholders under MeetAI's live translate panel", () => {
 		const keys = [
-			key("1,1", "liveAudioTranslateDisplay"),
+			key("1,1", "liveAudioTranslateDisplay", [5, 2]),
 			...["1,2", "1,3", "1,4", "1,5", "2,1", "2,2", "2,3", "2,4", "2,5"].map(
 				(code) => key(code, ""),
 			),

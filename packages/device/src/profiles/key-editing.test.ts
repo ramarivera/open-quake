@@ -434,6 +434,7 @@ it("MGMT-100 recovers polluted hotkey and agent titles from all eight locales wi
 			...key,
 			config: {
 				...key.config,
+				userModifiedTitle: false,
 				title: { ...key.config.title, text: keyText("hotkey", origin) },
 			},
 		};
@@ -629,5 +630,24 @@ it("AI-149: six AI role titles use eight recovered locales with explicit edit, i
 			).toBe("untranslated fallback");
 		}
 		expect(Schema.encodeSync(ProfileKey)(original)).toEqual(encoded);
+	}
+});
+
+// MGMT-259 approved deviation: equality is insufficient proof of default origin.
+it("MGMT-259 preserves unmarked English-default text and explicit edits after restart", () => {
+	for (const text of [keyText("hotkey", "en"), "Start", "", "My title"]) {
+		const unmarked = {
+			...key,
+			config: { ...key.config, title: { ...key.config.title, text } },
+		};
+		if (text) expect(keyTitle(unmarked, "de")).toBe(text);
+		for (const alternate of [false, true]) {
+			const saved = Schema.encodeSync(ProfileKey)(
+				editKeyTitle(unmarked, text, alternate),
+			);
+			const restarted = Schema.decodeUnknownSync(ProfileKey)(saved);
+			expect(keyTitle(restarted, "de", alternate)).toBe(text);
+			expect(keyTitle(restarted, "ja", alternate)).toBe(text);
+		}
 	}
 });

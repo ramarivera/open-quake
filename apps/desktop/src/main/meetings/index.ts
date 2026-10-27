@@ -42,6 +42,11 @@ import {
 	MeetingService,
 } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
+	AUDIO_SETUP_CHANNEL,
+	AudioSetupRequest,
+	BLACKHOLE_WARNING,
+} from "../../shared/audio-setup";
+import {
 	CAPTURE_CHUNK,
 	CAPTURE_LOST,
 	CAPTURE_PCM,
@@ -55,6 +60,7 @@ import { agentRequestAllowed } from "../agents/controller";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { audioSetup, openBlackHoleInstaller } from "./audio-setup";
 import { createCapturePort } from "./capture-port";
 import { writePrivateFile } from "./private-files";
 import { liveMeetingProviders, type MeetingProviderOptions } from "./provider";
@@ -443,6 +449,55 @@ export function prepareMeetings(
 					}
 					return yield* snapshot;
 				});
+			const setup = audioSetup({
+				active: () => !disposed,
+				platform: process.platform,
+				mock: options.mock,
+				confirm: async () =>
+					(
+						await dialog.showMessageBox({
+							type: "warning",
+							message: "Install BlackHole audio driver?",
+							detail: BLACKHOLE_WARNING,
+							buttons: ["Cancel", "Choose BlackHole package"],
+							defaultId: 0,
+							cancelId: 0,
+						})
+					).response === 1,
+				select: async () => {
+					const result = await dialog.showOpenDialog({
+						title: "Choose a BlackHole installer from existential.audio",
+						properties: ["openFile"],
+						filters: [{ name: "BlackHole installer", extensions: ["pkg"] }],
+					});
+					return result.canceled ? undefined : result.filePaths[0];
+				},
+				openInstaller: (selected) =>
+					openBlackHoleInstaller({
+						selected,
+						root: join(root, "installer-handoffs"),
+						open: (path) => shell.openPath(path),
+					}),
+			});
+			ipcMain.handle(AUDIO_SETUP_CHANNEL, async (event, value: unknown) => {
+				if (
+					!agentRequestAllowed(
+						{
+							senderId: event.sender.id,
+							frameURL: event.senderFrame?.url ?? "",
+							mainFrame: event.senderFrame === event.sender.mainFrame,
+						},
+						options.management?.()?.webContents.id,
+						renderer,
+					) ||
+					!Schema.is(AudioSetupRequest)(value)
+				)
+					return { platform: process.platform, state: "failed" };
+				if (disposed) return { platform: process.platform, state: "failed" };
+				return value.action === "status"
+					? setup.status()
+					: Effect.runPromise(setup.install());
+			});
 			ipcMain.handle(
 				MEETING_REQUEST,
 				async (event, value: unknown): Promise<unknown> => {
@@ -541,6 +596,7 @@ export function prepareMeetings(
 				disposed = true;
 				disposal = (async () => {
 					ipcMain.removeHandler(MEETING_REQUEST);
+					ipcMain.removeHandler(AUDIO_SETUP_CHANNEL);
 					for (const fiber of jobs.values())
 						await runtime.runPromise(Fiber.interrupt(fiber));
 					await runtime.runPromiseExit(MeetingService.suspend());

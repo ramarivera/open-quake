@@ -347,14 +347,7 @@ export function KeyEditor({
 		const pickerOpen = icons;
 		const ticket = epoch.current + 1;
 		await revert();
-		if (
-			!profile ||
-			!page ||
-			epoch.current !== ticket ||
-			deselect ||
-			anchor?.config.type === "liveAudioTranslateDisplay"
-		)
-			return;
+		if (!profile || !page || epoch.current !== ticket || deselect) return;
 		const selected = await window.quakeKeyLibrary.request({
 			type: "select",
 			deviceId: serial,

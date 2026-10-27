@@ -26,7 +26,6 @@ export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
 	["playAudio", [8, 2]],
 	["dkDesktopClock", [8, 2]],
 	["systemMonitorPanel", [8, 2]],
-	["liveAudioTranslateDisplay", [5, 2]],
 	["aiChatView", [5, 2]],
 	["gameMode", [4, 2]],
 	["quakeBot", [4, 2]],

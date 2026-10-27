@@ -772,3 +772,36 @@ it("restricts remote file IPC to the management window's main frame", async () =
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it("AI-283 authenticates the setup handler and keeps mock install requests away from native dialogs", async () => {
+	const root = await mkdtemp(join(tmpdir(), "audio-setup-ipc-"));
+	const owner = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+		renderer: "https://fixture.invalid",
+		management: () => ({ webContents: { id: 42 } }),
+	});
+	try {
+		await owner.ready;
+		const setup = ipc.handlers.get("meetings:audio-setup");
+		const frame = { url: "https://fixture.invalid" };
+		const event = { sender: { id: 42, mainFrame: frame }, senderFrame: frame };
+		expect(await setup?.(event, { action: "install" })).toMatchObject({
+			state: "mock",
+		});
+		expect(
+			await setup?.(
+				{ ...event, sender: { id: 666, mainFrame: frame } },
+				{ action: "install" },
+			),
+		).toMatchObject({ state: "failed" });
+		expect(
+			await setup?.(event, { action: "exec", path: "/untrusted.pkg" }),
+		).toMatchObject({ state: "failed" });
+	} finally {
+		await owner.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+	expect(ipc.handlers.has("meetings:audio-setup")).toBe(false);
+});

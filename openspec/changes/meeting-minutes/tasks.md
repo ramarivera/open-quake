@@ -255,3 +255,10 @@ review round, merge, real provider, microphone, hardware or audible audio was
 used. The execution bead stays open for parent acceptance and hosted checks.
 The temporary fix worktree and generated build output are removed at handoff;
 the original lane worktree is untouched.
+
+## Decision follow-ups 2026-10-27
+
+- [x] AI-334 allow alternate viewer spans through editor/save/layout and retain reachable controls. Bead open-quake-zh8.15, parent open-quake-i3j.
+- [x] AI-283 implement consented native BlackHole package handoff with fake installer tests. Bead open-quake-zh8.15, parent open-quake-i3j.
+
+Real editor service, mounted Keys UI and hidden mock Electron smoke save a 3x1 viewer and retain pane controls. Fake-only installer tests cover consent, cancellation, retry, signature rejection, isolated copying, IPC authorization and mock/non-macOS refusal. Screenshots decision-blackhole-consent.png, decision-blackhole-cancelled.png and meetings-viewer-3x1.png were visually inspected under /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/decision-followups/screenshots. The smoke logs inherited missing quake:device-ready handlers and an offline overlay; no root/native acceptance claim. No host installer, driver, routing, microphone or hardware was used.

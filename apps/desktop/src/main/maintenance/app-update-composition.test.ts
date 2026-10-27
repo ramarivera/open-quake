@@ -9,6 +9,7 @@ const native = vi.hoisted(() => ({
 	app: { getVersion: () => "1.0.0" },
 	dialog: { showMessageBox: vi.fn(async () => ({ response: 0 })) },
 	ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
+	shell: { openExternal: vi.fn(async () => {}) },
 }));
 vi.mock("electron", () => native);
 it("routes the real manual check/download/approval/install request path through the owned adapter", async () => {
@@ -107,6 +108,33 @@ it("routes the real manual check/download/approval/install request path through 
 		});
 	} finally {
 		finish();
+		await owner.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("MAIN-114 manual packages expose the owned releases page and distribution notice through maintenance", async () => {
+	const root = await mkdtemp(join(tmpdir(), "manual-update-"));
+	const owner = registerMaintenance({
+		root,
+		mock: false,
+		fixture: { roots: [], descriptors: [], bundledDirectories: [] },
+		renderer: "https://app.invalid",
+		management: () => undefined,
+		hardware: () => undefined,
+		stopWriters: async () => {},
+	});
+	try {
+		await owner.ready;
+		expect(await owner.request({ action: "check-update" })).toMatchObject({
+			ok: true,
+			view: { update: { state: "disabled" } },
+			message: expect.stringContaining("Windows builds are unsigned"),
+		});
+		expect(native.shell.openExternal).toHaveBeenCalledWith(
+			"https://github.com/ramarivera/open-quake/releases",
+		);
+	} finally {
 		await owner.dispose();
 		await rm(root, { recursive: true, force: true });
 	}

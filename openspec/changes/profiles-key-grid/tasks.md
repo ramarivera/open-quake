@@ -107,3 +107,9 @@ completing the import workflow in task 2.4 or hardware verification.
 - [x] Implement grid-editor import overflow recovery and canonical replacement/swap checks with tests. Beads open-quake-lih.10.7/.9.
 
 Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.tsx`, four canonical placement/overflow regressions in `profile-grid-placement.test.ts`, and the hidden mock native `smoke-geometry.ts` scenarios cover the new rows. Native checks include English/German replacement, 680px multi-action and knob layouts, folder entry and Space activation of vivid configuration. The full media smoke passes after scrolling the new editor layout into view before its visibility-gated OBS assertion. No hardware, microphone or audible audio was used. Gate totals and all 25 spec/code/test mappings accompany the lane PR.
+
+## Decision follow-ups 2026-10-27
+
+- [x] MGMT-259 preserve explicit and unproven literal titles; test save/restart/locale. Bead open-quake-jy0.21, parent open-quake-i3j.
+
+Real editor save and encoded reload preserve an explicitly typed English-default Hotkey title in German. Roundtrip tests cover empty/custom/default primary and alternate titles across German/Japanese. Legacy hotkey/meeting label inference now requires an explicit unmodified marker or retained translation metadata. Assistant-title migration remains owned by PR128.

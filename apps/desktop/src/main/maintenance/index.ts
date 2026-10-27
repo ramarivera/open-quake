@@ -51,6 +51,7 @@ import {
 } from "./firmware-files";
 import { firmwareSessionStore } from "./firmware-session";
 import { firmwareVersions } from "./firmware-versions";
+import { githubAppImageConfiguration, RELEASES_PAGE } from "./github-releases";
 import {
 	nativePermissionChecks,
 	nativePermissionRequest,
@@ -331,7 +332,25 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 							currentVersion: app.getVersion(),
 							platform: process.platform,
 							arch: process.arch,
-							...(options.updater ? { configuration: options.updater } : {}),
+							...(options.updater
+								? { configuration: options.updater }
+								: !mock &&
+										app.isPackaged &&
+										process.platform === "linux" &&
+										process.env.APPIMAGE
+									? {
+											configuration: githubAppImageConfiguration({
+												arch: process.arch,
+												image: process.env.APPIMAGE,
+												restart: () => {
+													app.relaunch({
+														execPath: process.env.APPIMAGE ?? process.execPath,
+													});
+													app.quit();
+												},
+											}),
+										}
+									: {}),
 						}),
 					),
 				),
@@ -678,6 +697,12 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									break;
 								}
 								case "check-update":
+									if ((yield* update.snapshot()).state === "disabled") {
+										if (!mock)
+											yield* io(() => shell.openExternal(RELEASES_PAGE));
+										message =
+											"GitHub Releases: Linux deb packages need manual installation. Windows builds are unsigned. macOS signing and notarization are pending distributor credentials.";
+									}
 									yield* update.check();
 									break;
 								case "download-update":

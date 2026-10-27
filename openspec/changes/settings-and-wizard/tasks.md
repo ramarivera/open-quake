@@ -248,3 +248,11 @@ PR #118 permission review 4381119069 and 4381129730: denied requests, rejected S
 PR #118 diagnostic review 4381129985: the live region renders the timed notice, not the persistent ready status. The mounted regression reproduces all-pass text remaining at 2600ms before the fix, then verifies expiry at exactly 2600ms with both passing channel rows retained. Background status remains silent and clears obsolete retry errors.
 
 The merged media smoke retains the shell's locale-safe selector and checks both passing connection rows after readiness. It waits out the explicit retry notice before asserting the empty live region. The native smoke passes all groups with 26 captures and process exit zero; mock devices and muted windows avoid host permission, microphone and audio changes.
+
+## Decision follow-ups 2026-10-27
+
+- [x] MAIN-114 SETTINGS-006/049/050 wire owned GitHub feed, verified AppImage replacement and manual-package notices. Bead open-quake-def.26, parent open-quake-i3j.
+
+The real AppUpdates consumer downloads a synthetic GitHub asset, checks digest/size, replaces a synthetic AppImage only on install, and rejects foreign redirects, foreign assets and corrupt/missing digests. Existing maintenance composition tests retain explicit install approval. macOS signing/notarization design is in desktop-release-pipeline/design.md. Actual release publication, signing credentials and Linux/native installation acceptance remain unverified.
+
+Final local verification: 3,342 desktop tests pass with one skip; protocol/device/edge suites pass 1,620 tests with three skips. All six typechecks, desktop build, both bundle modes and hidden mock meeting smoke pass. Biome has no errors, 16 warnings and two infos. Strict OpenSpec CLI 1.15.0 matches reproduced main at 9 pass/38 fail with no new diagnostics; inherited long-text warnings remain tracked in open-quake-lih.23.2. Early Turbo runs lost SSD TMPDIR under strict env and a new test initially lacked its firmware fixture; corrected direct SSD test runs establish these final results. No hooks or checks were disabled.

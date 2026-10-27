@@ -225,7 +225,7 @@ The mounted Keys editor SHALL offer pointer drag and keyboard placement from the
 - **AND** moves preserve all configuration and Escape or leaving the grid cancels placement
 
 ### Requirement: Selection and editor navigation
-Single clicks SHALL toggle selection, normalize covered coordinates to their visible anchor, exclude liveAudioTranslateDisplay, and revert unsaved previews on deselection, click-away and key/profile/page switches. Double clicks SHALL enter existing same-profile folder/emoji pages, return through Back/emojiBack, wrap next/previous pages, and open multi-action editing without executing host actions. Sources: MGMT-057, MGMT-064, MGMT-066, MGMT-077, SCREEN-138.
+Single clicks SHALL toggle selection, normalize covered coordinates to their visible anchor, allow liveAudioTranslateDisplay selection for approved AI-334 resizing, and revert unsaved previews on deselection, click-away and key/profile/page switches. Double clicks SHALL enter existing same-profile folder/emoji pages, return through Back/emojiBack, wrap next/previous pages, and open multi-action editing without executing host actions. Sources: MGMT-057, MGMT-064, MGMT-066, MGMT-077, SCREEN-138.
 
 #### Scenario: Selection and safe navigation
 - **WHEN** a selected covered coordinate is clicked again or a folder tile is double-clicked

@@ -236,3 +236,11 @@ Decoded import inspection SHALL detect layouts exceeding sixteen records or cont
 #### Scenario: Seventeen imported items
 - **WHEN** an import contains seventeen items including multi-cell spans
 - **THEN** the warning lists all seventeen items and their spans, import remains blocked, and cancel preserves the original profile and pasted JSON
+
+### Requirement: Preserve explicit key titles
+
+MGMT-259 SHALL preserve every explicitly edited title across save, restart and locale changes, including empty text and text equal to the English default. Unmarked text SHALL remain literal unless matching translation metadata or a known built-in source proves default origin. Text equality alone SHALL NOT prove legacy-default pollution.
+
+#### Scenario: English-default user title
+- **WHEN** a user types an English default label and switches to German after saving
+- **THEN** the exact user text survives and an unrelated unmarked key with that label remains literal
