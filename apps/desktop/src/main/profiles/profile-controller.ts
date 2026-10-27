@@ -239,7 +239,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						input.command.type === "create" ||
 						input.command.type === "duplicate" ||
 						input.command.type === "delete" ||
-						(input.command.type === "visibility" || input.command.type === "default-visibility");
+						input.command.type === "visibility" ||
+						input.command.type === "default-visibility";
 					const result = yield* manager.command(
 						input.command,
 						(envelope) =>
@@ -262,7 +263,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 									yield* ensureCurrent;
 									const target =
 										input.command.type === "delete" ||
-										(input.command.type === "visibility" || input.command.type === "default-visibility")
+										input.command.type === "visibility" ||
+										input.command.type === "default-visibility"
 											? envelope.activeByDevice[serial]
 											: selected;
 									const profile = envelope.profiles.find(

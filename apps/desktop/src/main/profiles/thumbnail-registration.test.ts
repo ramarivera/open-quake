@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Cause, Effect, Option, Runtime } from "effect";
+import { BrowserWindow, ipcMain } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
@@ -20,6 +21,8 @@ import {
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
+	PROFILE_PROGRESS,
+	PROFILE_REQUEST,
 	PROFILE_SELECTION,
 	PROFILE_SNAPSHOT,
 } from "../../shared/profile-manager";
@@ -47,6 +50,8 @@ const fixture = vi.hoisted(() => ({
 	capture: vi.fn(),
 	ready: vi.fn<(source: string) => Promise<unknown>>(),
 	published: vi.fn(),
+	secondPublished: vi.fn(),
+	resize: vi.fn(),
 	load: vi.fn<(url: string) => Promise<void>>(),
 	saved: undefined as unknown,
 }));
@@ -72,6 +77,7 @@ vi.mock("electron", () => {
 			fixture.windows.push(this);
 		}
 		webContents = {
+			mainFrame: { url: "file:///application/index.html" },
 			executeJavaScript: (source: string) => fixture.ready(source),
 			capturePage: () => fixture.capture(),
 			isDestroyed: () => this.destroyed,
@@ -82,7 +88,15 @@ vi.mock("electron", () => {
 		destroy = () => {
 			this.destroyed = true;
 		};
+		static fromWebContents = () => true;
 		static getAllWindows = () => [
+			{
+				isDestroyed: () => false,
+				webContents: {
+					isDestroyed: () => false,
+					send: fixture.secondPublished,
+				},
+			},
 			{
 				isDestroyed: () => false,
 				webContents: { isDestroyed: () => false, send: fixture.published },
@@ -114,6 +128,7 @@ async function setup(
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	prepare?: (root: string) => Promise<void>,
 	diagnostics?: DesktopDiagnostics,
+	management?: BrowserWindow,
 ) {
 	fixture.root = await mkdtemp(
 		join(process.env.OPEN_QUAKE_TEST_SCRATCH ?? tmpdir(), "producer-"),
@@ -123,11 +138,14 @@ async function setup(
 	fixture.windows.length = 0;
 	fixture.load.mockResolvedValue(undefined);
 	fixture.ready.mockResolvedValue(undefined);
-	fixture.capture.mockResolvedValue({ isEmpty: () => false, resize: () => ({ toPNG: () => png }) });
+	fixture.capture.mockResolvedValue({
+		isEmpty: () => false,
+		resize: fixture.resize.mockReturnValue({ toPNG: () => png }),
+	});
 	await prepare?.(fixture.root);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
 	const profiles = registerProfiles(
-		() => undefined,
+		() => management,
 		"file:///application/index.html",
 		deliver,
 		undefined,
@@ -533,5 +551,50 @@ it("waits for asynchronous owned tile artwork and decoded images before capturin
 	image.naturalWidth = 170;
 	checks.shift()?.();
 	await pending;
-	expect(fixture.capture).toHaveBeenCalledOnce();
+	expect(fixture.capture).toHaveBeenCalledTimes(2);
+});
+
+it("SCREEN-096/097 broadcasts thumbnail map and batch progress to two windows and produces 960x240 PNG", async () => {
+	const management = new BrowserWindow({ show: false });
+	await setup(undefined, undefined, undefined, management);
+	const handler = vi
+		.mocked(ipcMain.handle)
+		.mock.calls.find(([channel]) => channel === PROFILE_REQUEST)?.[1];
+	if (!handler) throw new Error("Missing manager handler");
+	const event = {
+		sender: management.webContents,
+		senderFrame: management.webContents.mainFrame,
+	};
+	fixture.published.mockClear();
+	fixture.secondPublished.mockClear();
+	await handler(event as Electron.IpcMainInvokeEvent, { type: "thumbnails" });
+	await vi.waitFor(() =>
+		expect(
+			fixture.published.mock.calls.some(
+				([channel, value]) =>
+					channel === PROFILE_PROGRESS &&
+					value.running === false &&
+					value.done > 0,
+			),
+		).toBe(true),
+	);
+	for (const channel of [PROFILE_PROGRESS, PROFILE_SNAPSHOT]) {
+		const first = fixture.published.mock.calls.filter(
+			([name]) => name === channel,
+		);
+		expect(first.length).toBeGreaterThan(0);
+		expect(
+			fixture.secondPublished.mock.calls.filter(([name]) => name === channel),
+		).toEqual(first);
+	}
+	expect(fixture.resize).toHaveBeenCalledWith({ width: 960, height: 240 });
+	const snapshots = fixture.published.mock.calls.filter(
+		([channel]) => channel === PROFILE_SNAPSHOT,
+	);
+	expect(
+		Object.values(snapshots.at(-1)?.[1].thumbnails ?? {}).some(
+			(value) =>
+				typeof value === "string" && value.startsWith("data:image/png;base64,"),
+		),
+	).toBe(true);
 });

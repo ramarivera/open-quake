@@ -7,6 +7,7 @@ export async function replaceBackup(
 	path: string,
 	bytes: Uint8Array,
 	signal?: AbortSignal,
+	beginCommit?: () => void,
 ): Promise<void> {
 	const staged = join(
 		dirname(path),
@@ -22,6 +23,8 @@ export async function replaceBackup(
 			await file.close();
 		}
 		signal?.throwIfAborted();
+		// rename cannot be cancelled once submitted. The deadline ends here.
+		beginCommit?.();
 		await rename(staged, path);
 		if (process.platform !== "win32") {
 			const parent = await open(dirname(path), "r");

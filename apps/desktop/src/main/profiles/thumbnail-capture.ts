@@ -108,6 +108,11 @@ export async function waitForThumbnailMedia(): Promise<void> {
 				}),
 		),
 	);
+	// These nodes belong only to the hidden capture, so freeze moving media at
+	// its first decoded frame before checking pixel stability.
+	for (const video of preview.querySelectorAll("video")) video.pause();
+	for (const animation of preview.getAnimations?.({ subtree: true }) ?? [])
+		animation.pause();
 	await new Promise<void>((resolve) =>
 		requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
 	);

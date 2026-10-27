@@ -36,6 +36,7 @@ const layer = (
 		serial: string,
 		profile: Profile,
 	) => Effect.Effect<void, ProfileDeliveryFailed> = () => Effect.void,
+	failWrite: () => boolean = () => false,
 ) => {
 	let saved: unknown = encodeProfileEnvelope(
 		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
@@ -50,6 +51,7 @@ const layer = (
 					profileStorageLayer({
 						read: async () => saved,
 						write: async (e) => {
+							if (failWrite()) throw new Error("synthetic storage failure");
 							saved = e;
 						},
 					}),
@@ -476,3 +478,50 @@ import {
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
+
+it.effect(
+	"SETTINGS-059 sends the wizard's committed visible selection to connected mock devices and rolls back storage failures",
+	() => {
+		let fail = false;
+		const pushes: string[] = [];
+		return Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const manager = yield* ProfileManager;
+			yield* switching.connect("mock-a", "1-1");
+			yield* switching.connect("mock-b", "1-1");
+			pushes.length = 0;
+			const before = yield* manager.read();
+			fail = true;
+			const failed = yield* controller
+				.request({
+					type: "manage",
+					command: { type: "default-visibility", ids: ["1-2"] },
+				})
+				.pipe(Effect.either);
+			expect(failed._tag).toBe("Left");
+			expect(yield* manager.read()).toBe(before);
+			fail = false;
+			const reply = yield* controller.request({
+				type: "manage",
+				command: { type: "default-visibility", ids: ["1-2"] },
+			});
+			expect(reply._tag).toBe("success");
+			const after = yield* manager.read();
+			expect(after.activeByDevice["mock-a"]?.profileId).toBe("1-2");
+			expect(after.activeByDevice["mock-b"]?.profileId).toBe("1-2");
+			expect(managerState(after).hidden).toContain("1-1");
+			expect(pushes.slice(-2)).toEqual(["mock-a:1-2", "mock-b:1-2"]);
+		}).pipe(
+			Effect.provide(
+				layer(
+					(serial, profile) =>
+						Effect.sync(() => {
+							pushes.push(`${serial}:${profile.id}`);
+						}),
+					() => fail,
+				),
+			),
+		);
+	},
+);

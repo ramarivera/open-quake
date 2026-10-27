@@ -326,6 +326,20 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					audioPresses.delete(control);
 					return;
 				}
+				if (["createFolder", "back"].includes(type)) {
+					const action = key.config.actions.find(
+						(a) =>
+							a.type === (type === "createFolder" ? "folder" : "parentFolder"),
+					);
+					if (
+						typeof action?.value !== "string" ||
+						!profile.pages.some((p) => p.id === action.value)
+					)
+						return yield* Effect.fail(new InvalidKeyAction("config.actions"));
+					yield* port.select(deviceId, profile.id, action.value);
+					yield* refresh(deviceId);
+					return;
+				}
 				if (type === "switchProfile") {
 					const destination = key.config.actions.find(
 						(a) => a.type === "profile",

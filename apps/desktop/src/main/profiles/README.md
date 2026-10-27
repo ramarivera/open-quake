@@ -33,7 +33,7 @@ command requires approval again. Renderer requests cannot supply shell text.
 | --- | --- |
 | MGMT-315–316, 338–340, 343, 346–384 | Nine resources, source footprints/actions/locks, platform Quick and locale projection. Catalog tests and local source comparison cover the data. Widget execution and full-strip rendering belong to other lanes. |
 | MGMT-313–324, 345 | Serialized CRUD, weighted names, deep copy, visibility, 30 visible profiles, stable deletion anchor and thumbnails. Manager/repository tests cover failures and concurrent key saves. Every row exposes the duplicate action with localized Copy suffixes. |
-| MGMT-326–327, 329–337 | Plain profile properties, installed-app selection, Other picker, connected-device scope, startup singleton and confirmation. Recovered labels are used; this page is ready for the design lane. App icons and vendor dialog styling are deferred. |
+| MGMT-326–327, 329–337 | Plain profile properties, installed-app selection, Other picker, connected-device scope, startup singleton and confirmation. Recovered labels are used; this page is ready for the design lane. Search and available app icons are shown; the page-based properties replace the vendor dialog. |
 | MGMT-091, 333–334; MAIN-079, 084 | Immediate polling, 3000/2000 ms intervals, 500 ms cache, native deadlines, normalized LCS >=0.79, 300 ms per-device debounce and first-connect default protection. Effect TestClock exercises switching and disposal. Native macOS identity/app-list reads are included in the smoke. |
 | MGMT-430–434 | Real hidden-window captures, content/locale cache keys, per-row update, batch progress and cancellation. Captures use the strip lane's renderer. |
 | MAIN-085 | Integration contract only. Lifecycle must supply logical serials and exclude the Quake-HID twin. Hardware delivery remains unverified. |
@@ -51,7 +51,7 @@ the source UTF-16 weighting.
 
 `ProfileService`, `ProfileManager` and `ProfileSwitching` share one
 `ProfileRepository` and its mutex. The optional manager metadata is
-backward-compatible with PR #12. The canonical file remains
+backward-compatible with PR #12. Default visibility can be applied as one validated batch; the wizard commits it before its separate progress record and retries progress failures without reverting the menu. The canonical file remains
 `<userData>/profiles-v1.json`; cached captures use `profiles/thumbnails/`.
 Transactions persist the complete envelope before publishing frozen,
 detached snapshots. Existing user profiles survive catalog installation.

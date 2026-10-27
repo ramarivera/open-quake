@@ -18,6 +18,7 @@ import type {
 } from "../../../shared/agents";
 import { button, click, input, mount, query, settle } from "../../test/dom";
 import { AssistantProviderSettings } from "../maintenance/AssistantProviderSettings";
+import { fakeBridge, wizard } from "../settings/test-fixtures";
 import { AssistantControls, AssistantEditor } from "./AssistantEditor";
 import { AssistantLink } from "./AssistantLink";
 import { KnobAssistantSettings } from "./KnobAssistantSettings";
@@ -734,3 +735,33 @@ it("followed General provider changes reconcile checked controls and cross-provi
 	expect(field(f.host, "Enable Thinking").checked).toBe(false);
 	expect(field(f.host, "Web Search").checked).toBe(false);
 });
+
+it.each(["CN", "DE", "US"])(
+	"MGMT-398 retains and selects OpenAI with saved region %s",
+	async (region) => {
+		vi.stubGlobal(
+			"quakeSettings",
+			fakeBridge({ wizard: async () => wizard({ region }) }),
+		);
+		const calls = bridge(
+			view(
+				rows.map((row) => ({
+					...row,
+					role: row.id === "qwen" ? "default" : "fallback",
+				})),
+			),
+		);
+		const f = await mount(<AssistantProviderSettings />);
+		closes.push(f.close);
+		const provider = query(f.host, "select", HTMLSelectElement);
+		expect(
+			[...provider.options].some((option) => option.text === "OpenAI"),
+		).toBe(true);
+		await input(provider, "openai");
+		expect(calls.at(-1)).toMatchObject({
+			type: "save-model",
+			row: { provider: "openai", role: "default" },
+		});
+		expect(provider.value).toBe("openai");
+	},
+);

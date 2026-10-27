@@ -182,10 +182,14 @@ The six vendor thumbnail operations/events SHALL map to typed read, thumbnail, t
 
 #### Scenario: Decode, stabilize and cancel capture
 - **WHEN** fake images/videos become ready and frames settle, or readiness/capture times out or is cancelled
-- **THEN** only a current stable image is published, failed jobs publish no partial image, all windows receive progress/update messages, and cache retention remains bounded
+- **THEN** capture-only videos and CSS animations pause at a decoded frame, only a current stable image is published, failed jobs publish no partial image, all windows receive progress/update messages, and cache retention remains bounded
+
+#### Scenario: Repeated picker frames
+- **WHEN** newer progress snapshots reuse an unchanged image source within the same device/session
+- **THEN** the picker reuses pending and decoded pixels without flicker; source or session replacement cancels obsolete decodes and at most thirty entries are retained
 
 ### Requirement: Atomic bounded backup lifecycle
-Imports SHALL enforce the shared thirty-visible-profile capacity before any publication, retain resource metadata and restore OBS key group identity. Exports SHALL time out after 120 seconds, cancel pending work and publish no partial archive; successful exports SHALL return native feedback. Import counts SHALL use the active locale. Sources: MGMT-322, MGMT-428, MGMT-429.
+Imports SHALL enforce the shared thirty-visible-profile capacity before any publication, retain resource metadata and restore OBS key group identity. Exports SHALL bound preparation to 120 seconds and cancel before atomic rename submission; once rename begins, cancellation SHALL await its committed outcome rather than report a timeout; successful exports SHALL return native feedback. Import counts SHALL use the active locale. Sources: MGMT-322, MGMT-428, MGMT-429.
 
 #### Scenario: Over-capacity import and export deadline
 - **WHEN** an archive would exceed thirty visible profiles, or export passes 120 seconds or is cancelled
@@ -197,6 +201,12 @@ Wizard profile choices SHALL start from persisted built-in visibility, default t
 #### Scenario: Wizard deselection
 - **WHEN** a user disables built-ins in the wizard and advances
 - **THEN** the last enabled choice cannot be disabled and saved visibility and connected menus reflect the choices without duplicating profiles
+
+#### Scenario: Wizard retry and authoritative visibility
+- **GIVEN** the manager visibility is newer than a saved wizard draft
+- **WHEN** the wizard is reopened
+- **THEN** its initial choices follow current manager visibility, including hidden defaults available for re-enabling
+- **AND** Continue holds its busy state through the visibility commit and draft save; a failed draft save stays on Profiles with the committed visibility intact and an idempotent retry, without claiming cross-store atomicity
 
 ### Requirement: Profile switch key
 Switch Profile SHALL expose Next Profile with sentinel -1, explicit profile and page selection. Next SHALL wrap across visible profiles; invalid or hidden destinations SHALL not change selection. Source: MGMT-297.

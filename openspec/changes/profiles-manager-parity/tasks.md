@@ -32,11 +32,15 @@ Task 1.11 verification: the baseline read/write cases timed out on the first shu
 
 ## profiles burn-down lane
 
-- [ ] 2.1 Page/folder lifecycle, canonical templates and legacy action imports. Bead open-quake-lih.9.15.
-- [ ] 2.2 Manager properties, searchable linked apps, catalog/resource compatibility and wizard visibility. Bead open-quake-lih.9.16.
-- [ ] 2.3 Foreground permission, logical serial normalization and throttled reporting. Bead open-quake-lih.9.17.
-- [ ] 2.4 Stable media-ready thumbnails, incremental decoding, fan-out and cancellation. Bead open-quake-lih.9.18.
-- [ ] 2.5 Capacity-atomic imports, bounded exports, metadata and OBS restore. Bead open-quake-lih.9.19.
+- [x] 2.1 Page/folder lifecycle, canonical templates and legacy action imports. Bead open-quake-lih.9.15.
+- [x] 2.2 Manager properties, searchable linked apps, catalog/resource compatibility and wizard visibility. Bead open-quake-lih.9.16.
+- [x] 2.3 Foreground permission, logical serial normalization and throttled reporting. Bead open-quake-lih.9.17.
+- [x] 2.4 Stable media-ready thumbnails, incremental decoding, fan-out and cancellation. Bead open-quake-lih.9.18.
+- [x] 2.5 Capacity-atomic imports, bounded exports, metadata and OBS restore. Bead open-quake-lih.9.19.
 - [ ] 2.6 Merge current main, rerun gates and native mock EN/DE smoke, deliver PR without merge or thread resolution.
 
-Profiles resume checkpoint, 2026-10-27: the interrupted lifecycle/foreground/capture work is committed as `667d3171`; current main merged normally as `dd0fa47d`. Added export deadline, batch wizard visibility and picker predecode changes compile through direct desktop TypeScript. No lane row is newly claimed complete: tests and Biome remain unrun because macOS read-permission queries on ExtSSD hang. At the lead's request, stop own runners, preserve a local checkpoint, do not push, and resume from `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/profiles/RESUME.md` after the host fix. All six lane tasks and Beads `.9.15` through `.9.19` stay open.
+Profiles delivery, 2026-10-27: all 28 assigned rows now have requirements, production behavior and passing software regressions. The resumed wizard holds busy through both saves and retries a failed draft without rolling back committed visibility. Picker decodes survive progress revisions; changed source/session/unmount cancels old pixels. Export cancellation ends at rename submission. Backup restores retain all seven resource kinds, metadata aliases and references, merge app-library groups and reconstruct OBS. Hidden captures freeze decoded video/CSS animations and require stable frames.
+
+Verification by GPT-6.1 Sol: root tests passed 4,989 with four existing skips, including 601 device and 3,355 desktop tests. Typecheck passed all six tasks, production build and default/mock bundle modes passed. Biome passed with 16 existing warnings and two infos. Hidden native profiles and media smokes passed; the profiles smoke now registers the real locale service and asserts the document language before EN/DE desktop/narrow screenshots. Evidence: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/profiles/`, especially `test-final3.log`, `last-features.log`, `typecheck-final2.log`, `profiles-smoke-final7.log` and `media-smoke-final3.log`.
+
+Task 2.6 remains incomplete because OpenSpec CLI 1.15.0 strict validation reports the shared warning-only baseline, 9 pass / 38 fail, tracked by `open-quake-lih.23.2`. Owning-change validation has nine long-requirement warnings and no ERROR entries; newly changed scenarios and export/wizard rules add no structural validation errors. No unrelated requirements or validator policy changed. Physical QUAKE delivery and native Linux/Windows acceptance remain unverified and belong to the lead. Beads `.9.15` through `.9.19` remain open for lead merge. No bot round, watch, thread resolution or merge was performed by this lane.

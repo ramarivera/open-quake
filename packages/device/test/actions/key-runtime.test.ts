@@ -21,6 +21,7 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
+import { inspectProfileImport } from "../../src/profiles/profile-import.js";
 
 function fixture(
 	config: unknown,
@@ -702,3 +703,144 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"MGMT-297 dispatches saved Next Profile with wrap and explicit profile/page",
+	() => {
+		const next = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "-1" },
+				{ type: "page", value: 1 },
+			],
+		});
+		next.switch();
+		const explicit = fixture({
+			type: "switchProfile",
+			actions: [
+				{ type: "profile", value: "p" },
+				{ type: "page", value: 2 },
+			],
+		});
+		return Effect.gen(function* () {
+			yield* press.pipe(Effect.provide(next.layer));
+			expect(next.selection()).toEqual({ profileId: "p", pageId: "one" });
+			yield* press.pipe(Effect.provide(explicit.layer));
+			expect(explicit.selection()).toEqual({ profileId: "p", pageId: "two" });
+		});
+	},
+);
+it.effect(
+	"MGMT-297 rejects missing profile/page and hidden destinations without selection changes",
+	() =>
+		Effect.gen(function* () {
+			for (const [profile, page] of [
+				["missing", 1],
+				["p", 9],
+			] as const) {
+				const f = fixture({
+					type: "switchProfile",
+					actions: [
+						{ type: "profile", value: profile },
+						{ type: "page", value: page },
+					],
+				});
+				const rejected = yield* press.pipe(
+					Effect.provide(f.layer),
+					Effect.either,
+				);
+				expect(rejected._tag).toBe("Left");
+				if (rejected._tag === "Left")
+					expect(rejected.left.code).toBe("QUAKE.ACTION.INVALID");
+				expect(f.selection()).toEqual({ profileId: "p", pageId: "one" });
+			}
+			const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+			const env = Schema.decodeUnknownSync(ProfileEnvelope)({
+				schemaVersion: 1,
+				manager: {
+					revision: 0,
+					installed: true,
+					userHasSetDefault: false,
+					approvedCommands: [],
+					hidden: ["hidden"],
+					links: [],
+				},
+				profiles: [
+					{
+						id: "p",
+						name: "P",
+						revision: 0,
+						pages: [
+							{
+								id: "one",
+								keys: [
+									{
+										...base,
+										childrenName: "switchProfile",
+										config: {
+											...base.config,
+											type: "switchProfile",
+											actions: [
+												{ type: "profile", value: "hidden" },
+												{ type: "page", value: 1 },
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+					{
+						id: "hidden",
+						name: "Hidden",
+						revision: 0,
+						pages: [{ id: "one", keys: [] }],
+					},
+				],
+				activeByDevice: { device: { profileId: "p", pageId: "one" } },
+			});
+			let selected = false;
+			const f = fixture(
+				{ type: "hotkey", actions: [{ type: "key", value: "control+a" }] },
+				false,
+				0,
+				{
+					read: Effect.succeed(env),
+					select: () =>
+						Effect.sync(() => {
+							selected = true;
+						}),
+				},
+			);
+			const rejected = yield* press.pipe(
+				Effect.provide(f.layer),
+				Effect.either,
+			);
+			expect(rejected._tag).toBe("Left");
+			if (rejected._tag === "Left")
+				expect(rejected.left.code).toBe("QUAKE.ACTION.INVALID");
+			expect(selected).toBe(false);
+		}),
+);
+for (const sentinel of [-1, -2])
+	it.effect(`MGMT-401 executes imported legacy page action ${sentinel}`, () => {
+		const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const imported = inspectProfileImport([
+			{
+				...base,
+				childrenName: "page",
+				config: {
+					...base.config,
+					type: "page",
+					actions: [{ type: "page", value: sentinel }],
+				},
+			},
+		]);
+		const config = imported.profile?.pages[0].keys[0]?.config;
+		if (!config) return Effect.die("missing imported page key");
+		const f = fixture(config);
+		return Effect.gen(function* () {
+			yield* press;
+			expect(f.selection()?.pageId).toBe("two");
+		}).pipe(Effect.provide(f.layer));
+	});

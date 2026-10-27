@@ -35,10 +35,10 @@ export const ProfileManagerState = Schema.Struct({
 });
 export type ProfileManagerState = typeof ProfileManagerState.Type;
 export const ManagerCommand = Schema.Union(
-    Schema.Struct({
-        type: Schema.Literal("default-visibility"),
-        ids: Schema.Array(Schema.String),
-    }),
+	Schema.Struct({
+		type: Schema.Literal("default-visibility"),
+		ids: Schema.Array(Schema.String),
+	}),
 	Schema.Struct({ type: Schema.Literal("create") }),
 	Schema.Struct({
 		type: Schema.Literal("rename"),

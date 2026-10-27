@@ -140,7 +140,10 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				(serial: string): Effect.Effect<void> =>
 					Effect.sync(() => {
 						for (const connected of sessions) {
-							if (logicalProfileSerial(connected) !== logicalProfileSerial(serial)) continue;
+							if (
+								logicalProfileSerial(connected) !== logicalProfileSerial(serial)
+							)
+								continue;
 							sessions.delete(connected);
 							generations.set(connected, (generations.get(connected) ?? 0) + 1);
 							lifetimes.set(connected, (lifetimes.get(connected) ?? 0) + 1);

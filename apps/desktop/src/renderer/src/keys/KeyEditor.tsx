@@ -945,28 +945,59 @@ export function KeyEditor({
 									}}
 								>
 									<option value="-1">Next Profile</option>
-									{envelope?.profiles.filter((p) => !(Option.getOrUndefined(envelope.manager)?.hidden ?? []).includes(p.id)).map((p) => (
-										<option key={p.id} value={p.id}>
-											{p.name}
-										</option>
-									))}
+									{envelope?.profiles
+										.filter(
+											(p) =>
+												!(
+													Option.getOrUndefined(envelope.manager)?.hidden ?? []
+												).includes(p.id),
+										)
+										.map((p) => (
+											<option key={p.id} value={p.id}>
+												{p.name}
+											</option>
+										))}
 								</select>
 							</Row>
 						)}
 						{key.config.type === "switchProfile" &&
-							key.config.actions.find((action) => action.type === "profile")?.value !== "-1" && (
+							key.config.actions.find((action) => action.type === "profile")
+								?.value !== "-1" && (
 								<Row label={locale === "de" ? "Seitennummer" : "Page Number"}>
 									<select
 										aria-label="Switch profile page"
-										value={String(key.config.actions.find((action) => action.type === "page")?.value ?? 1)}
-										onChange={(event) => void update({
-											...key,
-											config: { ...key.config, actions: key.config.actions.map((action) => action.type === "page" ? { ...action, value: Number(event.target.value) } : action) },
-										})}
+										value={String(
+											key.config.actions.find(
+												(action) => action.type === "page",
+											)?.value ?? 1,
+										)}
+										onChange={(event) =>
+											void update({
+												...key,
+												config: {
+													...key.config,
+													actions: key.config.actions.map((action) =>
+														action.type === "page"
+															? { ...action, value: Number(event.target.value) }
+															: action,
+													),
+												},
+											})
+										}
 									>
-										{envelope?.profiles.find((profile) => profile.id === key.config.actions.find((action) => action.type === "profile")?.value)?.pages.map((page, index) => (
-											<option key={page.id} value={index + 1}>{index + 1}</option>
-										))}
+										{envelope?.profiles
+											.find(
+												(profile) =>
+													profile.id ===
+													key.config.actions.find(
+														(action) => action.type === "profile",
+													)?.value,
+											)
+											?.pages.map((page, index) => (
+												<option key={page.id} value={index + 1}>
+													{index + 1}
+												</option>
+											))}
 									</select>
 								</Row>
 							)}

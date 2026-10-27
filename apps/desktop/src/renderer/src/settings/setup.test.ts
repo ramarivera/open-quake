@@ -385,7 +385,10 @@ describe("setup model", () => {
 
 	it("preselects saved choices, else every enabled default profile", () => {
 		expect(profileDefaults(["b", "gone"], profiles, null)).toEqual(["b"]);
-		expect(profileDefaults([], profiles, { _tag: "desktop-preview" })).toEqual(["a", "b"]);
+		expect(profileDefaults([], profiles, { _tag: "desktop-preview" })).toEqual([
+			"a",
+			"b",
+		]);
 		expect(
 			profileDefaults([], profiles, { _tag: "quake", deviceId: "QK-1" }),
 		).toEqual(["a", "b"]);
@@ -434,7 +437,7 @@ describe("owner reads", () => {
 	});
 
 	it("reads eligible defaults including hidden choices without changing their visibility", async () => {
-        vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+		vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
 		const [first, ...rest] = builtinProfiles("darwin");
 		assert(first);
 		// The real catalog install hides 1-0 on macOS.

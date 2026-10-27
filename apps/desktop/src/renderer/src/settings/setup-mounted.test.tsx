@@ -10,6 +10,11 @@ import {
 	ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import {
+	applyManagerCommand,
+	installProfileCatalog,
+	managerState,
+} from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
+import {
 	type AppLocaleBridge,
 	type LocaleSnapshot,
 	WIZARD_LANGUAGES,
@@ -324,4 +329,97 @@ it("SETTINGS-054 bundles project legal documents and advances only on explicit G
 	await click(button("Get Started"));
 	expect(saveWizard).toHaveBeenCalledExactlyOnceWith({ step: "locale-region" });
 	expect(saved.step).toBe("locale-region");
+});
+
+it("SETTINGS-059 seeds current visibility, re-enables hidden defaults, locks the last choice and retries a failed draft save", async () => {
+	vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux");
+	let envelope = installProfileCatalog(createInitialProfileEnvelope(), "linux");
+	const initial = applyManagerCommand(envelope, {
+		type: "default-visibility",
+		ids: ["1-1"],
+	});
+	if (initial._tag !== "updated") throw new Error("visibility fixture");
+	envelope = initial.envelope;
+	let saved = wizard({
+		step: "profiles",
+		display: { _tag: "desktop-preview" },
+		profileIds: ["1-2"],
+	});
+	let release: (() => void) | undefined;
+	let fail = true;
+	const bridge = fakeBridge({
+		wizard: async () => saved,
+		saveWizard: vi.fn(async (draft) => {
+			if (fail) {
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				throw { code: "QUAKE.SETTINGS.PERSIST_FAILED" };
+			}
+			saved = { ...saved, ...draft, revision: saved.revision + 1 };
+			return saved;
+		}),
+	});
+	const request = vi.fn<Window["quakeProfileManager"]["request"]>(
+		async (command) => {
+			if (
+				command.type === "manage" &&
+				command.command.type === "default-visibility"
+			) {
+				const result = applyManagerCommand(envelope, command.command);
+				if (result._tag !== "updated")
+					throw new Error("unexpected visibility rejection");
+				envelope = result.envelope;
+			}
+			return {
+				_tag: "success",
+				view: {
+					envelope: encodeProfileEnvelope(envelope),
+					serials: [],
+					apps: [],
+					thumbnails: {},
+					progress: { running: false, done: 0, total: 0, failed: 0 },
+				},
+			};
+		},
+	);
+	Object.defineProperty(window, "quakeProfileManager", {
+		configurable: true,
+		value: { request },
+	});
+	const store = createSetupStore(bridge);
+	await store.load();
+	await mount(
+		createElement(SetupWizard, {
+			store,
+			runtime: { state: "unsupported" },
+			onLeave: () => {},
+		}),
+	);
+	const checks = () => [
+		...document.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+	];
+	expect(checks()).toHaveLength(9);
+	expect(checks().filter((box) => box.checked)).toHaveLength(1);
+	expect(checks().find((box) => box.checked)?.disabled).toBe(true);
+	const hidden = checks().find((box) => !box.checked);
+	if (!hidden) throw new Error("missing hidden choice");
+	await click(hidden);
+	expect(checks().filter((box) => box.checked)).toHaveLength(2);
+	await click(button("Continue"));
+	expect(button("Saving…").disabled).toBe(true);
+	expect(button("Back").disabled).toBe(true);
+	expect(button("Finish later").disabled).toBe(true);
+	expect(
+		envelope.profiles.filter(
+			(p) => !managerState(envelope).hidden.includes(p.id),
+		),
+	).toHaveLength(3);
+	await act(async () => release?.());
+	expect(element(".setup").getAttribute("data-step")).toBe("profiles");
+	expect(document.querySelector("[role=alert]")).not.toBeNull();
+	fail = false;
+	await click(button("Continue"));
+	expect(element(".setup").getAttribute("data-step")).toBe("review");
+	expect(saved.profileIds).toHaveLength(2);
 });

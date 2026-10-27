@@ -17,6 +17,7 @@ import { knobProfileBinding } from "../knob/profile-binding";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
+import { registerAppLocale } from "../settings/registration";
 import { nativeForegroundApp } from "./foreground-app";
 import { registerProfiles } from "./index";
 import { loadInstalledProfileApps } from "./installed-apps";
@@ -51,6 +52,7 @@ async function smoke(): Promise<void> {
 	let disposeLifecycle = async (): Promise<void> => {};
 	let media: ReturnType<typeof registerMedia> | undefined;
 	let clock: ReturnType<typeof registerClock> | undefined;
+	let localeRegistration: ReturnType<typeof registerAppLocale> | undefined;
 	try {
 		await app.whenReady();
 		process.stdout.write("profiles smoke: app ready\n");
@@ -107,10 +109,16 @@ async function smoke(): Promise<void> {
 			removeLifecycle();
 			await lifecycleRuntime.dispose();
 		};
+		localeRegistration = registerAppLocale({
+			directory,
+			osLocale: "en-US",
+			renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+			windows: () => [management, panel],
+		});
 		const deliveries: string[] = [];
 		profiles = registerProfiles(
 			() => management,
-			undefined,
+			pathToFileURL(resolve("out/renderer/index.html")).href,
 			async (serial, profile) => {
 				deliveries.push(`${serial}:${profile.id}`);
 			},
@@ -309,7 +317,16 @@ async function smoke(): Promise<void> {
 		const batch = await request(management, { type: "thumbnails" });
 		assert.equal(batch._tag, "success");
 		if (batch._tag === "success") {
-			assert.equal(batch.view.progress.failed, 0);
+			assert.equal(
+				batch.view.progress.failed,
+				0,
+				JSON.stringify({
+					progress: batch.view.progress,
+					missing: batch.view.envelope.profiles
+						.filter((profile) => !batch.view.thumbnails[profile.id])
+						.map((profile) => profile.id),
+				}),
+			);
 			assert.equal(batch.view.progress.done, 9);
 		}
 		await management.webContents.executeJavaScript(
@@ -353,7 +370,16 @@ async function smoke(): Promise<void> {
 				select.value = ${JSON.stringify(locale)};
 				select.dispatchEvent(new Event('change', {bubbles:true}));
 			})()`);
-			await ready(management, `[data-profile-ready="1-2"]`);
+			await ready(
+				management,
+				`html[lang="${locale}"] [data-profile-ready="1-2"]`,
+			);
+			assert.equal(
+				await management.webContents.executeJavaScript(
+					"document.documentElement.lang",
+				),
+				locale,
+			);
 			for (const width of [1280, 390]) {
 				management.setContentSize(width, 1000);
 				await management.webContents.executeJavaScript(
@@ -408,7 +434,10 @@ async function smoke(): Promise<void> {
 		await knob.dispose();
 		await profiles.dispose();
 		managementDebug = management;
-		profiles = registerProfiles(() => management);
+		profiles = registerProfiles(
+			() => management,
+			pathToFileURL(resolve("out/renderer/index.html")).href,
+		);
 		knob = registerKnob(
 			() => panel,
 			() => [panel, management],
@@ -458,6 +487,7 @@ async function smoke(): Promise<void> {
 		await profiles?.dispose();
 		await media?.dispose();
 		await clock?.dispose();
+		await localeRegistration?.dispose();
 		await rm(directory, { recursive: true, force: true });
 		app.exit(Number(process.exitCode ?? 0));
 	}

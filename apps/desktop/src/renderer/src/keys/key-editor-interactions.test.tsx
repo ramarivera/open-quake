@@ -1824,8 +1824,11 @@ it("remaps imported folder, emoji and page links before mounted editor navigatio
 		"imported-page-2",
 		"imported-page-3",
 	]);
+	expect(imported?.pages[0].keys).toHaveLength(16);
 	expect(
-		imported?.pages[0].keys.map((k) => k.config.actions?.[0]?.value),
+		imported?.pages[0].keys
+			.filter((k) => k.config.type !== "")
+			.map((k) => k.config.actions?.[0]?.value),
 	).toEqual(["imported-page-2", "imported-page-3", "imported-page-3", 2]);
 	expect(
 		imported?.pages.slice(1).map((p) => p.keys[0]?.config.actions?.[0]?.value),

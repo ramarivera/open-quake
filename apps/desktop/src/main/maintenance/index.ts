@@ -24,6 +24,7 @@ import {
 	AppUpdatePort,
 	AppUpdates,
 } from "../../../../../packages/edge/src/maintenance/update-service.js";
+import { SettingsDocument } from "../../../../../packages/edge/src/settings/settings-contracts.js";
 import { APPEARANCE_STORAGE_KEY } from "../../renderer/src/theme/appearance";
 import {
 	FIRMWARE_PROGRESS_CHANNEL,
@@ -206,11 +207,17 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						)
 					)
 						throw new BackupFailed();
-					await exportBackupTo(root, selected.filePath, async () => appearanceRecord(
-                        await parent.webContents.executeJavaScript(
-                            `localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)})`,
-                        ),
-                    ), signal);
+					await exportBackupTo(
+						root,
+						selected.filePath,
+						async () =>
+							appearanceRecord(
+								await parent.webContents.executeJavaScript(
+									`localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)})`,
+								),
+							),
+						signal,
+					);
 					shell.showItemInFolder(selected.filePath);
 					return true;
 				},
@@ -629,8 +636,23 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 										))
 									)
 										break;
+									const locale = yield* io(async () => {
+										try {
+											return Schema.decodeUnknownSync(SettingsDocument)(
+												JSON.parse(
+													await readFile(
+														join(root, "settings-v1.json"),
+														"utf8",
+													),
+												),
+											).locale;
+										} catch {
+											return "en" as const;
+										}
+									});
 									replacement = () =>
 										restoreAndExit({
+											locale,
 											validate: () => restored.validate(root),
 											stop: async () => {
 												disposed = true;

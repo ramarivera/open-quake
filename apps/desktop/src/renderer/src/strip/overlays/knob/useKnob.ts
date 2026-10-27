@@ -5,7 +5,7 @@ import {
 	KnobReply,
 	type KnobRequest,
 } from "../../../../../shared/knob-contracts";
-import { decodeKnobThumbnails } from "./thumbnail-decoding";
+import { knobThumbnailDecoder } from "./thumbnail-decoding";
 
 export function useKnob() {
 	const [snapshot, setSnapshot] = useState<KnobModelSnapshot>();
@@ -18,7 +18,14 @@ export function useKnob() {
 		let alive = true;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let pending: KnobModelSnapshot;
-        let cancelDecode: (() => void) | undefined;
+		const decoder = knobThumbnailDecoder((decoded) => {
+			pending = decoded;
+			if (!timer)
+				timer = setTimeout(() => {
+					timer = undefined;
+					if (alive) setSnapshot(pending);
+				}, 16);
+		});
 		const accept = (value: unknown): void => {
 			if (
 				!alive ||
@@ -27,14 +34,7 @@ export function useKnob() {
 			)
 				return;
 			revision.current = value.revision;
-            cancelDecode?.();
-            cancelDecode = decodeKnobThumbnails(value, (decoded) => {
-                pending = decoded;
-                if (!timer) timer = setTimeout(() => {
-                    timer = undefined;
-                    if (alive) setSnapshot(pending);
-                }, 16);
-            });
+			decoder.accept(value);
 		};
 		const off = bridge.onSnapshot(accept);
 		void bridge
@@ -48,7 +48,7 @@ export function useKnob() {
 			});
 		return () => {
 			alive = false;
-            cancelDecode?.();
+			decoder.dispose();
 			off();
 			if (timer) clearTimeout(timer);
 		};

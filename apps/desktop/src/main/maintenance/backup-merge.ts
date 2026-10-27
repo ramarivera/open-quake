@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
 	builtinProfiles,
 	isBuiltinProfile,
@@ -236,9 +236,9 @@ export function mergeBackup(
 			skipped,
 		};
 	}
-	const groups = Schema.decodeUnknownSync(ResourceGroups)(
-		json(files.get("app/assets/resources.conf")),
-	);
+	const groups = Schema.decodeUnknownSync(ResourceGroups, {
+		onExcessProperty: "preserve",
+	})(json(files.get("app/assets/resources.conf")));
 	const configEntry = [...files].find(([name]) =>
 		/^[^/]+_config\.json$/.test(name),
 	);
@@ -379,7 +379,11 @@ export function mergeBackup(
 		string,
 		{
 			name: string;
-			pages: { id: string; keys: (typeof ProfileKey.Encoded)[] }[];
+			pages: {
+				id: string;
+				keys: (typeof ProfileKey.Encoded)[];
+				compatibility?: typeof ProfileJsonObject.Type;
+			}[];
 			knob?: { keyCode: "0,1"; config: typeof ProfileJsonObject.Type };
 			unchangedBuiltin: boolean;
 		}
@@ -413,7 +417,15 @@ export function mergeBackup(
 				);
 			});
 		const knob = keys.find((key) => key.keyCode === "0,1");
-		const page = { id: parts[1] ?? "1", keys: pageKeys };
+		const page = {
+			id: parts[1] ?? "1",
+			keys: pageKeys,
+			compatibility: {
+				backupResource: rewrite(
+					withoutCredentials(Schema.decodeUnknownSync(ProfileJson)(resource)),
+				),
+			},
+		};
 		const existing = pending.get(group);
 		if (existing) {
 			existing.pages.push(page);
@@ -484,6 +496,18 @@ export function mergeBackup(
 		seenProfiles.add(content);
 		added++;
 	}
+	// Keep the original taxonomy and extra metadata in existing legacy storage.
+	// The payload uses owned rewritten paths and content IDs, never source paths.
+	const catalog = rewrite(
+		withoutCredentials(
+			Schema.decodeUnknownSync(ProfileJson)([{ data: records }]),
+		),
+	);
+	const catalogBytes = Buffer.from(JSON.stringify(catalog));
+	portable.legacyFiles.set(
+		`resource-catalog-${hashBytes(catalogBytes)}/resources.json`,
+		catalogBytes,
+	);
 	assertCapacity(envelope, profiles);
 	return {
 		envelope: encodeProfileEnvelope({
@@ -512,18 +536,44 @@ export function backupProjection(
 	const current = Schema.decodeUnknownSync(ProfileEnvelope)(envelope);
 	const jsonBytes = (value: unknown) => Buffer.from(JSON.stringify(value));
 	const assetPaths = new Map<string, string>();
-	const resourceRows = assets.map(({ source, bytes }) => {
-		const id = hashBytes(bytes);
-		const relative = `app/assets/resource/${id}`;
-		files.set(relative, bytes);
-		assetPaths.set(source.replaceAll("\\", "/"), `${base}/${relative}`);
-		return {
-			id: `backup-resource:${id}`,
-			name: id,
-			path: `${base}/${relative}`,
-			resourceType: "File",
-		};
-	});
+	const metadata = assets
+		.filter((asset) =>
+			/\/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(asset.source),
+		)
+		.flatMap(({ bytes }) =>
+			Schema.decodeUnknownSync(ResourceGroups, {
+				onExcessProperty: "preserve",
+			})(json(bytes)).flatMap((group) => group.data),
+		);
+	const resourceRows = assets
+		.filter(
+			(asset) =>
+				!/\/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(asset.source),
+		)
+		.flatMap(({ source, bytes }) => {
+			const id = hashBytes(bytes);
+			const relative = `app/assets/resource/${id}`;
+			files.set(relative, bytes);
+			assetPaths.set(source.replaceAll("\\", "/"), `${base}/${relative}`);
+			const retained = [
+				...new Map(
+					metadata
+						.filter(
+							(entry) =>
+								entry.path.replaceAll("\\", "/") ===
+								source.replaceAll("\\", "/"),
+						)
+						.map((entry) => [stable(entry), entry]),
+				).values(),
+			];
+			return (retained.length ? retained : [undefined]).map((entry) => ({
+				...entry,
+				id: `backup-resource:${id}`,
+				name: entry?.name ?? id,
+				path: `${base}/${relative}`,
+				resourceType: entry?.resourceType ?? "File",
+			}));
+		});
 	const projectPaths = (value: ProfileJson): ProfileJson => {
 		if (typeof value === "string")
 			return assetPaths.get(value.replaceAll("\\", "/")) ?? value;
@@ -551,7 +601,13 @@ export function backupProjection(
 					),
 				),
 			);
+			const retained =
+				Option.isSome(page.compatibility) &&
+				Schema.is(ProfileJsonObject)(page.compatibility.value.backupResource)
+					? page.compatibility.value.backupResource
+					: {};
 			return {
+				...retained,
 				id,
 				name: `${index + 1},${pageIndex + 1},1`,
 				path: `${base}/${relative}`,
