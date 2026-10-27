@@ -99,3 +99,7 @@ beads remain open for lead integration.
 - [x] 8.2 Connect authorized management opening and specify/test multi-screen no-op. Bead open-quake-lih.10.22/.24.
 
 Key-runtime section 8 evidence: real hidden mock Electron timer zero/clear and typed completion, pageNo, 42% progress and checkmark passed with EN/DE captures on 2026-10-27. Root tests: 5001 passed, four existing skips. Build, both bundle checks, typecheck and Biome passed. Existing OpenSpec 1.15 strict long-requirement failures remain tracked in open-quake-lih.23.2; no added lane requirement has a diagnostic. Screenshots and logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/. Physical display acceptance remains unverified; beads remain open for lead integration.
+
+## PR #127 final hosted-validation fix
+
+- [x] Preserve grid-library capacity feedback and save behavior while removing repeated sequence dropdown construction. Bead `open-quake-lih.10.27`; implementation and focused regression evidence are recorded in `key-function-library/tasks.md`. Hosted validation of the new head remains for the lead.

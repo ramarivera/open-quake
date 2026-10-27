@@ -38,3 +38,7 @@ Evidence for tasks 1.1–1.4 is recorded in `verification.md`. Parent owns Beads
 - [x] 8.3 Implement saved nested folder/profile navigation using existing allocation and selection. Bead open-quake-lih.10.24.
 
 Key-runtime verification on 2026-10-27: 5001 root tests passed, four existing skips, six package typechecks passed, Biome had zero errors, build and both bundle checks passed. The existing hidden mock native smoke passed with EN/DE timer, page indicator, progress and checkmark captures. MAIN-076 and plugin MAIN-066 remain partial under open-quake-lih.10.25. OpenSpec 1.15 strict reports 9 passed and 38 failed from existing long-requirement warnings, tracked in open-quake-lih.23.2; the added lane requirements have no diagnostics. Physical QUAKE and native Linux/Windows acceptance remain unverified. All lane beads stay open for lead integration.
+
+## PR #127 final hosted-validation fix
+
+- [x] Reuse immutable sequence dropdown options and a compiled support predicate across rows. Bead `open-quake-lih.10.27`. Preserve the 100-operation capacity, rejection feedback, single-write save and canonical Close draft/value/force behavior. Verification lives in the bead and supplied scratch directory; hosted validation remains for the lead.
