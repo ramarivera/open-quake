@@ -1517,14 +1517,17 @@ describe("desktop main with the real device service and fake HID", () => {
 	});
 
 	afterEach(async () => {
-		const priorQuits = electron.app.quit.mock.calls.length;
-		const event = appEvent("before-quit");
-		if (event.preventDefault.mock.calls.length > 0)
-			await vi.waitFor(() =>
-				expect(electron.app.quit.mock.calls.length).toBeGreaterThan(priorQuits),
-			);
-		vi.useRealTimers();
-		vi.unstubAllEnvs();
+		try {
+			const priorQuits = electron.app.quit.mock.calls.length;
+			const event = appEvent("before-quit");
+			if (event.preventDefault.mock.calls.length > 0)
+				await vi.waitFor(() =>
+					expect(electron.app.quit.mock.calls.length).toBeGreaterThan(priorQuits),
+				);
+		} finally {
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		}
 	});
 
 	async function start(): Promise<void> {
