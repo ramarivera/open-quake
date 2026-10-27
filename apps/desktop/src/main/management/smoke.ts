@@ -87,6 +87,7 @@ const backupFile = join(directory, "synthetic-native-backup.zip");
 dialog.showSaveDialog = async () => ({ canceled: false, filePath: backupFile });
 shell.showItemInFolder = () => {};
 app.setPath("userData", directory);
+if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 let selectedFile: string | undefined;
 let selectedFiles: string[] | undefined;
 dialog.showOpenDialog = async () => ({
@@ -160,6 +161,8 @@ async function smoke() {
 	} as const;
 	const win = new BrowserWindow(options),
 		panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
+	win.webContents.setAudioMuted(true);
+	panel.webContents.setAudioMuted(true);
 	const calls = { themes: 0, assets: [] as string[] };
 	const handle = ipcMain.handle.bind(ipcMain);
 	ipcMain.handle = (channel, listener) =>
@@ -428,6 +431,57 @@ async function smoke() {
 			panel.loadURL(`${renderer}?surface=panel`),
 		]);
 		await settle(500);
+		// Assistant-routing parity: production RPC, persisted persona and mounted controls.
+		await activate("openclaw-ai");
+		await waitFor(
+			"document.querySelector('[aria-label=\"Assistant personality\"] input[type=range]')",
+		);
+		await js(
+			`(()=>{const section=document.querySelector('[aria-label="Assistant personality"]');const custom=section.querySelector('input[id$="-custom"]');if(!custom.checked)custom.click();})()`,
+		);
+		await waitFor(
+			"document.querySelector('[aria-label=\"Assistant personality\"] textarea')",
+		);
+		await js(
+			`(()=>{const el=document.querySelector('[aria-label="Assistant personality"] textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'Local smoke persona');el.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+		);
+		await js(
+			`Array.from(document.querySelector('[aria-label="Assistant personality"]').querySelectorAll('button')).find(b=>b.textContent==='Update').click()`,
+		);
+		await waitFor(
+			"Array.from(document.querySelectorAll('[aria-label=\"Assistant personality\"] [role=status]')).some(el=>el.textContent.includes('Assistant updated'))",
+		);
+		assert.equal(
+			await js("window.quakeChat.persona.read().then(s=>s.customPrompt)"),
+			"Local smoke persona",
+		);
+		for (const language of ["en", "de"]) {
+			await js(`window.quakeLocale.set('${language}')`);
+			await waitFor(`document.documentElement.lang==='${language}'`);
+			const label =
+				language === "en"
+					? "Assistant personality"
+					: "Assistentenpersönlichkeit";
+			await waitFor(
+				`document.querySelector('[aria-label="${label}"] textarea')?.value==='Local smoke persona'`,
+			);
+			await js(
+				`document.querySelector('[aria-label="${label}"]').scrollIntoView({block:'start'});null;`,
+			);
+			await capture(`assistant-persona-${language}`);
+			await js(
+				`document.querySelector('[aria-label="${label}"] button').scrollIntoView({block:'end'});null;`,
+			);
+			await capture(`assistant-update-${language}`);
+		}
+		await js("window.quakeLocale.set('en')");
+		await waitFor("document.documentElement.lang==='en'");
+		if (process.env.OPEN_QUAKE_SMOKE_ASSISTANT_ONLY === "1") {
+			process.stdout.write(
+				"Assistant routing native smoke PASS: real RPC, saved persona, mounted Update, EN/DE screenshots; hidden and muted.\n",
+			);
+			return;
+		}
 		for (const [query, page, agentTab] of [
 			["page=meetings", "meetings", undefined],
 			["page=meetings&activeTab=emoji", "emoji", undefined],

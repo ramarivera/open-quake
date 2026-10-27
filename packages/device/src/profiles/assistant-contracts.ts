@@ -19,7 +19,9 @@ export const AssistantSettings = Schema.Struct({
 	),
 	customPrompt: Schema.String.pipe(Schema.maxLength(3000)),
 	/** Retained per-key preset text, including the six Chinese Copilot prompts. */
-	rolePrompt: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(3000)), { exact: true }),
+	rolePrompt: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(3000)), {
+		exact: true,
+	}),
 	temperature: Schema.Finite.pipe(Schema.between(0, 2)),
 	topP: Schema.Finite.pipe(Schema.between(0, 1)),
 	thinking: Schema.Boolean,

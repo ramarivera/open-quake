@@ -69,13 +69,14 @@ export const makeDesktopChatConnection = (
 		const owners = sessionOwners.get(host) ?? new Map<string, symbol>();
 		sessionOwners.set(host, owners);
 		yield* Effect.addFinalizer(() => host.assistantVisibility(owner, false));
-    const handlers = ChatRpcs.toLayer({
+		const handlers = ChatRpcs.toLayer({
 			"assistant.read": () =>
 				host.persona.read().pipe(Effect.mapError(rpcFailure)),
 			"assistant.update": ({ settings }) =>
 				host.persona.update(settings).pipe(Effect.mapError(rpcFailure)),
-			"assistant.visibility": ({ visible }) => host.assistantVisibility(owner, visible),
-      "assistant.selection": () => host.selection(),
+			"assistant.visibility": ({ visible }) =>
+				host.assistantVisibility(owner, visible),
+			"assistant.selection": () => host.selection(),
 			"assistant.ack": ({ generation }) =>
 				host.acknowledgeSelection(generation),
 			"provider.files": (input) =>

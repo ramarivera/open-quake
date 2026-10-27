@@ -1,4 +1,3 @@
-import { previewLegacyAssistant } from "../../../../../../packages/device/src/profiles/assistant-legacy";
 import { Either, Schema } from "effect";
 import { useState } from "react";
 import type { KnobSlot } from "../../../../../../packages/device/src/knob/knob-contracts";
@@ -6,6 +5,7 @@ import {
 	AssistantSettings,
 	defaultAssistantSettings,
 } from "../../../../../../packages/device/src/profiles/assistant-contracts";
+import { previewLegacyAssistant } from "../../../../../../packages/device/src/profiles/assistant-legacy";
 import { Row } from "../ui/Form";
 import { AgentRouteFields } from "./AgentRouteFields";
 import { AssistantControls, useAssistantCatalog } from "./AssistantEditor";
@@ -55,7 +55,15 @@ export function KnobAssistantSettings({
 	const settings =
 		("assistantSettings" in slot.config
 			? slot.config.assistantSettings
-			: undefined) ?? (Either.isRight(parsed) ? parsed.right : route === "legacyAssistant" ? { ...previewLegacyAssistant(originalText), modelRowId: fallback.modelRowId } : fallback);
+			: undefined) ??
+		(Either.isRight(parsed)
+			? parsed.right
+			: route === "legacyAssistant"
+				? {
+						...previewLegacyAssistant(originalText),
+						modelRowId: fallback.modelRowId,
+					}
+				: fallback);
 	const resolvedRow =
 		(view?.models.default ?? []).find((r) => r.id === settings.modelRowId) ??
 		(view?.models.default ?? []).find((r) => r.role === "default");
@@ -147,7 +155,9 @@ export function KnobAssistantSettings({
 						onModel={(id) => selectAgent(agent, id)}
 					/>
 					<p role="status">
-						{t("Capture requires a connected agent runtime with this saved agent. The default model is used when no model is selected.")}
+						{t(
+							"Capture requires a connected agent runtime with this saved agent. The default model is used when no model is selected.",
+						)}
 					</p>
 				</>
 			) : (

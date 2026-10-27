@@ -125,9 +125,26 @@ it.effect("disabled knob voice input cannot pin a capture route", () =>
 	}),
 );
 
-it.effect("KNOB-032 pins the committed DK Claw identity and optional model without a direct provider", () => Effect.gen(function* () {
- for (const model of ["", "retained/unknown"]) {
-   const pinned = yield* pinKnobProfile(envelope([{ type: "voiceRoute", value: "dkclaw" }, { type: "agentId", value: "writer" }, ...(model ? [{ type: "dkclawModel", value: model }] : [])]), "QK");
-   expect(pinned).toMatchObject({ route: "dkclaw", agentId: "writer", modelId: model, providerId: "", revision: 7 });
- }
-}));
+it.effect(
+	"KNOB-032 pins the committed DK Claw identity and optional model without a direct provider",
+	() =>
+		Effect.gen(function* () {
+			for (const model of ["", "retained/unknown"]) {
+				const pinned = yield* pinKnobProfile(
+					envelope([
+						{ type: "voiceRoute", value: "dkclaw" },
+						{ type: "agentId", value: "writer" },
+						...(model ? [{ type: "dkclawModel", value: model }] : []),
+					]),
+					"QK",
+				);
+				expect(pinned).toMatchObject({
+					route: "dkclaw",
+					agentId: "writer",
+					modelId: model,
+					providerId: "",
+					revision: 7,
+				});
+			}
+		}),
+);

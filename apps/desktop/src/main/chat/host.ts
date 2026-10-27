@@ -188,7 +188,7 @@ export const rpcFailure = (error: ChatError | AiError): ChatRpcFailure =>
 	new ChatRpcFailure({ code: error.code, message: error.message });
 export function prepareDirectChat(options: DirectChatOptions) {
 	const persona = desktopPersona(options.directory);
-  const visibleConsumers = new Set<symbol>();
+	const visibleConsumers = new Set<symbol>();
 	let selection: AssistantSelection | null = null;
 	let selectionGeneration = 0;
 	const sessionSettings = new Map<SessionId, AssistantSettings>();
@@ -257,7 +257,8 @@ export function prepareDirectChat(options: DirectChatOptions) {
 							const assertCurrent = Effect.suspend(() =>
 								isCurrent() ? Effect.void : Effect.fail(new AiUnavailable()),
 							);
-							const keySettings = assistant ?? sessionSettings.get(input.sessionId);
+							const keySettings =
+								assistant ?? sessionSettings.get(input.sessionId);
 							const requestedSettings =
 								keySettings ??
 								(scope === "main" ? yield* persona.readSaved() : undefined);
@@ -378,11 +379,11 @@ export function prepareDirectChat(options: DirectChatOptions) {
 													systemPrompt:
 														settings.roleId === -1
 															? settings.customPrompt
-															: (settings.rolePrompt ||
+															: settings.rolePrompt ||
 																ROLE_PRESETS.find(
 																	(r) => r.id === settings.roleId,
-																 )?.prompt ||
-																""),
+																)?.prompt ||
+																"",
 												}
 											: {}),
 										profileId: profile.id,
@@ -486,9 +487,34 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			};
 			return {
 				runtime,
-				persona,
-        assistantVisible: () => Effect.sync(() => visibleConsumers.size > 0),
-        assistantVisibility: (owner: symbol, visible: boolean) => Effect.sync(() => { if (visible) visibleConsumers.add(owner); else visibleConsumers.delete(owner); }),
+				persona: {
+					read: () =>
+						Effect.suspend(() => {
+							const settings =
+								selection && sessionSettings.get(selection.sessionId);
+							return settings ? Effect.succeed(settings) : persona.read();
+						}),
+					update: Effect.fn("DesktopChat.updatePersona")(function* (
+						input: AssistantSettings,
+					) {
+						// Capture the destination before persistence yields. A newer key
+						// selection must never inherit an update meant for this one.
+						const sessionId = selection?.sessionId;
+						const saved = yield* persona.update(input);
+						if (sessionId && sessionSettings.has(sessionId)) {
+							sessionSettings.set(sessionId, saved);
+							if (selection?.sessionId === sessionId)
+								selection = { ...selection, settings: saved };
+						}
+						return saved;
+					}),
+				},
+				assistantVisible: () => Effect.sync(() => visibleConsumers.size > 0),
+				assistantVisibility: (owner: symbol, visible: boolean) =>
+					Effect.sync(() => {
+						if (visible) visibleConsumers.add(owner);
+						else visibleConsumers.delete(owner);
+					}),
 				selection: () => Effect.sync(() => selection),
 				selectAssistant: (
 					sessionId: SessionId,

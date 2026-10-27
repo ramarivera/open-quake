@@ -25,22 +25,39 @@ export function useAssistantSelection(
 					return;
 				}
 				const state = controller.getSnapshot();
-				if (selection.generation < seen.current || state.pending || state.clearing) return;
+				if (
+					selection.generation < seen.current ||
+					state.pending ||
+					state.clearing
+				)
+					return;
 				await controller.select(selection.sessionId);
 				if (!alive) return;
 				const latest = await bridge.selection?.();
 				const current = controller.getSnapshot();
 				if (
-					!alive || latest?.generation !== selection.generation ||
-					current.sessionId !== selection.sessionId || current.pending || current.clearing
-				) return;
+					!alive ||
+					latest?.generation !== selection.generation ||
+					current.sessionId !== selection.sessionId ||
+					current.pending ||
+					current.clearing
+				)
+					return;
 				seen.current = selection.generation;
-				if (selection.transcript) setText(draft => draft ? `${draft}\n${selection.transcript}` : selection.transcript ?? draft);
+				if (selection.transcript)
+					setText((draft) =>
+						draft
+							? `${draft}\n${selection.transcript}`
+							: (selection.transcript ?? draft),
+					);
 				await bridge.acknowledgeSelection?.(selection.generation);
 			} catch {
 				// Keep the host selection pending for the next read.
 			} finally {
-				if (alive) timer = setTimeout(() => { void read(); }, 300);
+				if (alive)
+					timer = setTimeout(() => {
+						void read();
+					}, 300);
 			}
 		};
 		void read();

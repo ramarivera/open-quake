@@ -52,8 +52,19 @@ export interface SpeechProfiles {
 	readonly speakAnswers: boolean;
 }
 export interface ProductionVoiceOptions {
-  readonly pinAgentRoute?: (snapshot: KnobCaptureSnapshot) => Effect.Effect<import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").PinnedAgentRoute, VoiceKnobRejected>;
-  readonly prepareAssistant?: (request: CaptureRequest) => Effect.Effect<{ readonly assistantSettings: import("../../../../../packages/device/src/profiles/assistant-contracts").AssistantSettings; readonly directModel: PinnedDirectModel }, VoiceRuntimeUnavailable>;
+	readonly pinAgentRoute?: (
+		snapshot: KnobCaptureSnapshot,
+	) => Effect.Effect<
+		import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").PinnedAgentRoute,
+		VoiceKnobRejected
+	>;
+	readonly prepareAssistant?: (request: CaptureRequest) => Effect.Effect<
+		{
+			readonly assistantSettings: import("../../../../../packages/device/src/profiles/assistant-contracts").AssistantSettings;
+			readonly directModel: PinnedDirectModel;
+		},
+		VoiceRuntimeUnavailable
+	>;
 	readonly pinDirectModel?: (
 		snapshot: KnobCaptureSnapshot,
 	) => Effect.Effect<PinnedDirectModel, VoiceKnobRejected>;
@@ -264,11 +275,20 @@ export const createProductionVoiceRuntime = Effect.fn(
 					else knobProfiles.delete(request.serial);
 					const body = Effect.gen(function* () {
 						yield* stage(owner, { _tag: "recording", status: "preparing" });
-            const prepared = request.type === "aiChat" && options.prepareAssistant ? yield* options.prepareAssistant(request) : undefined;
-            const assistantSettings = prepared?.assistantSettings ?? request.assistantSettings;
-            if (assistantSettings?.enableVoiceInput === false) return yield* new VoiceRuntimeUnavailable();
-						const agentRoute = request.knob?.route === "dkclaw" ? yield* (options.pinAgentRoute?.(request.knob) ?? Effect.fail(new VoiceKnobRejected("RouteUnavailable"))) : undefined;
-            const [directModel] = yield* Effect.all(
+						const prepared =
+							request.type === "aiChat" && options.prepareAssistant
+								? yield* options.prepareAssistant(request)
+								: undefined;
+						const assistantSettings =
+							prepared?.assistantSettings ?? request.assistantSettings;
+						if (assistantSettings?.enableVoiceInput === false)
+							return yield* new VoiceRuntimeUnavailable();
+						const agentRoute =
+							request.knob?.route === "dkclaw"
+								? yield* options.pinAgentRoute?.(request.knob) ??
+										Effect.fail(new VoiceKnobRejected("RouteUnavailable"))
+								: undefined;
+						const [directModel] = yield* Effect.all(
 							[
 								(prepared?.directModel ?? request.directModel)
 									? Effect.succeed(prepared?.directModel ?? request.directModel)
@@ -421,8 +441,9 @@ export const createProductionVoiceRuntime = Effect.fn(
 						yield* metrics.stop;
 						const characters = Array.from(transcript.trim());
 						const tooShort =
-							characters.length < 2 ||
-							(characters.length === 2 && /[。.]$/.test(transcript.trim()));
+							isKnobVoiceKey(request.keyCode) &&
+							(characters.length < 2 ||
+								(characters.length === 2 && /[。.]$/.test(transcript.trim())));
 						if (tooShort || !/[\p{L}\p{N}]/u.test(transcript)) {
 							terminal = "empty";
 							yield* stage(owner, {
@@ -446,18 +467,28 @@ export const createProductionVoiceRuntime = Effect.fn(
 							agentId: Option.getOrElse(request.agentId, () => ""),
 							message: transcript.slice(0, 8000),
 							...(request.knob ? { knob: request.knob } : {}),
-							...(assistantSettings
-								? { assistantSettings }
-								: {}),
+							...(assistantSettings ? { assistantSettings } : {}),
 							...(directModel ? { directModel } : {}),
-              ...(agentRoute ? { agentRoute } : {}),
+							...(agentRoute ? { agentRoute } : {}),
 						});
 						owner.terminal = true;
 					});
 					const fiber = yield* start.await.pipe(
 						Effect.zipRight(instrument(body, "speech.capture")),
 						Effect.catchAll((error) => {
-              if (error instanceof VoiceKnobRejected && error.code.startsWith("VOICE.KNOB.GATEWAY_")) return surface.rejectBusy(request.serial, request.keyCode, error.code === "VOICE.KNOB.GATEWAY_STOPPED" ? "aiAudio.openClawGatewayNotRunning" : error.code === "VOICE.KNOB.GATEWAY_STARTING" ? "aiAudio.openClawGatewayStarting" : "aiAudio.openClawNotReady");
+							if (
+								error instanceof VoiceKnobRejected &&
+								error.code.startsWith("VOICE.KNOB.GATEWAY_")
+							)
+								return surface.rejectBusy(
+									request.serial,
+									request.keyCode,
+									error.code === "VOICE.KNOB.GATEWAY_STOPPED"
+										? "aiAudio.openClawGatewayNotRunning"
+										: error.code === "VOICE.KNOB.GATEWAY_STARTING"
+											? "aiAudio.openClawGatewayStarting"
+											: "aiAudio.openClawNotReady",
+								);
 							const failure =
 								error instanceof AiUnavailable &&
 								error.originalCause instanceof DesktopSpeechError

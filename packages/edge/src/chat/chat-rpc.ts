@@ -56,8 +56,11 @@ export const ChatRpcs = RpcGroup.make(
 		success: AssistantSettings,
 		error: ChatRpcFailure,
 	}),
-	Rpc.make("assistant.visibility", { payload: { visible: Schema.Boolean }, error: ChatRpcFailure }),
-  Rpc.make("assistant.selection", {
+	Rpc.make("assistant.visibility", {
+		payload: { visible: Schema.Boolean },
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("assistant.selection", {
 		success: Schema.NullOr(AssistantSelection),
 		error: ChatRpcFailure,
 	}),

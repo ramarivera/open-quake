@@ -4,10 +4,10 @@ import {
 	legacyAssistantState,
 	migrateLegacyAiConfig,
 } from "../../../edge/src/ai/provider-catalog.js";
-import { upgradeAssistantTitle } from "./profile-assistant-migration.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
+import { upgradeAssistantTitle } from "./profile-assistant-migration.js";
 import {
 	Profile,
 	ProfileJson,

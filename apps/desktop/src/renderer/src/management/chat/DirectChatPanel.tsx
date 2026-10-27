@@ -18,8 +18,8 @@ import { fill, relativeTime } from "./format";
 import { Icon } from "./icons";
 import type { DirectChatModel } from "./model-scope";
 import { Prose } from "./Prose";
-import { useAssistantSelection } from "./useAssistantSelection";
 import strings from "./strings.json";
+import { useAssistantSelection } from "./useAssistantSelection";
 import "./workspace.css";
 
 export type ChatStrings = (typeof strings)["en"];

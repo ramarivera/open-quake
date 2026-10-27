@@ -586,7 +586,11 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								return;
 							}
 							if (event.code === 1) {
-                if (ports.assignedPress && (yield* ports.assignedPress(state.context))) return;
+								if (
+									ports.assignedPress &&
+									(yield* ports.assignedPress(state.context))
+								)
+									return;
 								if (state.focus._tag === "tile" && ports.focusedPress) {
 									const focusedCode = state.focus.keyCode;
 									const key = state.context.keys.find(

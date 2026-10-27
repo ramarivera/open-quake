@@ -288,7 +288,11 @@ Meeting ASR, upload and live translation SHALL compose the existing AiProviderSe
 
 
 ### Requirement: Assistant routing and per-key persona pinning
-AI-081, AI-088, AI-089 and AI-241 SHALL bind reviewed imported assistant settings to an isolated per-key session and explicit dictation target. Capture SHALL refuse offline or invalid model configuration before microphone acquisition, publish preparing, and cancel a released preparation without submitting. A visible wake-chat destination SHALL receive the transcript and selected session/settings; direct mode SHALL submit once. Rejected sends SHALL retain the transcript. Imported payloads SHALL remain inert until explicitly reviewed and saved.
+AI-081, AI-088, AI-089 and AI-241 SHALL bind reviewed imported assistant settings to an isolated per-key session and explicit dictation target. Imported payloads SHALL remain inert until explicitly reviewed and saved.
+
+#### Scenario: Capture admission and early release
+- **WHEN** a reviewed key starts capture
+- **THEN** capture refuses offline or invalid model configuration before microphone acquisition, publishes preparing, and cancels a released preparation without submitting
 
 #### Scenario: Reviewed legacy keys retain independent sessions
 - **WHEN** two reviewed keys with different saved models, history settings and wake-window choices are held and released
@@ -296,7 +300,7 @@ AI-081, AI-088, AI-089 and AI-241 SHALL bind reviewed imported assistant setting
 
 #### Scenario: Wake dictation and direct submission
 - **WHEN** a final transcript arrives for a wake-window key
-- **THEN** the selected desktop session receives editable dictation and no background inference runs, while a direct key submits once and preserves its transcript on refusal
+- **THEN** the selected desktop session receives editable dictation and its pinned settings, with no background inference, while a direct key submits once and preserves its transcript on refusal
 
 ### Requirement: Retained Copilot key execution and title migration
 AI-117, MGMT-358, MGMT-359 and SETTINGS-110 SHALL execute all six shipped Copilot keys with their per-key Chinese prompts, thinking and search controls. On import and persisted profile read, aiChat keys identified by the six role IDs 128/6/8/93/129/84 or their exact built-in title i18n keys SHALL upgrade an existing false title edit flag to true. The migration SHALL preserve user titles, actions and every other edit flag and SHALL be idempotent.
@@ -318,3 +322,8 @@ AI-228, AI-229 and AI-230 SHALL offer filterable System Role selection, Custom R
 #### Scenario: Update during a turn
 - **WHEN** a user changes preset/custom role or sampling and presses Update during a running turn, then reloads the controls and sends again
 - **THEN** the active request remains unchanged and the next request uses the persisted new persona and sampling
+
+#### Scenario: Update a device-selected desktop session
+- **WHEN** a device key selects a desktop session and the user opens the persona controls and presses Update
+- **THEN** the controls read that session's settings and the next desktop turn in that session uses the updated prompt and sampling
+- **AND** another key's session and an already admitted request remain unchanged

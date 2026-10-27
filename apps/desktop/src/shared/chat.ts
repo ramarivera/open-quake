@@ -26,7 +26,7 @@ export interface DirectChatBridge {
 		) => Promise<AssistantSettings>;
 	};
 	readonly assistantVisibility?: (visible: boolean) => Promise<void>;
-  readonly selection?: () => Promise<AssistantSelection | null>;
+	readonly selection?: () => Promise<AssistantSelection | null>;
 	readonly acknowledgeSelection?: (generation: number) => Promise<void>;
 	readonly files?: (input: PublicFileRequest) => Promise<FileResult>;
 	readonly providers?: () => Promise<ProviderListing>;

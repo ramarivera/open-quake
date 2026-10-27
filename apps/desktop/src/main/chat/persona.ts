@@ -21,8 +21,14 @@ export function desktopPersona(directory: string) {
 		})(raw).pipe(Effect.mapError((cause) => new AiConfigInvalid(cause)));
 	});
 	return {
-    read: () => read().pipe(Effect.map(value => value ?? { ...defaultAssistantSettings(), useAgent: false })),
-    readSaved: read,
+		read: () =>
+			read().pipe(
+				Effect.map(
+					(value) =>
+						value ?? { ...defaultAssistantSettings(), useAgent: false },
+				),
+			),
+		readSaved: read,
 		update: (input: AssistantSettings) =>
 			lock.withPermits(1)(
 				Effect.gen(function* () {

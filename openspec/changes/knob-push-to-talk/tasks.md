@@ -52,4 +52,23 @@ passed 24 tests across `voice-ipc.test.ts` and `runtime-knob.test.ts`.
 
 ## 5. Assistant-routing burn-down
 
-- [ ] 5.1 Complete saved agent/HA routes and short speech terminal. Bead open-quake-lih.15.15.
+- [x] 5.1 Complete saved agent/HA routes and short speech terminal. Bead open-quake-lih.15.15.
+
+
+Task 5.1 software evidence: `knob/voice-route.test.ts`,
+`agent-http/knob-route.test.ts`, `agent-http/voice-adapter.test.ts` and
+`speech/runtime.test.ts` exercise committed agent/model pinning, phase refusals
+before microphone permission, ready fake-socket recognition and outbound saved
+identity. Short recognition applies only to knob captures; existing grid
+transcript-policy tests retain meaningful one-character speech. The mounted
+knob editor and `knob/assigned-ha.test.ts` prove save/import/configData retention,
+configured HA execution, stale identity and cancellation. Auto HA returns its
+action result without redundant response inference.
+
+Root tests passed 4,983 with four skips; six typecheck tasks, build, both bundle
+modes and hidden persona mock smoke passed. Strict OpenSpec retains the shared
+9 pass / 38 fail length-warning issue open-quake-lih.23.2; the new requirements
+are not flagged. Bead open-quake-lih.15.15 stays open for lead review and merge.
+Physical gestures, Linux audio, actual runtime/provider connectivity, real HA,
+microphone and playback remain unverified. Earlier physical and route tasks
+remain untouched.

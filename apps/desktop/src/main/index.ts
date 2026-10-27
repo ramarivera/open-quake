@@ -302,10 +302,15 @@ if (!app.requestSingleInstanceLock()) {
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
 						const httpModule = prepareAgentHttp({
-              localAgents: async () => {
-                const view = await agentsModule.runtime.runPromise(AgentsService.view());
-                return { status: view.runtime.status, agentIds: view.agents.map(a => a.id) };
-              },
+							localAgents: async () => {
+								const view = await agentsModule.runtime.runPromise(
+									AgentsService.view(),
+								);
+								return {
+									status: view.runtime.status,
+									agentIds: view.agents.map((a) => a.id),
+								};
+							},
 							diagnostics,
 							management: () => managementWin,
 							renderer: rendererURL,
@@ -338,7 +343,8 @@ if (!app.requestSingleInstanceLock()) {
 													?.keys.find((k) => k.keyCode === keyCode);
 												return (
 													key?.config.assistantSettings ??
-													(key?.config.type === "aiChat" && !key.config.aiConfigData
+													(key?.config.type === "aiChat" &&
+													!key.config.aiConfigData
 														? assistantSettingsFromActions(key.config.actions)
 														: undefined)
 												);
@@ -404,8 +410,9 @@ if (!app.requestSingleInstanceLock()) {
 									}),
 								),
 							speech: {
-                pinAgentRoute: snapshot => httpModule.pinKnobRoute(snapshot),
-                prepareAssistant: request => assistantCapturePreparer(directChat)(request),
+								pinAgentRoute: (snapshot) => httpModule.pinKnobRoute(snapshot),
+								prepareAssistant: (request) =>
+									assistantCapturePreparer(directChat)(request),
 								localResume: fileStore(
 									app.getPath("userData"),
 									"local-player-resume-v1.json",
@@ -593,7 +600,8 @@ if (!app.requestSingleInstanceLock()) {
 							() => [panelWin, managementWin],
 							{
 								media: mediaActions,
-                homeAssistant: (key, signal, isCurrent) => integrations.executeHaFromKey(key, signal, isCurrent),
+								homeAssistant: (key, signal, isCurrent) =>
+									integrations.executeHaFromKey(key, signal, isCurrent),
 								readVolume: Effect.tryPromise({
 									try: (signal) =>
 										weatherModule.runtime.runPromise(HostVolume.read, {

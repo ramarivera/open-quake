@@ -89,5 +89,22 @@ route. The three task beads stay open for lead review and merge.
 
 ## 9. Assistant-routing burn-down
 
-- [ ] 9.1 Complete key/persona execution and title migration. Bead open-quake-lih.15.13.
-- [ ] 9.2 Complete legacy prompt catalog and desktop persona updates. Bead open-quake-lih.15.14.
+- [x] 9.1 Complete key/persona execution and title migration. Bead open-quake-lih.15.13.
+- [x] 9.2 Complete legacy prompt catalog and desktop persona updates. Bead open-quake-lih.15.14.
+
+
+Assistant-routing software evidence: `chat/transport.test.ts` drives per-key
+sessions, wake dictation, six Copilot roles and subsequent-turn persona Update
+through real RPC and loopback providers. `AssistantEditor.test.tsx` covers
+review/save/reopen, role controls and sampling; `useAssistantSelection.test.tsx`
+covers transcript acknowledgement races. Device profile tests cover idempotent
+title repair; edge catalog tests cover retained locales, exclusions and fallback.
+
+Final lane gates passed 4,983 root tests with four skips, six typecheck tasks,
+the desktop build and both bundle modes. Hidden, muted native mock smoke passed
+real persona RPC and Update with EN/DE screenshots in lane SSD scratch. Strict
+OpenSpec 1.15.0 remains 9 pass / 38 fail from inherited requirement-length
+warnings, tracked in open-quake-lih.23.2. None of the new lane requirements are
+flagged. Linux execution, physical QUAKE, microphone, playback, real HA and paid
+providers remain unverified. Beads .15.13 and .15.14 stay open for lead review
+and merge; task 8.4 and physical/live acceptance remain open.

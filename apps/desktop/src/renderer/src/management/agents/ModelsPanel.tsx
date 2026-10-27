@@ -625,7 +625,7 @@ export function ModelsPanel({
 				</button>
 			</nav>
 			<div hidden={tab !== "default"}>
-        <PersonaSettings rows={view.models.default ?? []} />
+				<PersonaSettings rows={view.models.default ?? []} />
 				<ModelTable
 					key="default"
 					scope="default"
