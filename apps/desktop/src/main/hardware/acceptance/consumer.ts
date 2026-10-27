@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import type { HardwareCommand, HardwareReply } from "@open-quake/protocol";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Stream } from "effect";
 import { canonicalHidSerial } from "../../../../../../packages/device/src/device-contracts.js";
 import { QuakeDevice } from "../../../../../../packages/device/src/device-service.js";
+import {
+	HardwareCommandRejected,
+	HardwareReplyTimeout,
+} from "../../../../../../packages/device/src/hardware/hardware-errors.js";
 import { HardwareControls } from "../../../../../../packages/device/src/hardware/hardware-service.js";
 import { HidTransport } from "../../../../../../packages/device/src/hid-transport.js";
 import { safeCause } from "../../diagnostics/privacy.js";
@@ -185,8 +190,11 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 				assert.equal((yield* session.snapshot()).available, true);
 			}),
 		);
-		// A raw query uses a subscription acquired before the send, retaining one native owner.
-		const readState = (feature: "mic" | "luminance" | "knobLed") =>
+		// Restoration bypasses poisoned controls but still consumes each set's ACK.
+		const rawExchange = (
+			command: HardwareCommand,
+			tag: HardwareReply["_tag"],
+		) =>
 			Effect.scoped(
 				Effect.gen(function* () {
 					const stream = yield* connection.subscribe();
@@ -194,34 +202,49 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 						stream.pipe(
 							Stream.filter(
 								(event) =>
-									event._tag === "HardwareReply" &&
-									event.reply._tag ===
-										(
-											{
-												mic: "MicState",
-												luminance: "LuminanceState",
-												knobLed: "KnobLedState",
-											} as const
-										)[feature],
+									event._tag === "HardwareReply" && event.reply._tag === tag,
 							),
 						),
 					).pipe(Effect.interruptible, Effect.forkScoped);
-					yield* connection.sendHardware({ _tag: "Query", feature });
+					yield* connection.sendHardware(command);
 					const event = yield* Fiber.join(waiter).pipe(
 						Effect.interruptible,
-						Effect.timeout("4 seconds"),
+						Effect.timeoutFail({
+							duration: "4 seconds",
+							onTimeout: () => new HardwareReplyTimeout(),
+						}),
 					);
-					assert(
-						Option.isSome(event) &&
-							event.value._tag === "HardwareReply" &&
-							event.value.reply._tag !== "Ack" &&
-							event.value.reply._tag !== "FirmwareVersion",
-					);
-					return event.value.reply._tag === "LuminanceState"
-						? event.value.reply.value
-						: event.value.reply.on;
+					assert(Option.isSome(event) && event.value._tag === "HardwareReply");
+					return event.value.reply;
 				}),
 			);
+		const readState = (feature: "mic" | "luminance" | "knobLed") =>
+			Effect.gen(function* () {
+				const reply = yield* rawExchange(
+					{ _tag: "Query", feature },
+					(
+						{
+							mic: "MicState",
+							luminance: "LuminanceState",
+							knobLed: "KnobLedState",
+						} as const
+					)[feature],
+				);
+				assert(reply._tag !== "Ack" && reply._tag !== "FirmwareVersion");
+				return reply._tag === "LuminanceState" ? reply.value : reply.on;
+			});
+		const writeState = (
+			command: Extract<
+				HardwareCommand,
+				{ _tag: "Mic" | "Luminance" | "KnobLed" }
+			>,
+		) =>
+			Effect.gen(function* () {
+				const reply = yield* rawExchange(command, "Ack");
+				assert(reply._tag === "Ack");
+				if (reply.status !== 0x90)
+					return yield* new HardwareCommandRejected(reply.status);
+			});
 		const snapshot = yield* session.snapshot();
 		if (
 			options.mutations &&
@@ -232,7 +255,7 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 			const mic = snapshot.mic;
 			const luminance = snapshot.luminance;
 			const restoreMic = Effect.gen(function* () {
-				yield* connection.sendHardware({ _tag: "Mic", on: mic });
+				yield* writeState({ _tag: "Mic", on: mic });
 				assert.equal(
 					yield* readState("mic"),
 					mic,
@@ -260,7 +283,7 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 						assert.equal((yield* session.snapshot()).luminance, next);
 					}),
 					Effect.gen(function* () {
-						yield* connection.sendHardware({
+						yield* writeState({
 							_tag: "Luminance",
 							value: luminance,
 						});
@@ -301,7 +324,7 @@ export const runHardwareAcceptance = Effect.fn("HardwareAcceptance.run")(
 							assert.equal(yield* readState("knobLed"), !original.value);
 						}),
 						Effect.gen(function* () {
-							yield* connection.sendHardware({
+							yield* writeState({
 								_tag: "KnobLed",
 								on: original.value,
 							});

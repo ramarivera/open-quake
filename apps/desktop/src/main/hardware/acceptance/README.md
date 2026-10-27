@@ -20,7 +20,9 @@ write rejection and reopen. It doesn't establish firmware watchdog expiry.
 
 The separately opted-in mutation run also changes microphone, panel luminance
 and knob LED, queries the changed state, restores the original value and queries
-again. Restoration runs on failure and interruption too. A restoration failure
+again. Restoration consumes each setting acknowledgement before sending its query.
+Its independent reply waits have a four-second deadline and retain catalog timeout identity.
+Restoration runs on failure and interruption too. A restoration failure
 is a failed scenario and retains the original failure as well. Product preferences
 are never loaded or written; this suite uses memory-only preferences.
 

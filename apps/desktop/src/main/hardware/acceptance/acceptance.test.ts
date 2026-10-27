@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { encodeHardwareCommand } from "@open-quake/protocol";
-import { Cause, Effect, Either, Exit, Layer } from "effect";
+import { Cause, Effect, Either, Exit, Layer, Stream } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import {
 	fakeHardwareReply,
@@ -228,52 +228,91 @@ it("rejects a replacement serial at connect before opening or writing", async ()
 	expect(JSON.stringify(results)).not.toContain("replacement-private");
 });
 
-it("finishes a missing restoration readback with a timeout instead of hanging cleanup", async () => {
-	let mic = 1;
-	let luminance = 255;
-	let led = 1;
-	let micQueries = 0;
-	const fake = await Effect.runPromise(
-		makeFakeHardwareTransport({
-			serial: "approved",
-			onCommand: ({ opCode, cmdId, subData }) => {
-				if (opCode === 1) {
-					if (cmdId === 3) mic = subData[0] ?? mic;
-					if (cmdId === 5) luminance = subData[0] ?? luminance;
-					if (cmdId === 6) led = subData[0] ?? led;
-					return [fakeHardwareReply(0, [0x90])];
-				}
-				if (opCode !== 2) return [];
-				if (cmdId === 3) {
-					micQueries++;
-					if (micQueries === 4) return [];
-					return [fakeHardwareReply(3, [mic])];
-				}
-				if (cmdId === 5) return [fakeHardwareReply(5, [luminance])];
-				if (cmdId === 6) return [fakeHardwareReply(6, [led])];
-				if (cmdId === 46) return [fakeHardwareReply(46, [1, 1, 0, 21])];
-				return [];
-			},
-		}),
-	);
-	const results = await Effect.runPromise(
-		Effect.scoped(
-			runHardwareAcceptance({
+it.each([false, true])(
+	"bounds restoration and waits for delayed ACKs, missing readback=%s",
+	async (missingReadback) => {
+		let mic = 1;
+		let luminance = 255;
+		let led = 1;
+		let micQueries = 0;
+		let busy = false;
+		const fake = await Effect.runPromise(
+			makeFakeHardwareTransport({
 				serial: "approved",
-				mutations: true,
-				keepAliveIntervalMs: 30,
-				keepAliveObservationMs: 1120,
+				onCommand: ({ opCode, cmdId, subData }) => {
+					if (opCode === 1) {
+						busy = true;
+						if (cmdId === 3) mic = subData[0] ?? mic;
+						if (cmdId === 5) luminance = subData[0] ?? luminance;
+						if (cmdId === 6) led = subData[0] ?? led;
+						return [fakeHardwareReply(0, [0x90])];
+					}
+					if (opCode !== 2 || busy) return [];
+					if (cmdId === 3) {
+						micQueries++;
+						if (missingReadback && micQueries === 4) return [];
+						return [fakeHardwareReply(3, [mic])];
+					}
+					if (cmdId === 5) return [fakeHardwareReply(5, [luminance])];
+					if (cmdId === 6) return [fakeHardwareReply(6, [led])];
+					if (cmdId === 46) return [fakeHardwareReply(46, [1, 1, 0, 21])];
+					return [];
+				},
 			}),
-		).pipe(Effect.provide(fake.layer)),
-	);
-	expect(results.find((item) => item.id === "mic-roundtrip")).toMatchObject({
-		status: "failed",
-		cause: { kind: "Fail", error: { name: "Error" } },
-	});
-	expect(results.find((item) => item.id === "reconnect")?.status).toBe(
-		"passed",
-	);
-	expect(mic).toBe(1);
-	expect(luminance).toBe(255);
-	expect(led).toBe(1);
-}, 10_000);
+		);
+		const delayed = Layer.succeed(HidTransport, {
+			...fake.transport,
+			open: (info) =>
+				fake.transport.open(info).pipe(
+					Effect.map((handle) => ({
+						...handle,
+						reports: handle.reports.pipe(
+							Stream.mapEffect((report) =>
+								report[0] === 0xa3 && report[3] === 0
+									? Effect.sleep(20).pipe(
+											Effect.tap(() =>
+												Effect.sync(() => {
+													busy = false;
+												}),
+											),
+											Effect.as(report),
+										)
+									: Effect.succeed(report),
+							),
+						),
+					})),
+				),
+		});
+		const results = await Effect.runPromise(
+			Effect.scoped(
+				runHardwareAcceptance({
+					serial: "approved",
+					mutations: true,
+					keepAliveIntervalMs: 30,
+					keepAliveObservationMs: 1120,
+				}),
+			).pipe(Effect.provide(delayed)),
+		);
+		if (missingReadback)
+			expect(results.find((item) => item.id === "mic-roundtrip")).toMatchObject(
+				{
+					status: "failed",
+					cause: {
+						kind: "Fail",
+						error: {
+							_tag: "HardwareReplyTimeout",
+							code: "QUAKE.HARDWARE.REPLY_TIMEOUT",
+						},
+					},
+				},
+			);
+		else expect(results.filter((item) => item.status === "failed")).toEqual([]);
+		expect(results.find((item) => item.id === "reconnect")?.status).toBe(
+			"passed",
+		);
+		expect(mic).toBe(1);
+		expect(luminance).toBe(255);
+		expect(led).toBe(1);
+	},
+	10_000,
+);
