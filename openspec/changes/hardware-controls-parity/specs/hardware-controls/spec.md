@@ -174,3 +174,13 @@ The application SHALL bound hardware lifecycle waits and release exclusive hando
 #### Scenario: VIA lease ends
 - **WHEN** its selected device disappears from enumeration, its permission is revoked, or its owning document navigates or ends
 - **THEN** the established VIA lease is denied and released, native reconnect resumes, and unrelated chooser events do not release another lease
+
+#### Scenario: Linux modifier-only host chords
+- **WHEN** explicit host mode holds or taps a chord containing only modifiers
+- **THEN** the Linux keyboard adapter posts only those modifiers, keeps them held until release, and releases them in reverse order without posting ordinary usage zero
+- **AND** chords containing an ordinary key preserve their existing down/up order and 50 millisecond tap duration
+
+#### Scenario: VIA handoff during reconnect
+- **WHEN** VIA requests ownership while its selected native bus is discovering or opening a connection
+- **THEN** handoff waits for in-flight acquisition to settle and closes its native handle before fulfilling the lease, including an uninterruptible late open
+- **AND** the selected bus cannot acquire another native handle until the lease ends, other serials retain their independent ownership, and native reconnect resumes when the lease ends

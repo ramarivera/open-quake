@@ -344,3 +344,46 @@ it.scoped(
 			]);
 		}),
 );
+
+for (const [chord, codes] of [
+	["shift", [42]],
+	["control+shift+alt+meta", [29, 42, 56, 125]],
+	["control+shift+a", [29, 42, 30]],
+] as const) {
+	it.scoped(`Linux holdChord and pressChord preserve ${chord}`, () =>
+		Effect.gen(function* () {
+			const writes: Buffer[] = [];
+			const linux = linuxKeyboardPort({
+				open: () => 10,
+				ioctl: () => {},
+				write: (_fd, bytes) => {
+					writes.push(bytes);
+				},
+				close: () => {},
+			});
+			yield* Effect.addFinalizer(() => Effect.sync(() => linux.close()));
+			const keyboard = hostKeyboardAdapter({
+				...linux,
+				code: (usage) => usage,
+			});
+			const events = () =>
+				writes.map((b) => [b.readUInt16LE(18), b.readInt32LE(20)]);
+			const downs = codes.map((code) => [code, 1]);
+			const complete = [
+				...downs,
+				...[...codes].reverse().map((code) => [code, 0]),
+			];
+			const release = yield* keyboard.holdChord(chord);
+			expect(events()).toEqual(downs);
+			yield* release;
+			expect(events()).toEqual(complete);
+			writes.length = 0;
+			const pressing = yield* keyboard.pressChord(chord).pipe(Effect.fork);
+			yield* TestClock.adjust(49);
+			expect(events()).toEqual(downs);
+			yield* TestClock.adjust(1);
+			yield* Fiber.join(pressing);
+			expect(events()).toEqual(complete);
+		}),
+	);
+}

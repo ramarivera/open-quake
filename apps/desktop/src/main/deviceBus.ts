@@ -72,6 +72,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	let matrix: { row: 1 | 2; col: 8 } = { row: 2, col: 8 };
 	let retry = 0;
 	let viaLeased = false;
+	const ownershipLock = yield* Effect.makeSemaphore(1);
 	let selectedPath: string | undefined;
 	let exhaustedPresence: string | undefined;
 	let reset = yield* Deferred.make<void>();
@@ -160,50 +161,60 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	};
 	const connectAndForward = Effect.scoped(
 		Effect.gen(function* () {
-			// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
-			// rather than the system, consumer or keyboard HID collections.
-			if (selection) {
-				const present = yield* device.discover();
-				const current =
-					present.find((info) => info.serialNumber === selection.serial) ??
-					present.find(
-						(info) =>
-							info.serialNumber === hidSerialFromAlias(selection.serial),
+			// Serialize discovery and native open with VIA handoff. A late,
+			// uninterruptible open must settle before ownership can be granted.
+			const connection = yield* ownershipLock.withPermits(1)(
+				Effect.gen(function* () {
+					if (viaLeased) return;
+					// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
+					// rather than the system, consumer or keyboard HID collections.
+					if (selection) {
+						const present = yield* device.discover();
+						const current =
+							present.find((info) => info.serialNumber === selection.serial) ??
+							present.find(
+								(info) =>
+									info.serialNumber === hidSerialFromAlias(selection.serial),
+							);
+						if (!current) return yield* new QuakeDeviceNotFound();
+						selectedPath = current.path;
+					}
+					if (!selection && !selectedPath && lastSerial) {
+						const present = yield* device.discover();
+						const prior =
+							present.find((info) => info.serialNumber === lastSerial) ??
+							present.find(
+								(info) =>
+									!info.serialNumber || !secondary.has(info.serialNumber),
+							);
+						if (!prior) return yield* new QuakeDeviceNotFound();
+						selectedPath = prior.path;
+					}
+					if (selectedPath) {
+						const present = yield* device.discover();
+						if (!present.some((info) => info.path === selectedPath)) {
+							if (selection) return yield* new QuakeDeviceNotFound();
+							selectedPath = undefined;
+							return yield* new QuakeDeviceNotFound();
+						}
+					}
+					const connection = yield* device.connect(
+						selectedPath ? { path: selectedPath } : {},
 					);
-				if (!current) return yield* new QuakeDeviceNotFound();
-				selectedPath = current.path;
-			}
-			if (!selection && !selectedPath && lastSerial) {
-				const present = yield* device.discover();
-				const prior =
-					present.find((info) => info.serialNumber === lastSerial) ??
-					present.find(
-						(info) => !info.serialNumber || !secondary.has(info.serialNumber),
+					connectionNow = connection;
+					matrix = { row: 2, col: 8 };
+					lastSerial = connection.info.serialNumber;
+					selectedPath = connection.info.path;
+					yield* Effect.addFinalizer(() =>
+						Effect.sync(() => {
+							connectionNow = undefined;
+						}),
 					);
-				if (!prior) return yield* new QuakeDeviceNotFound();
-				selectedPath = prior.path;
-			}
-			if (selectedPath) {
-				const present = yield* device.discover();
-				if (!present.some((info) => info.path === selectedPath)) {
-					if (selection) return yield* new QuakeDeviceNotFound();
-					selectedPath = undefined;
-					return yield* new QuakeDeviceNotFound();
-				}
-			}
-			const connection = yield* device.connect(
-				selectedPath ? { path: selectedPath } : {},
-			);
-			connectionNow = connection;
-			matrix = { row: 2, col: 8 };
-			lastSerial = connection.info.serialNumber;
-			selectedPath = connection.info.path;
-			const openedAt = yield* Clock.currentTimeMillis;
-			yield* Effect.addFinalizer(() =>
-				Effect.sync(() => {
-					connectionNow = undefined;
+					return connection;
 				}),
 			);
+			if (!connection) return;
+			const openedAt = yield* Clock.currentTimeMillis;
 			const events = yield* connection.subscribe();
 			if (attachHardware && connection.info.serialNumber) {
 				const attached = yield* attachHardware(connection).pipe(Effect.either);
@@ -414,9 +425,14 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		releaseForVia: () =>
 			Effect.gen(function* () {
 				viaLeased = true;
-				if (connectionNow)
-					yield* connectionNow.disconnect().pipe(
-						Effect.tapError(() =>
+				yield* ownershipLock
+					.withPermits(1)(
+						Effect.suspend(() =>
+							connectionNow ? connectionNow.disconnect() : Effect.void,
+						),
+					)
+					.pipe(
+						Effect.onError(() =>
 							Effect.sync(() => {
 								viaLeased = false;
 							}),

@@ -209,7 +209,7 @@ export function hostKeyboardAdapter(
 					pressed.push({ key: code, flags });
 					port.post(code, true, flags);
 				}
-				if (key !== undefined) {
+				if (usage !== 0 && key !== undefined) {
 					pressed.push({ key, flags });
 					port.post(key, true, flags);
 				}
