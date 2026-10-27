@@ -2,7 +2,7 @@
 
 ### Requirement: Verified Apple release signing
 
-Tagged macOS releases SHALL use team TRGDCMBX3J's Developer ID Application identity, hardened runtime and Apple notarization. Signing secrets SHALL be confined to trusted macOS tag packaging, and absent requirements SHALL block publication. PR and ordinary local builds SHALL remain usable without signing credentials. Windows/Linux signing SHALL remain unchanged.
+Tagged macOS releases SHALL use team TRGDCMBX3J's Developer ID Application identity, hardened runtime and Apple notarization. Signing secrets SHALL be confined to the macOS packaging step for trusted version tags or manual rehearsals on reviewed main. Absent signing requirements SHALL fail either trusted path, and manual rehearsals SHALL retain read-only contents permissions without publication or tag creation. PR and ordinary local builds SHALL remain usable without signing credentials. Windows/Linux signing SHALL remain unchanged.
 
 #### Scenario: Missing release credentials
 - **WHEN** macOS packaging runs for a version tag without complete signing/notarization credentials
