@@ -21,6 +21,9 @@ import { registerAppLocale } from "../settings/registration";
 import { registerHardware } from "./index";
 import { hardwarePreferencesLive } from "./preferences";
 
+// Keep the hidden acceptance window from activating this macOS app.
+if (process.platform === "darwin") app.setActivationPolicy("accessory");
+
 const Session = Context.GenericTag<HardwareSession>("HardwareSmokeSession");
 let directory: string | undefined;
 let disposeLocale: (() => Promise<void>) | undefined;
@@ -106,7 +109,7 @@ async function smoke(): Promise<void> {
 		width: 1100,
 		height: 1000,
 		webPreferences: {
-			preload: resolve("out/preload/index.mjs"),
+			preload: resolve(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
 			contextIsolation: true,
 			nodeIntegration: false,
@@ -143,23 +146,25 @@ async function smoke(): Promise<void> {
 	unregisterLifecycle = registerLifecycle(
 		lifecycleRuntime,
 		() => window,
-		pathToFileURL(resolve("out/renderer/index.html")).href,
+		pathToFileURL(resolve(import.meta.dirname, "../renderer/index.html")).href,
 	);
 	unregister = registerHardware(
 		() => current,
 		() => window,
 		true,
-		pathToFileURL(resolve("out/renderer/index.html")).href,
+		pathToFileURL(resolve(import.meta.dirname, "../renderer/index.html")).href,
 	);
 	const locale = registerAppLocale({
 		directory,
 		osLocale: "en-US",
-		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		renderer: pathToFileURL(
+			resolve(import.meta.dirname, "../renderer/index.html"),
+		).href,
 		windows: () => [window],
 	});
 	disposeLocale = () => locale.dispose();
 	window.webContents.setAudioMuted(true);
-	await window.loadFile(resolve("out/renderer/index.html"));
+	await window.loadFile(resolve(import.meta.dirname, "../renderer/index.html"));
 	const js = (script: string): Promise<unknown> =>
 		window.webContents.executeJavaScript(script);
 	const read = async () => {

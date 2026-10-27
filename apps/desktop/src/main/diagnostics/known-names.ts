@@ -1,7 +1,7 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`ObsService.initialize ObsService.status ObsService.configure ObsService.detect ObsService.connect ObsService.connectUnlocked ObsService.disconnect ObsService.execute ObsService.executeCommand ObsService.setVisible ObsService.release ObsService.poll ObsService.readTile ObsService.catalog ObsRepository.read ObsRepository.save ObsRepository.saveUnlocked ObsRepository.password ObsRepository.detect
+	`HardwareAcceptance.run ObsService.initialize ObsService.status ObsService.configure ObsService.detect ObsService.connect ObsService.connectUnlocked ObsService.disconnect ObsService.execute ObsService.executeCommand ObsService.setVisible ObsService.release ObsService.poll ObsService.readTile ObsService.catalog ObsRepository.read ObsRepository.save ObsRepository.saveUnlocked ObsRepository.password ObsRepository.detect
 FirmwareSession.load AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
 SoundboardService.play SoundboardService.start SoundboardService.stopNow SoundboardService.pause SoundboardService.resume SoundboardService.previous SoundboardService.next SoundboardService.rescan SoundboardService.setVolume SoundboardService.stopProfile SoundboardService.execute SoundboardService.stop SoundboardService.stopAll SoundboardService.naturalEnd SoundboardService.close SoundboardService.snapshot SoundboardRepository.list SoundboardRepository.put SoundboardPlayer.open
 SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
@@ -193,6 +193,7 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"hardware.acceptance.failed",
 	"hardware.request.failed",
 	"hardware.lock.failed",
 	"hardware.qmk.failed",
