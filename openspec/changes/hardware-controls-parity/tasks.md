@@ -57,3 +57,9 @@ Final focused checks: 46 desktop hardware/preferences/VIA tests, 37 native-bus/r
 - [x] 7.1 Serialize long-tone replacement and stop, including master disable and teardown, without holding the transition lock while awaiting queued startup. Prove overlapping start/stop while trailing silence is pending with fake HID. Bead open-quake-lih.11.30. Parent owns final review gates.
 
 Software verification, 2026-10-27, Codex gpt-6.1-sol high: a session transition semaphore serializes replacement and stopping across explicit requests, master disable and teardown. Worker startup remains outside the transition lock, and the worker is explicitly interruptible inside the short uninterruptible owner transition. Both request orders reproduce the orphan-tone defect on the preceding source; both pass after the fix. Two additional fake-HID regressions cover disable and zero volume while replacement drains silence. All 43 tests in the two owning hardware service suites, device typecheck, scoped Biome and owning strict OpenSpec pass. No live device or audible output ran. Current-head hosted checks and review remain parent-owned.
+
+## 8. Reviewed main integration
+
+- [x] 8.1 Preserve native key actions, hardware dispatch, revision-owned cancellation and strip feedback when integrating PR126 through PR128. Align buzzer/mic library expectations with their implemented availability while retaining unavailable-plugin and exact 100/101 capacity coverage. Bead `open-quake-i3j.5`.
+
+Integration verification, 2026-10-27: before the approved expectation update, the resolved tree exactly matches tested candidate stage `78e96fec`. The actual PR branch passes all 84 desktop runtime/library/overlay tests and desktop typecheck. The complete combined candidate passed 5,353 tests, six typechecks, production build and both bundle checks. Hosted review and installer checks on this synchronized head remain pending; physical hardware/OS acceptance is separate.

@@ -115,6 +115,18 @@ export function createDirectChatBridge(
 			});
 	let disposed = false;
 	return {
+		persona: {
+			read: () => run((client) => client.assistant.read(undefined)),
+			update: (settings, generation = null) =>
+				run((client) => client.assistant.update({ settings, generation })),
+		},
+		assistantVisibility: (visible) =>
+			run((client) => client.assistant.visibility({ visible })),
+		selection: () => run((client) => client.assistant.selection(undefined)),
+		navigate: (sessionId, generation) =>
+			run((client) => client.assistant.navigate({ sessionId, generation })),
+		acknowledgeSelection: (generation) =>
+			run((client) => client.assistant.ack({ generation })),
 		files: (input) => run((client) => client.provider.files(input)),
 		providers: () => run((client) => client.provider.list(undefined)),
 		submit: (input) => run((client) => client.chat.submit(input)),

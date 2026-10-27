@@ -68,7 +68,55 @@ export const makeDesktopChatConnection = (
 		const owner = Symbol("chat-window");
 		const owners = sessionOwners.get(host) ?? new Map<string, symbol>();
 		sessionOwners.set(host, owners);
+		yield* Effect.addFinalizer(() => host.assistantVisibility(owner, false));
+		// Both allowed windows have independent RPC connections. Claim only the
+		// selected session; ordinary desktop persona settings remain shared.
+		const selectedForOwner = Effect.gen(function* () {
+			const selected = yield* host.selection();
+			if (selected) {
+				const current = owners.get(selected.sessionId);
+				if (current && current !== owner) return yield* new ChatInvalid();
+				owners.set(selected.sessionId, owner);
+			}
+			return selected;
+		});
 		const handlers = ChatRpcs.toLayer({
+			"assistant.read": () =>
+				selectedForOwner.pipe(
+					Effect.flatMap((selected) =>
+						host.persona.read(selected?.generation ?? null),
+					),
+					Effect.mapError(rpcFailure),
+				),
+			"assistant.update": ({ settings, generation }) =>
+				selectedForOwner.pipe(
+					Effect.zipRight(host.persona.update(settings, generation)),
+					Effect.mapError(rpcFailure),
+				),
+			"assistant.visibility": ({ visible }) =>
+				host.assistantVisibility(owner, visible),
+			"assistant.selection": () =>
+				selectedForOwner.pipe(Effect.mapError(rpcFailure)),
+			"assistant.navigate": ({ sessionId, generation }) =>
+				Effect.gen(function* () {
+					// Check both destinations before changing the host selection. A different
+					// window must not release an owned key or restore its private settings.
+					yield* selectedForOwner;
+					const current = owners.get(sessionId);
+					if (current && current !== owner) return yield* new ChatInvalid();
+					const selected = yield* host.navigate(sessionId, generation);
+					owners.set(sessionId, owner);
+					return selected;
+				}).pipe(Effect.mapError(rpcFailure)),
+			"assistant.ack": ({ generation }) =>
+				selectedForOwner.pipe(
+					Effect.flatMap((selected) =>
+						selected?.generation === generation
+							? host.acknowledgeSelection(generation)
+							: Effect.void,
+					),
+					Effect.mapError(rpcFailure),
+				),
 			"provider.files": (input) =>
 				Effect.gen(function* () {
 					const profileId = selections.get(input.sessionId);

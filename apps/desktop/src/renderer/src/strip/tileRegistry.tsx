@@ -53,6 +53,7 @@ import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
+	readonly currentPage?: number | undefined;
 	readonly hardware?:
 		| import("../../../shared/hardware-contracts").HardwareSnapshot
 		| undefined;
@@ -251,6 +252,25 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
+		[
+			"pageNo",
+			({ context, tile }) => (
+				<div
+					data-page-number={context.currentPage ?? 1}
+					style={{
+						width: tile.box.width,
+						height: tile.box.height,
+						display: "grid",
+						placeItems: "center",
+						fontSize: 64,
+						fontWeight: 700,
+						color: "white",
+					}}
+				>
+					{context.currentPage ?? 1}
+				</div>
+			),
+		],
 		["playAudio", PlayerSlot],
 		["playAudioLegacy", PlayerSlot],
 		["meetingMinutes", MeetingKey],

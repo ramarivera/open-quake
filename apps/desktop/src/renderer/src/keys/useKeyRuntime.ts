@@ -15,7 +15,11 @@ export function useKeyRuntime(): ReadonlyMap<string, KeyRuntimeState> {
 						state.pageId,
 						state.keyCode,
 					]);
-					return new Map(previous).set(key, { ...previous.get(key), ...state });
+					const old = previous.get(key);
+					return new Map(previous).set(key, {
+						...(old?.revision === state.revision ? old : undefined),
+						...state,
+					});
 				});
 		};
 		const off = window.quakeKeyLibrary?.onRuntime(accept);

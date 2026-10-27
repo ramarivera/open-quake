@@ -60,11 +60,18 @@ async function fixture(
 				: "Linux",
 	);
 	const base = createInitialProfileEnvelope();
+	const catalog = builtinProfiles(platform).map((profile) =>
+		// Keep every actual catalog row and Quick's actions for settings/dispatch.
+		// Other preset contents are irrelevant to these manager interactions.
+		profile.id === "1-2"
+			? profile
+			: { ...profile, pages: base.profiles[0].pages },
+	);
 	let saved = encodeProfileEnvelope({
 		...base,
 		profiles: [
 			{ ...base.profiles[0], id: "custom", name: "Custom" },
-			...builtinProfiles(platform),
+			...catalog,
 		],
 		activeByDevice: {
 			"desktop-preview": {

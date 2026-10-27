@@ -45,13 +45,17 @@ import type {
 	SessionId,
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
-import type { ChatError } from "../../../../../packages/edge/src/chat/chat-errors";
+import {
+	type ChatError,
+	ChatInvalid,
+} from "../../../../../packages/edge/src/chat/chat-errors";
 import { ChatInferenceLive } from "../../../../../packages/edge/src/chat/chat-ports";
 import {
 	ChatRepository,
 	fileChatStorageLayer,
 } from "../../../../../packages/edge/src/chat/chat-repository";
 import {
+	type AssistantSelection,
 	type ChatInput,
 	ChatRpcFailure,
 	type PublicChatHistory,
@@ -64,6 +68,7 @@ import { connectSpark } from "../credentials/spark-socket";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { type AssistantHaPort, executeAssistantHa } from "./assistant-ha";
+import { desktopPersona } from "./persona";
 import { shortcutDraft } from "./shortcut-draft";
 
 const OWNER = "desktop-user";
@@ -185,6 +190,11 @@ export interface DirectChatOptions {
 export const rpcFailure = (error: ChatError | AiError): ChatRpcFailure =>
 	new ChatRpcFailure({ code: error.code, message: error.message });
 export function prepareDirectChat(options: DirectChatOptions) {
+	const persona = desktopPersona(options.directory);
+	const visibleConsumers = new Set<symbol>();
+	let selection: AssistantSelection | null = null;
+	let selectionGeneration = 0;
+	const sessionSettings = new Map<SessionId, AssistantSettings>();
 	const profiles = AiRepository.Default;
 	const inference = ChatInferenceLive.pipe(
 		Layer.provide(
@@ -250,10 +260,15 @@ export function prepareDirectChat(options: DirectChatOptions) {
 							const assertCurrent = Effect.suspend(() =>
 								isCurrent() ? Effect.void : Effect.fail(new AiUnavailable()),
 							);
-							const savedSettings = assistant
+							const keySettings =
+								assistant ?? sessionSettings.get(input.sessionId);
+							const requestedSettings =
+								keySettings ??
+								(scope === "main" ? yield* persona.readSaved() : undefined);
+							const savedSettings = requestedSettings
 								? yield* Schema.decodeUnknown(AssistantSettings, {
 										onExcessProperty: "error",
-									})(assistant).pipe(
+									})(requestedSettings).pipe(
 										Effect.mapError((cause) => new AiConfigInvalid(cause)),
 									)
 								: undefined;
@@ -261,7 +276,9 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								pinned ??
 								(yield* Effect.gen(function* () {
 									const rows = yield* options.models(
-										savedSettings ? "default" : scope,
+										keySettings || savedSettings?.modelRowId
+											? "default"
+											: scope,
 									);
 									const eligible = resolveModelRows(rows);
 									const saved = savedSettings?.modelRowId
@@ -351,7 +368,10 @@ export function prepareDirectChat(options: DirectChatOptions) {
 									: baseProfile;
 							yield* AiRepository.put(profile);
 							const submitChat = (
-								beforeInference: Effect.Effect<void, AiError> = Effect.void,
+								beforeInference: Effect.Effect<
+									undefined | { readonly answer: string },
+									AiError
+								> = Effect.succeed(undefined),
 							) =>
 								ChatService.submit(
 									OWNER,
@@ -364,9 +384,11 @@ export function prepareDirectChat(options: DirectChatOptions) {
 													systemPrompt:
 														settings.roleId === -1
 															? settings.customPrompt
-															: (ROLE_PRESETS.find(
+															: settings.rolePrompt ||
+																ROLE_PRESETS.find(
 																	(r) => r.id === settings.roleId,
-																)?.prompt ?? ""),
+																)?.prompt ||
+																"",
 												}
 											: {}),
 										profileId: profile.id,
@@ -408,7 +430,8 @@ export function prepareDirectChat(options: DirectChatOptions) {
 							return yield* submitChat(
 								Effect.gen(function* () {
 									const providers = yield* AiProviderService;
-									return yield* AiVoiceService.submit({
+									let actionResult: { readonly answer: string } | undefined;
+									yield* AiVoiceService.submit({
 										requestId: input.turnId,
 										profileId: profile.id,
 										text: input.text,
@@ -434,7 +457,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 																		return { operationId: input.turnId };
 																	if (dispatch.route !== "operateEquipment")
 																		return yield* new AiUnavailable();
-																	yield* executeAssistantHa(
+																	actionResult = yield* executeAssistantHa(
 																		options.homeAssistant,
 																		settings,
 																		profile.id,
@@ -455,6 +478,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 											),
 										)
 										.pipe(Effect.asVoid, Effect.zipLeft(assertCurrent));
+									return actionResult;
 								}).pipe(Effect.provide(providerLayer)),
 							);
 						}),
@@ -468,6 +492,98 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			};
 			return {
 				runtime,
+				persona: {
+					read: (generation?: number | null) =>
+						Effect.gen(function* () {
+							if (
+								generation !== undefined &&
+								generation !== (selection?.generation ?? null)
+							)
+								return yield* new ChatInvalid();
+							const settings =
+								selection && sessionSettings.get(selection.sessionId);
+							return settings ?? (yield* persona.read());
+						}),
+					update: Effect.fn("DesktopChat.updatePersona")(function* (
+						input: AssistantSettings,
+						generation: number | null = null,
+					) {
+						// A draft can only update the selection that supplied it. Selected
+						// edits are session-local; the saved key remains the restart source.
+						if ((selection?.generation ?? null) !== generation)
+							return yield* new ChatInvalid();
+						const destination = selection;
+						if (!destination) return yield* persona.update(input);
+						const saved = yield* Schema.decodeUnknown(AssistantSettings, {
+							onExcessProperty: "error",
+						})(input).pipe(
+							Effect.mapError((cause) => new AiConfigInvalid(cause)),
+						);
+						if (
+							selection?.generation !== generation ||
+							!sessionSettings.has(destination.sessionId)
+						)
+							return yield* new ChatInvalid();
+						sessionSettings.set(destination.sessionId, saved);
+						selection = { ...destination, settings: saved };
+						return saved;
+					}),
+				},
+				assistantVisible: () => Effect.sync(() => visibleConsumers.size > 0),
+				assistantVisibility: (owner: symbol, visible: boolean) =>
+					Effect.sync(() => {
+						if (visible) visibleConsumers.add(owner);
+						else visibleConsumers.delete(owner);
+					}),
+				selection: () => Effect.sync(() => selection),
+				navigate: Effect.fn("DesktopChat.navigate")(function* (
+					sessionId: SessionId,
+					generation: number | null,
+				) {
+					if ((selection?.generation ?? null) !== generation)
+						return yield* new ChatInvalid();
+					if (selection?.sessionId === sessionId) return selection;
+					const settings = sessionSettings.get(sessionId);
+					selection = settings
+						? { sessionId, settings, generation: ++selectionGeneration }
+						: null;
+					return selection;
+				}),
+				selectAssistant: (
+					sessionId: SessionId,
+					settings: AssistantSettings,
+					transcript?: string,
+				) =>
+					Effect.sync(() => {
+						sessionSettings.delete(sessionId);
+						sessionSettings.set(sessionId, settings);
+						while (sessionSettings.size > 32) {
+							const first = sessionSettings.keys().next();
+							if (!first.done) sessionSettings.delete(first.value);
+						}
+						selection = {
+							generation: ++selectionGeneration,
+							sessionId,
+							settings,
+							...(transcript === undefined ? {} : { transcript }),
+						};
+					}),
+				acknowledgeSelection: (generation: number) =>
+					Effect.sync(() => {
+						if (
+							selection?.generation === generation &&
+							selection.transcript !== undefined
+						) {
+							const { transcript: _, ...current } = selection;
+							selection = current;
+						}
+					}),
+				preflight: () =>
+					Effect.suspend(() =>
+						(options.online?.() ?? net.isOnline())
+							? Effect.void
+							: Effect.fail(new AiUnavailable()),
+					),
 				providers: Effect.fn("DesktopChat.providers")(function* () {
 					const rows = yield* options.models("default");
 					return yield* Effect.forEach(rows, (row) =>
@@ -551,7 +667,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 				pinKnobModel: Effect.fn("DesktopChat.pinKnobModel")(function* (
 					providerId: string,
 					modelId: string,
-					_assistant?: AssistantSettings,
+					assistant?: AssistantSettings,
 				): Effect.fn.Return<PinnedDirectModel, VoiceKnobRejected> {
 					const rows = yield* options
 						.models("default")
@@ -560,17 +676,23 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								(cause) => new VoiceKnobRejected("RouteIncomplete", cause),
 							),
 						);
-					const matches = resolveModelRows(rows).filter(
-						(r) =>
-							r.id === providerId &&
-							modelId.trim().length > 0 &&
-							modelId.length <= 200,
-					);
+					const eligible = resolveModelRows(rows);
+					const followed = assistant && !assistant.modelRowId;
+					const provider = followed
+						? eligible.find((r) => r.role === "default")?.id
+						: assistant?.modelRowId || providerId;
+					const matches = eligible.filter((r) => r.id === provider);
 					const row = matches.length === 1 ? matches[0] : undefined;
 					if (!row?.model.trim() || !row.credentialRef)
 						return yield* new VoiceKnobRejected("RouteIncomplete");
+					const settings = assistant
+						? reconcileAssistantProvider(assistant, row)
+						: undefined;
+					const model = settings ? settings.modelId || row.model : modelId;
+					if (!model.trim() || model.length > 200)
+						return yield* new VoiceKnobRejected("RouteIncomplete");
 					const profile = yield* Effect.try({
-						try: () => profileFromModel({ ...row, model: modelId }),
+						try: () => profileFromModel({ ...row, model }),
 						catch: (cause) => new VoiceKnobRejected("RouteIncomplete", cause),
 					});
 					if (Either.isLeft(validateProfile(profile)) || !profile.credentialRef)

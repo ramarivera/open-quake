@@ -82,6 +82,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 async function fixture() {
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
+	const tile = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
 		schemaVersion: 1,
 		profiles: ["a", "b"].map((id) => ({
@@ -90,7 +91,14 @@ async function fixture() {
 			revision: 0,
 			pages: ["1", "2"].map((page) => ({
 				id: page,
-				keys: [Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"))],
+				// Group navigation skips empty profiles. Keep a visible page indicator.
+				keys: [
+					{
+						...tile,
+						childrenName: "pageNo",
+						config: { ...tile.config, type: "pageNo" },
+					},
+				],
 			})),
 		})),
 		activeByDevice: {},

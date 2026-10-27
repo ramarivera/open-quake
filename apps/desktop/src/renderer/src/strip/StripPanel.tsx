@@ -1,5 +1,6 @@
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { KeyPanelMessage } from "../../../../../../packages/device/src/actions/key-display-contracts.js";
 import type { GridVoiceInput } from "../../../shared/voice-surface";
 import {
 	createPanelKeyDispatcher,
@@ -113,6 +114,22 @@ function ActiveStripPanel(): React.JSX.Element {
 		} else emojiSelection.current = undefined;
 	};
 	const profiles = useStripProfiles(observeSelection, serial);
+	useEffect(() => {
+		if (!serial) return;
+		return window.openQuake?.onQuakeEvent((event) => {
+			if (event.kind !== "json") return;
+			const decoded = Schema.decodeUnknownEither(KeyPanelMessage)(event.value);
+			if (decoded._tag === "Right")
+				void window.quakeKeyLibrary
+					?.request({
+						type: "panel-message",
+						deviceId: serial,
+						message: decoded.right,
+					})
+					.catch(() => {});
+		});
+	}, [serial]);
+
 	const deviceReady = useDeviceReady(serial, profiles);
 	const layoutIdentity =
 		profiles._tag === "ready"

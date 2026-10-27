@@ -74,6 +74,9 @@ const answer = (text = "answer"): Stream.Stream<RuntimeConversationEvent> =>
 
 async function setup(
 	provider: RuntimeProviderAdapter["streamConversation"] = () => answer(),
+	validateAgentRoute?: NonNullable<
+		Parameters<typeof createAgentHttpVoiceAdapter>[0]["validateAgentRoute"]
+	>,
 ) {
 	const stream = vi.fn(provider);
 	const adapter: RuntimeProviderAdapter = {
@@ -137,6 +140,7 @@ async function setup(
 						Effect.gen(function* () {
 							voice = yield* createAgentHttpVoiceAdapter(
 								{
+									...(validateAgentRoute ? { validateAgentRoute } : {}),
 									selected: () =>
 										Effect.promise(() => selectionWait).pipe(
 											Effect.zipRight(Effect.sync(() => selected)),
@@ -716,6 +720,48 @@ it("MGMT-302 reports unavailable when the selected fallback cannot reset context
 				Effect.flip(runtime.resetContext(request.serial, request.keyCode)),
 			),
 		).toMatchObject({ _tag: "VoiceRuntimeUnavailable" });
+	} finally {
+		await f.dispose();
+	}
+});
+
+it("KNOB-032 dispatches the pinned saved agent/model instead of the mutable external selection", async () => {
+	const f = await setup(
+		() => answer(),
+		() => Effect.succeed(true),
+	);
+	try {
+		await f.runtime.runPromise(
+			GridVoiceRuntime.pipe(
+				Effect.flatMap((r) =>
+					r.sendText({
+						...request,
+						knob: {
+							profileId: "p",
+							revision: 1,
+							route: "dkclaw",
+							providerId: "",
+							modelId: "retained/unknown",
+							agentId: "writer",
+						},
+						agentRoute: {
+							connectionId: connection.id,
+							agentId: "writer",
+							modelId: "retained/unknown",
+							generation: 0,
+							registryGeneration: 1,
+						},
+					}),
+				),
+			),
+		);
+		await vi.waitFor(() => expect(f.stream).toHaveBeenCalledOnce());
+		expect(f.stream.mock.calls[0]?.[1]).toMatchObject({
+			agentId: "writer",
+			modelId: "retained/unknown",
+			messages: [{ role: "user", content: "hello" }],
+		});
+		expect(f.fallback.sendText).not.toHaveBeenCalled();
 	} finally {
 		await f.dispose();
 	}

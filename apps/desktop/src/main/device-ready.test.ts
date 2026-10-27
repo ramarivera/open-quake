@@ -22,6 +22,7 @@ import type { DeviceBus } from "./deviceBus";
 it.each([true, false])(
 	"refreshes real hardware commands with optional firmware reply %s",
 	async (versionReply) => {
+		vi.useFakeTimers();
 		const scope = await Effect.runPromise(Scope.make());
 		try {
 			const hardware = await Effect.runPromise(
@@ -72,7 +73,10 @@ it.each([true, false])(
 				mock: true,
 			});
 			expect(await read("unknown")).toEqual({ _tag: "offline" });
-			expect(await read("A")).toEqual({
+			const refreshing = read("A");
+			// Firmware retries still run through real HardwareControls, on a controlled timer.
+			await vi.advanceTimersByTimeAsync(3000);
+			expect(await refreshing).toEqual({
 				_tag: "ready",
 				snapshot: {
 					serialNumber: "A",
@@ -103,6 +107,7 @@ it.each([true, false])(
 			}
 		} finally {
 			await Effect.runPromise(Scope.close(scope, Exit.void));
+			vi.useRealTimers();
 		}
 	},
 );
