@@ -32,13 +32,15 @@ Initial candidate verification before authorized credential setup, 2026-10-27: 1
 - [x] 4.7 Reconcile proposal/design signing scope after review 4389763081: macOS PR and ordinary local builds remain ad-hoc, macOS tags require signing/notarization, and Windows/Linux remain unsigned. Record credential provisioning separately from signed-artifact acceptance; later acceptance is recorded under 4.4. Bead `open-quake-i3j.6`.
 
 - [x] 4.8 Integrate reviewed main, preserve updater policy and replace obsolete signing prerequisites with verified credential and local-artifact facts. Bead `open-quake-i3j.5`. Both distributed app copies pass the existing verifier; the parent independently rechecked the DMG and both artifact hashes. No installation, GUI launch, hardware test, tag or publication occurred.
-- [ ] 4.9 Complete the requested Terra/Sol benchmark comparison under `open-quake-i3j.4`; completed Apple credential/artifact verification does not settle that separate comparison.
+- [x] 4.9 Complete the requested Terra/Sol benchmark comparison under `open-quake-i3j.4`. The same-base comparison used the hardware diagnostics and Pino bridge tasks in `pre-hardware-observability`, with independent Opus 5.5 and Wonder Full judgments. This did not repeat already-solved Apple signing or unused port-helper research. Per-task results and one-run limits are in that change's design.
 
 Final integration checks: all 20 release/signing tests pass after the documentation merge. Signing source and workflow behavior are unchanged from the locally verified candidate. Current-head hosted checks and review remain pending.
 
 ## 5. Hosted signing rehearsal, open-quake-i3j.7
 
 - [x] 5.1 Add a main-only manual nonpublishing rehearsal using the existing signing/package/verification path and preserve PR secret isolation and tag-only publication. Ramiro explicitly approved this CI change. All 22 release/signing checks pass, including untrusted-ref rejection, forced signing on main, read-only contents permissions and tag-only publication.
-- [ ] 5.2 Run the reviewed workflow on GitHub and verify its signed/notarized DMG/ZIP artifacts without creating a tag. Existing local proof does not close this hosted acceptance step.
+- [x] 5.2 Run the reviewed workflow on GitHub and verify its signed/notarized DMG/ZIP artifacts without creating a tag. Workflow run 40569365883 succeeded on merged main d6cc8610, version 0.0.0-rehearsal.508. Both downloaded app copies passed the existing signature, expected identity/team, hardened runtime, timestamp, staple and Gatekeeper verifier. All five packages and the complete matrix passed. Publication was skipped and no release or rehearsal tag was created.
 
 PR133 reviews 4391645019, 4391676290 and 4391676301: credential documentation and the earlier signing-secret requirement now include both macOS version-tag signing and main-only manual rehearsals. PR and Windows/Linux secret isolation is unchanged. Documentation-only correction; the 22 existing release/signing checks cover the referenced workflow behavior.
+
+Hosted acceptance completed on 2026-10-27 under `open-quake-i3j.7`. Verification used both the hosted artifact checks and independent inspection of the downloaded DMG and ZIP without installation or local app launch. The DMG was detached and the extracted app removed. This proves the release pipeline at d6cc8610; it does not claim a hosted signed package of the later diagnostics merge.
