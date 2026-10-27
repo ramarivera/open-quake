@@ -7,7 +7,12 @@ function appleSigningRequired(env = process.env, platform = process.platform) {
 	const tagRelease =
 		env.GITHUB_EVENT_NAME === "push" &&
 		env.GITHUB_REF?.startsWith("refs/tags/v");
-	return Boolean(tagRelease || env.OPEN_QUAKE_APPLE_SIGNING === "1");
+	const rehearsal =
+		env.GITHUB_EVENT_NAME === "workflow_dispatch" &&
+		env.GITHUB_REF === "refs/heads/main";
+	return Boolean(
+		tagRelease || rehearsal || env.OPEN_QUAKE_APPLE_SIGNING === "1",
+	);
 }
 
 function appleSigningOptions(env = process.env, platform = process.platform) {
@@ -20,6 +25,12 @@ function appleSigningOptions(env = process.env, platform = process.platform) {
 	const present = (name) => Boolean(env[name]?.trim());
 	if (env.GITHUB_EVENT_NAME?.startsWith("pull_request")) {
 		fail("signing credentials must never be used in pull-request builds");
+	}
+	if (
+		env.GITHUB_EVENT_NAME === "workflow_dispatch" &&
+		env.GITHUB_REF !== "refs/heads/main"
+	) {
+		fail("manual signing rehearsal must use refs/heads/main");
 	}
 	if (env.APPLE_TEAM_ID !== APPLE_TEAM) {
 		fail(`APPLE_TEAM_ID must be ${APPLE_TEAM}`);

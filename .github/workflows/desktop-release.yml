@@ -2,6 +2,7 @@ name: Desktop release
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     tags: ["v*"]
 
@@ -14,6 +15,8 @@ concurrency:
 
 jobs:
   validate:
+    # A manual rehearsal only trusts the reviewed default branch.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:
@@ -30,7 +33,7 @@ jobs:
       - name: Resolve version
         id: version
         env:
-          BUILD_TAG: ${{ github.event_name == 'push' && github.ref_name || format('v0.0.0-pr.{0}.{1}', github.event.number, github.run_number) }}
+          BUILD_TAG: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_dispatch' && format('v0.0.0-rehearsal.{0}', github.run_number) || format('v0.0.0-pr.{0}.{1}', github.event.number, github.run_number) }}
         run: node apps/desktop/scripts/release.mjs version "$BUILD_TAG"
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev
       # FFmpeg backs the real-codec meeting integration tests. Use a pinned
@@ -111,12 +114,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @open-quake/desktop build
       - name: Package without distribution signing
-        if: "!(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac')"
+        if: "!(((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && matrix.platform == 'mac')"
         run: pnpm --filter @open-quake/desktop package --${{ matrix.platform }} --${{ matrix.arch }}
-      # Secrets exist only for the trusted tag macOS packaging process. PR code
-      # and every Windows/Linux step keep the existing unsigned path.
+      # Secrets exist only for trusted macOS tag or default-branch rehearsal
+      # packaging. PR code and Windows/Linux retain the unsigned path.
+      # Manual runs have read-only contents access and never enter publish.
       - name: Sign and notarize macOS release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac'
+        if: ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && matrix.platform == 'mac'
         env:
           OPEN_QUAKE_APPLE_SIGNING: "1"
           APPLE_TEAM_ID: TRGDCMBX3J
@@ -136,7 +140,7 @@ jobs:
           # electron-builder owns P12 import, temporary keychain and notarytool.
           pnpm --filter @open-quake/desktop package --mac --arm64
       - name: Clean temporary Apple signing material
-        if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac'
+        if: always() && ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && matrix.platform == 'mac'
         run: |
           signing_temp="$RUNNER_TEMP/open-quake-apple-signing"
           # Builder normally disposes the keychain itself. Also cover failed

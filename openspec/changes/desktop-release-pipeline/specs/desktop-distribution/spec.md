@@ -73,3 +73,17 @@ The updater SHALL remain disabled without an explicit owned feed, artifact origi
 
 - **WHEN** no owned update policy has been supplied
 - **THEN** manual checks remain disabled and no network request, artifact download or installer invocation occurs
+
+### Requirement: Nonpublishing hosted signing rehearsal
+
+A manual workflow SHALL rehearse the existing signed macOS package path only from reviewed main, using a distinct prerelease build version. Signing secrets SHALL remain confined to the macOS packaging step. Manual runs SHALL have read-only repository contents permissions and SHALL never enter release publication or create a tag.
+
+#### Scenario: Dispatch a trusted rehearsal
+
+- **WHEN** an authorized operator manually dispatches the desktop workflow on main
+- **THEN** native builds and the existing packaged DMG/ZIP verifier run, macOS uses required Developer ID signing/notarization, Windows/Linux stay unsigned, and downloads remain workflow artifacts
+
+#### Scenario: Dispatch from an untrusted ref
+
+- **WHEN** a manual dispatch targets a branch other than main
+- **THEN** validation and dependent packaging do not execute and signing secrets are not consumed

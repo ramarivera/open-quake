@@ -63,6 +63,10 @@ Use Node 24 and the repository's pinned pnpm version. On the target operating sy
 
 For a packaged smoke check, set `RELEASE_VERSION` to the package version, then run `pnpm --filter @open-quake/desktop test:package`. The default local version is `0.0.0`; CI uses the tag version or an explicit PR prerelease version. On Linux run the check under `xvfb-run -a` if no display is available. The smoke mounts the DMG and extracts the ZIP on macOS, silently installs and uninstalls the EXE on Windows, and installs/removes the DEB and runs the AppImage on Linux. Windows/Linux checks belong on disposable test machines because they install packages. The smoke window stays hidden and never opens the QUAKE or emits keyboard/media actions.
 
+## Rehearse signing without publishing
+
+Run `gh workflow run desktop-release.yml --ref main` to exercise the same signing and package verification on GitHub-hosted runners. Manual runs use `0.0.0-rehearsal.<run number>`, keep repository contents permissions read-only and skip the tag-only publication job. They create neither a tag nor a GitHub Release. Their downloads remain Actions artifacts. Dispatching from another ref skips validation and packaging. Windows and Linux keep their unsigned policy.
+
 ## Apple release credentials and validation
 
 The macmini already has `Developer ID Application: Ramiro Rivera (TRGDCMBX3J)`. Certificate provisioning is solved. Authorized setup verified the matching private key and unexpired certificate, authenticated the existing notarization API credentials, and provisioned the five GitHub Actions secrets below. GitHub runner provisioning is separate from the installed macmini identity.
