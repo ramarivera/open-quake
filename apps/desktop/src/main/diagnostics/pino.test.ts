@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
+import { setImmediate } from "node:timers/promises";
 import {
 	Cause,
 	Effect,
@@ -354,7 +355,7 @@ describe("assembled Effect 3 / Pino consumer", () => {
 		await app.dispose();
 		const status = await diagnostics.close();
 		expect(status.storageFailures).toBeGreaterThan(0);
-		expect(status.stdoutFailures).toBeGreaterThan(0);
+		expect(status.stdoutFailures).toBe(1);
 		expect(status.lastOutputFailure).toMatchObject({ sourceCode: "EPIPE" });
 		expect(JSON.stringify(status)).not.toContain("PRIVATE_");
 	});
@@ -393,7 +394,49 @@ describe("Pino destination lifecycle", () => {
 			stdoutPendingBytes: 0,
 			stdoutTimedOut: false,
 		});
-		expect(stdout.listenerCount("error")).toBe(0);
+		expect(stdout.listenerCount("error")).toBe(1);
+	});
+
+	it("keeps a shared guard after successful close without accumulating listeners", async () => {
+		const stdout = new Writable({
+			write(_chunk, _encoding, done) {
+				done();
+			},
+		});
+		for (let index = 0; index < 12; index++) {
+			const output = createPinoOutput(() => {}, { stdout });
+			output.emit({ event: "safe" });
+			await output.close();
+			expect(output.status().stdoutFailures).toBe(0);
+			expect(stdout.listenerCount("error")).toBe(1);
+			expect(() =>
+				stdout.emit("error", new Error("PRIVATE_LATE_ERROR")),
+			).not.toThrow();
+			expect(output.status().stdoutFailures).toBe(0);
+		}
+	});
+
+	it("counts one failed write once and still counts a distinct asynchronous error", async () => {
+		const failure = Object.assign(new Error("PRIVATE_PIPE"), { code: "EPIPE" });
+		const stdout = new Writable({
+			write(_chunk, _encoding, done) {
+				done(failure);
+			},
+		});
+		const output = createPinoOutput(() => {}, { stdout });
+		output.emit({ event: "safe" });
+		await setImmediate();
+		expect(output.status().stdoutFailures).toBe(1);
+		stdout.emit(
+			"error",
+			Object.assign(new Error("PRIVATE_LATE"), { code: "EIO" }),
+		);
+		expect(output.status().stdoutFailures).toBe(2);
+		expect(output.status().lastOutputFailure).toMatchObject({
+			sourceCode: "EIO",
+		});
+		expect(JSON.stringify(output.status())).not.toContain("PRIVATE_");
+		await output.close();
 	});
 
 	it("bounds stalled stdout, reports timeout honestly, and still drains private storage", async () => {

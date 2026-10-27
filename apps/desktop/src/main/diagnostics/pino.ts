@@ -2,6 +2,11 @@ import type { Writable } from "node:stream";
 import pino from "pino";
 import { type SafeError, safeError } from "./privacy.js";
 
+// Shared streams outlive an individual diagnostics owner. Keep one inert guard
+// after close without retaining that owner's queues, counters or error objects.
+const guardedStreams = new WeakSet<Writable>();
+const ignoreLateError = () => undefined;
+
 export interface DiagnosticOutputOptions {
 	/** Process-owned stdout, never closed by diagnostics. false disables this copy. */
 	readonly stdout?: Writable | false;
@@ -50,7 +55,13 @@ export function createPinoOutput(
 	let closed = false;
 	let closing: Promise<void> | undefined;
 	const waiters = new Set<() => void>();
+	const reportedErrors = new WeakSet<object>();
 	const outputFailed = (cause: unknown) => {
+		// Node reports the same write failure through its callback and error event.
+		if (typeof cause === "object" && cause !== null) {
+			if (reportedErrors.has(cause)) return;
+			reportedErrors.add(cause);
+		}
 		stdoutFailures++;
 		lastOutputFailure = safeError(cause);
 	};
@@ -139,9 +150,13 @@ export function createPinoOutput(
 		if (closing) return closing;
 		closed = true;
 		closing = drain().finally(() => {
-			// Keep a guard on failed/timed-out shared stdout for late errors.
-			if (!stdoutTimedOut && !stdoutFailures)
-				stdout?.removeListener("error", outputFailed);
+			if (stdout) {
+				if (!guardedStreams.has(stdout)) {
+					stdout.on("error", ignoreLateError);
+					guardedStreams.add(stdout);
+				}
+				stdout.removeListener("error", outputFailed);
+			}
 		});
 		return closing;
 	};

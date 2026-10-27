@@ -42,11 +42,15 @@ and drops new stdout copies when full or failed. The file queue remains independ
 `stdout: false` disables the copy for isolated consumers. `stdoutDrainMs` defaults
 to 1000 ms and is bounded to 1 through 5000 ms. A timed-out callback remains counted
 in `stdoutPendingBytes`; `stdoutTimedOut` never claims successful delivery. The
-shared stdout stream stays open. A late-error guard remains attached after failure
-or timeout so delayed stream errors cannot crash the application.
+shared stdout stream stays open. One inert guard per stream remains after close,
+including successful drains, so delayed errors cannot crash the application.
+The guard doesn't retain a closed diagnostics owner's counters or queues.
+Write callbacks still update live status if they complete after a timeout;
+independent stream errors after close don't change finalized delivery counts.
 
 Check `pinoFailures`, `stdoutFailures`, `stdoutDropped`, `stdoutPendingBytes` and
-`stdoutTimedOut` as well as file status. `lastOutputFailure` contains only the
+`stdoutTimedOut` as well as file status. `stdoutFailures` counts distinct error
+objects, so a callback and stream event for the same failure count once. `lastOutputFailure` contains only the
 existing safe error projection. Pino has no worker or hidden transport queue here.
 A synchronous Pino serialization/destination failure attempts a safe local JSON
 fallback and increments `pinoFailures`. Stdout callback completion proves acceptance
