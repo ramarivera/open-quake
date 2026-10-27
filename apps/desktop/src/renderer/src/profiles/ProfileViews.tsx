@@ -322,14 +322,14 @@ export function ProfilesManager(): React.JSX.Element {
 			<header>
 				<button
 					type="button"
-					aria-label={locale === "de" ? "Zurück zu Tasten" : "Return to Keys"}
+					aria-label={localeText("profileReturn")}
 					onClick={() =>
 						window.dispatchEvent(
 							new CustomEvent("open-quake:navigate", { detail: "keys" }),
 						)
 					}
 				>
-					{locale === "de" ? "Zurück" : "Close"}
+					{localeText("profileClose")}
 				</button>
 				<h2>{text("functionWheelEditor.title")}</h2>
 				<label>
@@ -474,7 +474,7 @@ export function ProfilesManager(): React.JSX.Element {
 						</select>
 					</label>
 					<label>
-						{locale === "de" ? "Anwendungen suchen" : "Search applications"}
+						{localeText("profileAppSearch")}
 						<input
 							type="search"
 							value={appSearch}

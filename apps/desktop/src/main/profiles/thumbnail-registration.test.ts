@@ -19,6 +19,7 @@ import {
 	type Profile,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
 	PROFILE_FOREGROUND_GUIDANCE,
@@ -125,6 +126,7 @@ afterEach(async () => {
 	for (const path of directories.splice(0))
 		await rm(path, { recursive: true, force: true });
 	vi.unstubAllEnvs();
+	vi.unstubAllGlobals();
 });
 async function setup(
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
@@ -160,78 +162,98 @@ async function setup(
 	return profiles;
 }
 describe("production manager thumbnail producer", () => {
-	it("cleans startup orphans and edited captures through actual profile commits while retaining other locales", async () => {
-		const obsolete = `${"a".repeat(64)}.png`;
-		const nativeUnlink = (
-			await vi.importActual<typeof import("node:fs/promises")>(
-				"node:fs/promises",
-			)
-		).unlink;
-		let startupDeleted: () => void = () => {};
-		const startupDeletion = new Promise<void>((resolve) => {
-			startupDeleted = resolve;
-		});
-		const startupUnlink = vi
-			.spyOn(filesystem, "unlink")
-			.mockImplementation(async (path) => {
-				await nativeUnlink(path);
-				if (String(path).endsWith(obsolete)) startupDeleted();
+	it.each(["darwin", "linux"] as const)(
+		"cleans startup orphans and edited captures through actual profile commits while retaining other locales on %s",
+		async (platform) => {
+			vi.stubGlobal("process", { ...process, platform });
+			const obsolete = `${"a".repeat(64)}.png`;
+			const nativeUnlink = (
+				await vi.importActual<typeof import("node:fs/promises")>(
+					"node:fs/promises",
+				)
+			).unlink;
+			let startupDeleted: () => void = () => {};
+			const startupDeletion = new Promise<void>((resolve) => {
+				startupDeleted = resolve;
 			});
-		const profiles = await setup(undefined, async (root) => {
-			await mkdir(join(root, "profiles", "thumbnails"), { recursive: true });
-			await writeFile(join(root, "profiles", "thumbnails", obsolete), png);
-		});
-		const cache = join(fixture.root, "profiles", "thumbnails");
-		try {
-			await profiles.refresh();
-			await startupDeletion;
-			expect(await readdir(cache)).not.toContain(obsolete);
-		} finally {
-			startupUnlink.mockRestore();
-		}
-		await profiles.thumbnail("1-2", "de", new AbortController().signal);
-		const original = await profiles.runtime.runPromise(ProfileManager.read());
-		const manager = await profiles.runtime.runPromise(ProfileManager);
-		const created = await profiles.runtime.runPromise(
-			manager.command({ type: "create" }),
-		);
-		if (created._tag !== "updated") throw new Error("Create fixture rejected");
-		const custom = created.envelope.profiles.find(
-			(p) => !original.profiles.some((old) => old.id === p.id),
-		);
-		if (!custom) throw new Error("Missing custom fixture");
-		await profiles.thumbnail(custom.id, "en", new AbortController().signal);
-		const before = `${profileThumbnailKey(translateProfile(custom, "en"), "en")}.png`;
-		expect(await readdir(cache)).toContain(before);
-		const native =
-			await vi.importActual<typeof import("node:fs/promises")>(
-				"node:fs/promises",
-			);
-		let deleted: () => void = () => {};
-		const deletion = new Promise<void>((resolve) => {
-			deleted = resolve;
-		});
-		const unlink = vi
-			.spyOn(filesystem, "unlink")
-			.mockImplementation(async (path) => {
-				await native.unlink(path);
-				if (String(path).endsWith(before)) deleted();
+			const startupUnlink = vi
+				.spyOn(filesystem, "unlink")
+				.mockImplementation(async (path) => {
+					await nativeUnlink(path);
+					if (String(path).endsWith(obsolete)) startupDeleted();
+				});
+			const profiles = await setup(undefined, async (root) => {
+				// Catalog installation has separate coverage. Keep the real installed
+				// Quick profile and all eight locales, without translating/hashing eight
+				// unrelated built-ins during every cleanup and publication in this test.
+				const installed = installProfileCatalog(
+					createInitialProfileEnvelope(),
+					platform,
+				);
+				const quick = installed.profiles.find(
+					(profile) => profile.id === "1-2",
+				);
+				if (!quick) throw new Error("Missing Quick fixture");
+				fixture.saved = encodeProfileEnvelope({
+					...installed,
+					profiles: [quick],
+				});
+				await mkdir(join(root, "profiles", "thumbnails"), { recursive: true });
+				await writeFile(join(root, "profiles", "thumbnails", obsolete), png);
 			});
-		try {
-			await profiles.runtime.runPromise(
-				manager.command({ type: "rename", id: custom.id, name: "Changed" }),
+			const cache = join(fixture.root, "profiles", "thumbnails");
+			try {
+				await profiles.refresh();
+				await startupDeletion;
+				expect(await readdir(cache)).not.toContain(obsolete);
+			} finally {
+				startupUnlink.mockRestore();
+			}
+			await profiles.thumbnail("1-2", "de", new AbortController().signal);
+			const original = await profiles.runtime.runPromise(ProfileManager.read());
+			const manager = await profiles.runtime.runPromise(ProfileManager);
+			const created = await profiles.runtime.runPromise(
+				manager.command({ type: "create" }),
 			);
-			await deletion;
-			expect(await readdir(cache)).not.toContain(before);
-		} finally {
-			unlink.mockRestore();
-		}
-		const retained = original.profiles.find((p) => p.id === "1-2");
-		if (!retained) throw new Error("Missing retained fixture");
-		expect(await readdir(cache)).toContain(
-			`${profileThumbnailKey(translateProfile(retained, "de"), "de")}.png`,
-		);
-	});
+			if (created._tag !== "updated")
+				throw new Error("Create fixture rejected");
+			const custom = created.envelope.profiles.find(
+				(p) => !original.profiles.some((old) => old.id === p.id),
+			);
+			if (!custom) throw new Error("Missing custom fixture");
+			await profiles.thumbnail(custom.id, "en", new AbortController().signal);
+			const before = `${profileThumbnailKey(translateProfile(custom, "en"), "en")}.png`;
+			expect(await readdir(cache)).toContain(before);
+			const native =
+				await vi.importActual<typeof import("node:fs/promises")>(
+					"node:fs/promises",
+				);
+			let deleted: () => void = () => {};
+			const deletion = new Promise<void>((resolve) => {
+				deleted = resolve;
+			});
+			const unlink = vi
+				.spyOn(filesystem, "unlink")
+				.mockImplementation(async (path) => {
+					await native.unlink(path);
+					if (String(path).endsWith(before)) deleted();
+				});
+			try {
+				await profiles.runtime.runPromise(
+					manager.command({ type: "rename", id: custom.id, name: "Changed" }),
+				);
+				await deletion;
+				expect(await readdir(cache)).not.toContain(before);
+			} finally {
+				unlink.mockRestore();
+			}
+			const retained = original.profiles.find((p) => p.id === "1-2");
+			if (!retained) throw new Error("Missing retained fixture");
+			expect(await readdir(cache)).toContain(
+				`${profileThumbnailKey(translateProfile(retained, "de"), "de")}.png`,
+			);
+		},
+	);
 
 	it("logs cleanup failures through the owning runtime without preventing snapshot publication", async () => {
 		const diagnosticRoot = await mkdtemp(
@@ -602,6 +624,7 @@ it("SCREEN-096/097 broadcasts thumbnail map and batch progress to two windows an
 });
 
 it("MAIN-084 replays nonprompting permission guidance on manager read and clears it after recovery", async () => {
+	vi.stubGlobal("process", { ...process, platform: "darwin" });
 	const management = new BrowserWindow({ show: false });
 	await setup(undefined, undefined, undefined, management);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "0");

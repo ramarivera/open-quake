@@ -944,7 +944,7 @@ export function KeyEditor({
 										});
 									}}
 								>
-									<option value="-1">Next Profile</option>
+									<option value="-1">{keyText("nextProfile", locale)}</option>
 									{envelope?.profiles
 										.filter(
 											(p) =>
@@ -963,7 +963,7 @@ export function KeyEditor({
 						{key.config.type === "switchProfile" &&
 							key.config.actions.find((action) => action.type === "profile")
 								?.value !== "-1" && (
-								<Row label={locale === "de" ? "Seitennummer" : "Page Number"}>
+								<Row label={keyText("pageNumber", locale)}>
 									<select
 										aria-label="Switch profile page"
 										value={String(
@@ -1019,6 +1019,7 @@ export function KeyEditor({
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
 									key.config.type !== "clawbot" &&
+									key.config.type !== "switchProfile" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)

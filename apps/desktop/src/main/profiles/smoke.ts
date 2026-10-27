@@ -444,7 +444,7 @@ async function smoke(): Promise<void> {
 				management.webContents.send(PROFILE_FOREGROUND_GUIDANCE, "available");
 				assert(
 					await management.webContents.executeJavaScript(
-						`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(!document.querySelector('.profiles-manager [role=alert]')))))`,
+						`new Promise((resolve,reject)=>{const start=Date.now();const check=()=>{if(!document.querySelector('.profiles-manager [role=alert]'))return resolve(true);if(Date.now()-start>=5000)return reject(new Error("Guidance alert did not clear"));setTimeout(check,20);};check();})`,
 					),
 				);
 			}

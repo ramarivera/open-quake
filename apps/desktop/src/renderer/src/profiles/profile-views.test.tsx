@@ -638,7 +638,7 @@ it("MGMT-314 closes the manager through its keyboard-accessible return control a
 	await click(button(f.host, "Knob profiles"));
 	const close = query(
 		f.host,
-		'button[aria-label="Return to Keys"]',
+		'button[aria-label="Close and return to Keys"]',
 		HTMLButtonElement,
 	);
 	close.focus();

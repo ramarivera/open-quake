@@ -4,6 +4,7 @@ import {
 	Array as EffectArray,
 	Fiber,
 	Layer,
+	Logger,
 	Option,
 	TestClock,
 } from "effect";
@@ -77,6 +78,72 @@ const port = (): ProfileDesktopPort => ({
 	progress: () => {},
 });
 describe("real profile desktop controller", () => {
+	it.effect(
+		"drops deleted profiles from failed style recaptures without repeated warnings",
+		() =>
+			Effect.gen(function* () {
+				let fail = false;
+				const warnings: unknown[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async () => {
+						if (fail) throw new Error("Capture failed");
+						return "data:image/png;base64,capture";
+					},
+				});
+				const manager = yield* ProfileManager;
+				const created = yield* manager.command({ type: "create" });
+				if (created._tag !== "updated")
+					return yield* Effect.die("Create fixture failed");
+				const custom = created.envelope.profiles.find((p) =>
+					p.id.startsWith("custom-"),
+				);
+				if (!custom) return yield* Effect.die("Missing custom");
+				yield* controller.request({
+					type: "thumbnail",
+					id: custom.id,
+					locale: "en",
+				});
+				fail = true;
+				yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				yield* manager.command({
+					type: "delete",
+					id: custom.id,
+					confirmed: true,
+				});
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				expect(warnings).toEqual([]);
+			}).pipe(Effect.provide(layer())),
+	);
+
 	it.effect(
 		"continues after a style recapture fails and retries only failures on the same preference",
 		() =>

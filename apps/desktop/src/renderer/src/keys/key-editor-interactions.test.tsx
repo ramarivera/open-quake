@@ -2573,3 +2573,42 @@ it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized ed
 			?.textContent,
 	).toBe("My mute");
 });
+
+it("MGMT-401 uses only typed profile/page selects for switch-profile keys", async () => {
+	const f = await fixture({
+		configure: (envelope) => ({
+			...envelope,
+			profiles: EffectArray.map(envelope.profiles, (profile) => ({
+				...profile,
+				pages: EffectArray.map(profile.pages, (page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.keyCode === "1,1"
+							? {
+									...key,
+									childrenName: "switchProfile",
+									config: {
+										...key.config,
+										type: "switchProfile",
+										actions: [
+											{ type: "profile", value: "p" },
+											{ type: "page", value: 1 },
+										],
+									},
+								}
+							: key,
+					),
+				})),
+			})),
+		}),
+	});
+	await f.select();
+	expect(f.host.querySelector('[aria-label="Switch profile"]')).not.toBeNull();
+	expect(
+		f.host.querySelector('[aria-label="Switch profile page"]'),
+	).not.toBeNull();
+	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
+	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
+		"Next Profile",
+	);
+});

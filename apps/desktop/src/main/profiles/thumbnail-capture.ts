@@ -78,8 +78,30 @@ export async function waitForThumbnailMedia(): Promise<void> {
 	await Promise.all(
 		Array.from(preview.querySelectorAll("img")).map(async (image) => {
 			await image.decode();
-			if (!image.complete || image.naturalWidth === 0)
+			if (
+				!image.complete ||
+				image.naturalWidth === 0 ||
+				image.naturalHeight === 0
+			)
 				throw new Error("Thumbnail image unavailable");
+			// Keep the same element so tile CSS, object-fit, refs and accessibility
+			// survive. Canvas reads already-decoded pixels, including animated images,
+			// without fetching media. Tainted/unreadable pixels must reject capture.
+			const snapshot = document.createElement("canvas");
+			snapshot.width = image.naturalWidth;
+			snapshot.height = image.naturalHeight;
+			const context = snapshot.getContext("2d");
+			if (!context) throw new Error("Thumbnail image snapshot unavailable");
+			context.drawImage(image, 0, 0);
+			const source = snapshot.toDataURL("image/png");
+			if (!source.startsWith("data:image/png;"))
+				throw new Error("Thumbnail image snapshot unavailable");
+			image.removeAttribute("srcset");
+			if (image.parentElement?.tagName === "PICTURE")
+				for (const candidate of image.parentElement.querySelectorAll("source"))
+					candidate.removeAttribute("srcset");
+			image.src = source;
+			await image.decode();
 		}),
 	);
 	await Promise.all(

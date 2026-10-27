@@ -218,7 +218,11 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						}
 						for (const id of [...pendingStyleCaptures]) {
 							const result = yield* capture(id, locale).pipe(Effect.either);
-							if (result._tag === "Right") pendingStyleCaptures.delete(id);
+							if (
+								result._tag === "Right" ||
+								result.left._tag === "ProfileNotFound"
+							)
+								pendingStyleCaptures.delete(id);
 							else
 								yield* Effect.logWarning(
 									"profiles.thumbnail.style.failed",

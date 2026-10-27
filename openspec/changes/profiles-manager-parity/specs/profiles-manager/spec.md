@@ -194,7 +194,11 @@ The six vendor thumbnail operations/events SHALL map to typed read, thumbnail, t
 
 #### Scenario: Decode, stabilize and cancel capture
 - **WHEN** fake images/videos become ready and frames settle, or readiness/capture times out or is cancelled
-- **THEN** capture-only videos and CSS animations pause at a decoded frame, only a current stable image is published, failed jobs publish no partial image, all windows receive progress/update messages, and cache retention remains bounded
+- **THEN** capture-only images freeze to static PNG pixels, videos and CSS animations pause at a decoded frame, only a current stable image is published, failed jobs publish no partial image, all windows receive progress/update messages, and cache retention remains bounded
+
+#### Scenario: Animated image capture
+- **WHEN** a valid profile renders animated GIF emoji or artwork in its isolated hidden preview
+- **THEN** decoded images become static pixels in their existing image elements before frame comparison, preserving layout, object-fit and accessibility; unreadable pixels or failed replacement decoding reject capture without publication or external media requests
 
 #### Scenario: Repeated picker frames
 - **WHEN** newer progress snapshots reuse an unchanged image source within the same device/session

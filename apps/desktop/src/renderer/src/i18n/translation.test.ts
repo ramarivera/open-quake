@@ -2,6 +2,7 @@ import { GTProvider } from "gt-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import {
 	type AppDictionaries,
 	appDictionaries,
@@ -130,5 +131,35 @@ it("bundles specific profile-progress failure feedback in all eight locales", ()
 			),
 		);
 		expect(rendered).toContain(messages[index]);
+	}
+});
+
+it("bundles profile controls in every locale with the visible close label in its accessible name", () => {
+	for (const locale of [
+		"en",
+		"de",
+		"zh",
+		"es",
+		"fr",
+		"ko",
+		"it",
+		"ja",
+	] as const) {
+		const picker = appDictionaries[locale]?.picker;
+		expect(keyText("nextProfile", locale)).not.toBe("nextProfile");
+		if (locale !== "en")
+			expect(keyText("nextProfile", locale)).not.toBe("Next Profile");
+		if (!picker || typeof picker === "string")
+			throw new Error("Missing picker strings");
+		const close = picker.profileClose,
+			back = picker.profileReturn,
+			search = picker.profileAppSearch;
+		expect(typeof close).toBe("string");
+		expect(typeof back).toBe("string");
+		expect(typeof search).toBe("string");
+		if (typeof close !== "string" || typeof back !== "string")
+			throw new Error("Missing close label");
+		expect(back).toContain(close);
+		if (locale !== "en") expect(search).not.toBe("Search applications");
 	}
 });

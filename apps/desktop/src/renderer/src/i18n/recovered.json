@@ -9,7 +9,10 @@
 			"previousPage": "上一页",
 			"nextPage": "下一页",
 			"language": "语言",
-			"foregroundAccessibility": "自动切换配置需要辅助功能权限。请在系统设置 > 隐私与安全性 > 辅助功能中启用 open-quake。"
+			"foregroundAccessibility": "自动切换配置需要辅助功能权限。请在系统设置 > 隐私与安全性 > 辅助功能中启用 open-quake。",
+			"profileClose": "关闭",
+			"profileReturn": "关闭并返回按键",
+			"profileAppSearch": "搜索应用"
 		},
 		"translationLanguages": {
 			"en": "英语",
@@ -88,7 +91,10 @@
 			"previousPage": "Previous Page",
 			"nextPage": "Next Page",
 			"language": "Language",
-			"foregroundAccessibility": "Automatic profile switching needs Accessibility access. Enable open-quake in System Settings > Privacy & Security > Accessibility."
+			"foregroundAccessibility": "Automatic profile switching needs Accessibility access. Enable open-quake in System Settings > Privacy & Security > Accessibility.",
+			"profileClose": "Close",
+			"profileReturn": "Close and return to Keys",
+			"profileAppSearch": "Search applications"
 		},
 		"translationLanguages": {
 			"en": "English",
@@ -148,7 +154,10 @@
 			"previousPage": "Página anterior",
 			"nextPage": "Página siguiente",
 			"language": "Idioma",
-			"foregroundAccessibility": "El cambio automático de perfiles necesita acceso de Accesibilidad. Activa open-quake en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad."
+			"foregroundAccessibility": "El cambio automático de perfiles necesita acceso de Accesibilidad. Activa open-quake en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.",
+			"profileClose": "Cerrar",
+			"profileReturn": "Cerrar y volver a Teclas",
+			"profileAppSearch": "Buscar aplicaciones"
 		},
 		"translationLanguages": {
 			"en": "Inglés",
@@ -227,7 +236,10 @@
 			"previousPage": "Page précédente",
 			"nextPage": "Page suivante",
 			"language": "Langue",
-			"foregroundAccessibility": "Le changement automatique de profil nécessite l’accès à Accessibilité. Activez open-quake dans Réglages Système > Confidentialité et sécurité > Accessibilité."
+			"foregroundAccessibility": "Le changement automatique de profil nécessite l’accès à Accessibilité. Activez open-quake dans Réglages Système > Confidentialité et sécurité > Accessibilité.",
+			"profileClose": "Fermer",
+			"profileReturn": "Fermer et revenir aux touches",
+			"profileAppSearch": "Rechercher des applications"
 		},
 		"translationLanguages": {
 			"en": "Anglais",
@@ -306,7 +318,10 @@
 			"previousPage": "이전 페이지",
 			"nextPage": "다음 페이지",
 			"language": "언어",
-			"foregroundAccessibility": "자동 프로필 전환에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 open-quake를 활성화하세요."
+			"foregroundAccessibility": "자동 프로필 전환에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 open-quake를 활성화하세요.",
+			"profileClose": "닫기",
+			"profileReturn": "닫기 및 키로 돌아가기",
+			"profileAppSearch": "애플리케이션 검색"
 		},
 		"translationLanguages": {
 			"en": "영어",
@@ -385,7 +400,10 @@
 			"previousPage": "Vorherige Seite",
 			"nextPage": "Nächste Seite",
 			"language": "Sprache",
-			"foregroundAccessibility": "Der automatische Profilwechsel benötigt Bedienungshilfen. Aktiviere open-quake unter Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen."
+			"foregroundAccessibility": "Der automatische Profilwechsel benötigt Bedienungshilfen. Aktiviere open-quake unter Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen.",
+			"profileClose": "Schließen",
+			"profileReturn": "Schließen und zurück zu Tasten",
+			"profileAppSearch": "Anwendungen suchen"
 		},
 		"translationLanguages": {
 			"en": "Englisch",
@@ -445,7 +463,10 @@
 			"previousPage": "Pagina precedente",
 			"nextPage": "Pagina successiva",
 			"language": "Lingua",
-			"foregroundAccessibility": "Il cambio automatico del profilo richiede l’accesso ad Accessibilità. Abilita open-quake in Impostazioni di Sistema > Privacy e sicurezza > Accessibilità."
+			"foregroundAccessibility": "Il cambio automatico del profilo richiede l’accesso ad Accessibilità. Abilita open-quake in Impostazioni di Sistema > Privacy e sicurezza > Accessibilità.",
+			"profileClose": "Chiudi",
+			"profileReturn": "Chiudi e torna ai tasti",
+			"profileAppSearch": "Cerca applicazioni"
 		},
 		"translationLanguages": {
 			"en": "Inglese",
@@ -524,7 +545,10 @@
 			"previousPage": "前のページ",
 			"nextPage": "次のページ",
 			"language": "言語",
-			"foregroundAccessibility": "自動プロファイル切り替えにはアクセシビリティの許可が必要です。システム設定 > プライバシーとセキュリティ > アクセシビリティで open-quake を有効にしてください。"
+			"foregroundAccessibility": "自動プロファイル切り替えにはアクセシビリティの許可が必要です。システム設定 > プライバシーとセキュリティ > アクセシビリティで open-quake を有効にしてください。",
+			"profileClose": "閉じる",
+			"profileReturn": "閉じる、キーに戻る",
+			"profileAppSearch": "アプリを検索"
 		},
 		"translationLanguages": {
 			"en": "英語",

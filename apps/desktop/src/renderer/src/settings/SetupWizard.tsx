@@ -331,12 +331,12 @@ function SetupFlow({
 						/>
 						{t("setup.done.hardware")}
 					</p>
-					{profileFailure && (
+					{profileFailure && step === "profiles" && (
 						<p role="alert" className="setup-error">
 							{t("setup.failure.persist")}
 						</p>
 					)}
-					{state.failure ? (
+					{state.failure && !(profileFailure && step === "profiles") ? (
 						<p role="alert" className="setup-error">
 							{step === "profiles" &&
 							visibilitySaved &&
@@ -460,12 +460,12 @@ function SetupFlow({
 						}
 						onEdit={go}
 					/>
-					{profileFailure && (
+					{profileFailure && step === "profiles" && (
 						<p role="alert" className="setup-error">
 							{t("setup.failure.persist")}
 						</p>
 					)}
-					{state.failure ? (
+					{state.failure && !(profileFailure && step === "profiles") ? (
 						<p role="alert" className="setup-error">
 							{step === "profiles" &&
 							visibilitySaved &&

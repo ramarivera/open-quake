@@ -838,6 +838,7 @@ for (const sentinel of [-1, -2])
 		]);
 		const config = imported.profile?.pages[0].keys[0]?.config;
 		if (!config) return Effect.die("missing imported page key");
+		expect(config.type).toBe(sentinel === -1 ? "previousPage" : "nextPage");
 		const f = fixture(config);
 		return Effect.gen(function* () {
 			yield* press;
