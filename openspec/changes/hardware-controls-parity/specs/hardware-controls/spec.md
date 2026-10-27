@@ -194,3 +194,8 @@ The application SHALL bound hardware lifecycle waits and release exclusive hando
 - **WHEN** VIA requests ownership while its selected native bus is discovering or opening a connection
 - **THEN** handoff waits for in-flight acquisition to settle and closes its native handle before fulfilling the lease, including an uninterruptible late open
 - **AND** the selected bus cannot acquire another native handle until the lease ends, other serials retain their independent ownership, and native reconnect resumes when the lease ends
+
+#### Scenario: Overlapping long-tone requests
+- **WHEN** start and stop requests overlap while the preceding tone awaits its trailing silence acknowledgement
+- **THEN** worker replacement and stopping serialize in request order, and the last stop awaits silence with no orphan worker
+- **AND** a queued startup does not prevent a later stop from cancelling it before the playback lock becomes available

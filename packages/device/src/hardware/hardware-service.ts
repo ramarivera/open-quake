@@ -165,6 +165,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				}> = Option.none();
 				const wireLock = yield* Effect.makeSemaphore(1);
 				const toneLock = yield* Effect.makeSemaphore(1);
+				const toneTransitionLock = yield* Effect.makeSemaphore(1);
+				let toneClosing = false;
 				let sequenceStop:
 					| { stop: Deferred.Deferred<void>; done: Deferred.Deferred<void> }
 					| undefined;
@@ -408,49 +410,65 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					(name: ToneName): Effect.Effect<void, HardwareError> =>
 						playSequence(buzzerTones[name]),
 				);
+				const interruptLongTone = Effect.gen(function* () {
+					if (Option.isSome(longTone)) {
+						yield* Fiber.interrupt(longTone.value);
+						longTone = Option.none();
+					}
+				});
+				const stopLongTone = toneTransitionLock.withPermits(1)(
+					interruptLongTone.pipe(Effect.uninterruptible),
+				);
 				const setLongTone = Effect.fn("HardwareControls.setLongTone")(
 					function* (on: boolean): Effect.fn.Return<void, HardwareError> {
-						yield* ensureActive();
-						if (Option.isSome(longTone)) {
-							yield* Fiber.interrupt(longTone.value);
-							longTone = Option.none();
-						}
-						if (
-							!on ||
-							!preferences.buzzerEnabled ||
-							preferences.alertVolume === 0
-						)
-							return;
-						const started = yield* Deferred.make<void, HardwareError>();
-						longTone = Option.some(
-							yield* toneLock
-								.withPermits(1)(
-									Effect.gen(function* () {
-										yield* send({
-											_tag: "Buzzer",
-											level: preferences.alertVolume,
-										}).pipe(Effect.uninterruptible);
-										yield* Deferred.succeed(started, undefined);
-										yield* Effect.never;
-									}).pipe(Effect.ensuring(silence)),
+						const started = yield* toneTransitionLock.withPermits(1)(
+							Effect.gen(function* () {
+								yield* ensureActive();
+								yield* interruptLongTone;
+								// Preferences or lifecycle may change while trailing silence drains.
+								yield* ensureActive();
+								if (toneClosing) return yield* new HardwareUnavailable();
+								if (
+									!on ||
+									!preferences.buzzerEnabled ||
+									preferences.alertVolume === 0
 								)
-								.pipe(
-									Effect.onExit((exit) =>
-										Exit.isFailure(exit)
-											? Deferred.fail(
-													started,
-													Option.getOrElse(
-														Cause.failureOption(exit.cause),
-														() => new HardwareUnavailable(),
-													),
-												)
-											: Deferred.succeed(started, undefined),
-									),
-									Effect.ignore,
-									Effect.forkIn(scope),
-								),
+									return Option.none<Deferred.Deferred<void, HardwareError>>();
+								const started = yield* Deferred.make<void, HardwareError>();
+								longTone = Option.some(
+									yield* toneLock
+										.withPermits(1)(
+											Effect.gen(function* () {
+												yield* send({
+													_tag: "Buzzer",
+													level: preferences.alertVolume,
+												}).pipe(Effect.uninterruptible);
+												yield* Deferred.succeed(started, undefined);
+												yield* Effect.never;
+											}).pipe(Effect.ensuring(silence)),
+										)
+										.pipe(
+											Effect.onExit((exit) =>
+												Exit.isFailure(exit)
+													? Deferred.fail(
+															started,
+															Option.getOrElse(
+																Cause.failureOption(exit.cause),
+																() => new HardwareUnavailable(),
+															),
+														)
+													: Deferred.succeed(started, undefined),
+											),
+											Effect.ignore,
+											Effect.interruptible,
+											Effect.forkIn(scope),
+										),
+								);
+								return Option.some(started);
+							}).pipe(Effect.uninterruptible),
 						);
-						yield* Deferred.await(started);
+						// A pending playback lock must not block a subsequent release request.
+						if (Option.isSome(started)) yield* Deferred.await(started.value);
 					},
 				);
 				const flush = Effect.fn("HardwareControls.flush")(
@@ -495,7 +513,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				yield* Effect.addFinalizer(() =>
 					Effect.gen(function* () {
 						if (Option.isSome(preview)) yield* Fiber.interrupt(preview.value);
-						if (Option.isSome(longTone)) yield* Fiber.interrupt(longTone.value);
+						toneClosing = true;
+						yield* stopLongTone;
 						if (Option.isSome(saving)) yield* Fiber.interrupt(saving.value);
 						yield* flush().pipe(
 							Effect.catchTag("HardwarePreferencesFailed", (error) =>
@@ -757,10 +776,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 											yield* Deferred.succeed(playback.stop, undefined);
 											yield* Deferred.await(playback.done);
 										}
-										if (Option.isSome(longTone)) {
-											yield* Fiber.interrupt(longTone.value);
-											longTone = Option.none();
-										}
+										yield* stopLongTone;
 									}
 									owner.preferences = preferences;
 									owner.dirty = true;

@@ -532,3 +532,103 @@ it.scoped(
 			expect(saved.get("racing-reconnect")?.mic).toBe(false);
 		}),
 );
+
+for (const order of ["start-stop", "stop-start"] as const) {
+	it.scoped(
+		`overlapping long-tone ${order} retains the final worker owner`,
+		() =>
+			Effect.gen(function* () {
+				let holdSilence = true;
+				const { connect } = yield* setup({
+					onCommand: (c) => {
+						if (
+							c.opCode === 1 &&
+							c.cmdId === 2 &&
+							c.subData[0] === 0 &&
+							holdSilence
+						) {
+							holdSilence = false;
+							return [];
+						}
+						return c.opCode === 2
+							? [fakeHardwareReply(c.cmdId, [1, 1, 0, 21])]
+							: [fakeHardwareReply(0, [0x90])];
+					},
+				});
+				const { session, fake } = yield* connect(order);
+				yield* session.setLongTone(true);
+				const first = yield* session
+					.setLongTone(order === "start-stop")
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(0);
+				expect(holdSilence).toBe(false);
+				const second = yield* session
+					.setLongTone(order === "stop-start")
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(0);
+				expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
+				expect(Option.isNone(yield* Fiber.poll(second))).toBe(true);
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				yield* TestClock.adjust(0);
+				yield* Fiber.join(first);
+				yield* Fiber.join(second);
+				expect((yield* fake.writes).at(-1)?.[5]).toBe(
+					order === "start-stop" ? 0 : 84,
+				);
+				// A subsequent release must still own the final tone, even after overlap.
+				yield* session.setLongTone(false);
+				expect((yield* fake.writes).at(-1)?.[5]).toBe(0);
+			}),
+	);
+}
+
+for (const preference of ["disabled", "zero"] as const) {
+	it.scoped(
+		`master ${preference} owns a concurrent long-tone replacement`,
+		() =>
+			Effect.gen(function* () {
+				let holdSilence = true;
+				const { connect } = yield* setup({
+					onCommand: (c) => {
+						if (
+							c.opCode === 1 &&
+							c.cmdId === 2 &&
+							c.subData[0] === 0 &&
+							holdSilence
+						) {
+							holdSilence = false;
+							return [];
+						}
+						return c.opCode === 2
+							? [fakeHardwareReply(c.cmdId, [1, 1, 0, 21])]
+							: [fakeHardwareReply(0, [0x90])];
+					},
+				});
+				const { session, fake } = yield* connect(`overlap-${preference}`);
+				yield* session.setLongTone(true);
+				const replacing = yield* session
+					.setLongTone(true)
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(0);
+				expect(holdSilence).toBe(false);
+				const disabling = yield* session
+					.configure({
+						...defaultHardwarePreferences,
+						...(preference === "disabled"
+							? { buzzerEnabled: false }
+							: { alertVolume: 0 }),
+					})
+					.pipe(Effect.fork);
+				yield* TestClock.adjust(0);
+				expect(Option.isNone(yield* Fiber.poll(disabling))).toBe(true);
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				yield* Fiber.join(replacing);
+				yield* Fiber.join(disabling);
+				yield* TestClock.adjust(1000);
+				const levels = (yield* fake.writes)
+					.filter((r) => r[3] === 1 && r[4] === 2)
+					.map((r) => r[5]);
+				expect(levels).toEqual([84, 0]);
+			}),
+	);
+}
