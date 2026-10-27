@@ -63,3 +63,9 @@ Software verification, 2026-10-27, Codex gpt-6.1-sol high: a session transition 
 - [x] 8.1 Preserve native key actions, hardware dispatch, revision-owned cancellation and strip feedback when integrating PR126 through PR128. Align buzzer/mic library expectations with their implemented availability while retaining unavailable-plugin and exact 100/101 capacity coverage. Bead `open-quake-i3j.5`.
 
 Integration verification, 2026-10-27: before the approved expectation update, the resolved tree exactly matches tested candidate stage `78e96fec`. The actual PR branch passes all 84 desktop runtime/library/overlay tests and desktop typecheck. The complete combined candidate passed 5,353 tests, six typechecks, production build and both bundle checks. Hosted review and installer checks on this synchronized head remain pending; physical hardware/OS acceptance is separate.
+
+## 9. Interrupted long-tone startup
+
+- [x] 9.1 Cancel the startup caller's scoped worker on interruption while preserving a later replacement owner. Bead `open-quake-i3j.5`, PR129 review 4390151564.
+
+Verification, 2026-10-27: two regressions fail against `db031f8b`, reproducing a cancelled queued tone sounding later and a cancelled in-flight start remaining audible. A third regression retains a concurrent replacement. All 40 owning tone/consumer tests pass, including earlier overlapping start/stop and master-disable cases. Device typecheck and scoped Biome pass. No physical device or audible test ran. New-head hosted checks and bot review remain pending.

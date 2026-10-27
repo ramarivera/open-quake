@@ -420,56 +420,74 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					interruptLongTone.pipe(Effect.uninterruptible),
 				);
 				const setLongTone = Effect.fn("HardwareControls.setLongTone")(
-					function* (on: boolean): Effect.fn.Return<void, HardwareError> {
-						const started = yield* toneTransitionLock.withPermits(1)(
-							Effect.gen(function* () {
-								yield* ensureActive();
-								yield* interruptLongTone;
-								// Preferences or lifecycle may change while trailing silence drains.
-								yield* ensureActive();
-								if (toneClosing) return yield* new HardwareUnavailable();
-								if (
-									!on ||
-									!preferences.buzzerEnabled ||
-									preferences.alertVolume === 0
-								)
-									return Option.none<Deferred.Deferred<void, HardwareError>>();
-								const started = yield* Deferred.make<void, HardwareError>();
-								longTone = Option.some(
-									yield* toneLock
-										.withPermits(1)(
-											Effect.gen(function* () {
-												yield* send({
-													_tag: "Buzzer",
-													level: preferences.alertVolume,
-												}).pipe(Effect.uninterruptible);
-												yield* Deferred.succeed(started, undefined);
-												yield* Effect.never;
-											}).pipe(Effect.ensuring(silence)),
+					(on: boolean): Effect.Effect<void, HardwareError> =>
+						Effect.suspend(() => {
+							let worker: Fiber.RuntimeFiber<void, never> | undefined;
+							return Effect.gen(function* () {
+								const started = yield* toneTransitionLock.withPermits(1)(
+									Effect.gen(function* () {
+										yield* ensureActive();
+										yield* interruptLongTone;
+										// Preferences or lifecycle may change while trailing silence drains.
+										yield* ensureActive();
+										if (toneClosing) return yield* new HardwareUnavailable();
+										if (
+											!on ||
+											!preferences.buzzerEnabled ||
+											preferences.alertVolume === 0
 										)
-										.pipe(
-											Effect.onExit((exit) =>
-												Exit.isFailure(exit)
-													? Deferred.fail(
-															started,
-															Option.getOrElse(
-																Cause.failureOption(exit.cause),
-																() => new HardwareUnavailable(),
-															),
-														)
-													: Deferred.succeed(started, undefined),
-											),
-											Effect.ignore,
-											Effect.interruptible,
-											Effect.forkIn(scope),
-										),
+											return Option.none<
+												Deferred.Deferred<void, HardwareError>
+											>();
+										const started = yield* Deferred.make<void, HardwareError>();
+										worker = yield* toneLock
+											.withPermits(1)(
+												Effect.gen(function* () {
+													yield* send({
+														_tag: "Buzzer",
+														level: preferences.alertVolume,
+													}).pipe(Effect.uninterruptible);
+													yield* Deferred.succeed(started, undefined);
+													yield* Effect.never;
+												}).pipe(Effect.ensuring(silence)),
+											)
+											.pipe(
+												Effect.onExit((exit) =>
+													Exit.isFailure(exit)
+														? Deferred.fail(
+																started,
+																Option.getOrElse(
+																	Cause.failureOption(exit.cause),
+																	() => new HardwareUnavailable(),
+																),
+															)
+														: Deferred.succeed(started, undefined),
+												),
+												Effect.ignore,
+												Effect.interruptible,
+												Effect.forkIn(scope),
+											);
+										longTone = Option.some(worker);
+										return Option.some(started);
+									}).pipe(Effect.uninterruptible),
 								);
-								return Option.some(started);
-							}).pipe(Effect.uninterruptible),
-						);
-						// A pending playback lock must not block a subsequent release request.
-						if (Option.isSome(started)) yield* Deferred.await(started.value);
-					},
+								// A pending playback lock must not block a subsequent release request.
+								if (Option.isSome(started))
+									yield* Deferred.await(started.value);
+							}).pipe(
+								// Install cleanup around the entire transition, including the
+								// boundary between publishing the worker and awaiting startup.
+								Effect.onInterrupt(() =>
+									toneTransitionLock.withPermits(1)(
+										Effect.suspend(() =>
+											Option.isSome(longTone) && longTone.value === worker
+												? interruptLongTone
+												: Effect.void,
+										),
+									),
+								),
+							);
+						}),
 				);
 				const flush = Effect.fn("HardwareControls.flush")(
 					(): Effect.Effect<void, HardwarePreferencesFailed> =>

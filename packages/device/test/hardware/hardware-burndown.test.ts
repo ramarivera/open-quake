@@ -632,3 +632,74 @@ for (const preference of ["disabled", "zero"] as const) {
 			}),
 	);
 }
+
+it.scoped(
+	"cancelled queued long-tone startup never sounds after a sequence releases",
+	() =>
+		Effect.gen(function* () {
+			const { connect } = yield* setup();
+			const { session, fake } = yield* connect("cancelled-tone-start");
+			const sequence = yield* session
+				.playSequence([[80, 60000]])
+				.pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			const starting = yield* session.setLongTone(true).pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			expect(Option.isNone(yield* Fiber.poll(starting))).toBe(true);
+			yield* Fiber.interrupt(starting);
+			yield* Fiber.interrupt(sequence);
+			yield* TestClock.adjust(0);
+			const levels = (yield* fake.writes)
+				.filter((r) => r[3] === 1 && r[4] === 2)
+				.map((r) => r[5]);
+			expect(levels).toEqual([84, 0]);
+		}),
+);
+
+for (const replace of [false, true]) {
+	it.scoped(
+		`interrupted long-tone startup drains its write and preserves replacement=${replace}`,
+		() =>
+			Effect.gen(function* () {
+				let holdStartup = true;
+				const { connect } = yield* setup({
+					onCommand: (c) => {
+						if (
+							c.opCode === 1 &&
+							c.cmdId === 2 &&
+							c.subData[0] !== 0 &&
+							holdStartup
+						) {
+							holdStartup = false;
+							return [];
+						}
+						return c.opCode === 2
+							? [fakeHardwareReply(c.cmdId, [1, 1, 0, 21])]
+							: [fakeHardwareReply(0, [0x90])];
+					},
+				});
+				const { session, fake } = yield* connect(`cancelled-start-${replace}`);
+				const starting = yield* session
+					.setLongTone(true)
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(0);
+				expect(holdStartup).toBe(false);
+				const replacement = replace
+					? yield* session.setLongTone(true).pipe(Effect.fork)
+					: undefined;
+				yield* TestClock.adjust(0);
+				const cancelling = yield* Fiber.interrupt(starting).pipe(Effect.fork);
+				yield* TestClock.adjust(0);
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				yield* TestClock.adjust(0);
+				yield* Fiber.join(cancelling);
+				if (replacement) yield* Fiber.join(replacement);
+				const levels = (yield* fake.writes)
+					.filter((r) => r[3] === 1 && r[4] === 2)
+					.map((r) => r[5]);
+				expect(levels).toEqual(replace ? [84, 0, 84] : [84, 0]);
+				yield* session.setLongTone(false);
+				expect((yield* fake.writes).at(-1)?.[5]).toBe(0);
+			}),
+	);
+}

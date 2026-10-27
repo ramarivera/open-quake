@@ -199,3 +199,8 @@ The application SHALL bound hardware lifecycle waits and release exclusive hando
 - **WHEN** start and stop requests overlap while the preceding tone awaits its trailing silence acknowledgement
 - **THEN** worker replacement and stopping serialize in request order, and the last stop awaits silence with no orphan worker
 - **AND** a queued startup does not prevent a later stop from cancelling it before the playback lock becomes available
+
+#### Scenario: Cancelled long-tone startup retains request ownership
+- **WHEN** a caller interrupts long-tone startup while it waits for another sequence or an in-flight buzzer write
+- **THEN** that request's worker stops before cancellation settles and cannot sound after the sequence releases; any accepted write drains and receives trailing silence
+- **AND** cancellation does not stop a replacement worker installed by a later request
