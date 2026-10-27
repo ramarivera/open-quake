@@ -28,6 +28,18 @@ async function fixture(autoStart = false) {
 	let stopped = 0;
 	let stopFailure = false;
 	let ready = true;
+	let probing: () => void = () => {};
+	const healthStarted = new Promise<void>((resolve) => {
+		probing = resolve;
+	});
+	let stopping: () => void = () => {};
+	const processStopped = new Promise<void>((resolve) => {
+		stopping = resolve;
+	});
+	let becameReady: () => void = () => {};
+	const runtimeReady = new Promise<void>((resolve) => {
+		becameReady = resolve;
+	});
 	let exit: () => void = () => {};
 	if (autoStart)
 		await storage.saveSettings({
@@ -49,14 +61,21 @@ async function fixture(autoStart = false) {
 						stopped++;
 						if (stopFailure) throw new Error("fake tree cleanup failed");
 						exit();
+						stopping();
 					},
 				};
 				return process;
 			},
-			health: async () => ready,
+			health: async () => {
+				probing();
+				return ready;
+			},
 		},
 	});
 	if (!backend?.administration) throw new Error("missing owned runtime");
+	const unsubscribe = backend.subscribe?.((state) => {
+		if (state.status === "ready") becameReady();
+	});
 	const runtime = ManagedRuntime.make(
 		AgentsRuntime.Default.pipe(
 			Layer.provide(Layer.succeed(AgentRuntimePort, backend)),
@@ -69,6 +88,9 @@ async function fixture(autoStart = false) {
 		admin: backend.administration,
 		runtime,
 		starts,
+		healthStarted,
+		processStopped,
+		runtimeReady,
 		stopped: () => stopped,
 		stopFailure: (fail: boolean) => {
 			stopFailure = fail;
@@ -79,6 +101,7 @@ async function fixture(autoStart = false) {
 		},
 		close: async () => {
 			await runtime.dispose();
+			unsubscribe?.();
 			await rm(root, { recursive: true, force: true });
 		},
 	};
@@ -148,11 +171,8 @@ it("CENTER-047/048 owns start, consented restart, selected private directory and
 it("CENTER-047/104/MAIN-144 persists opt-in autostart, reports unexpected exit, rejects arbitrary environment and keeps redacted bounded logs", async () => {
 	const f = await fixture(true);
 	try {
-		await expect
-			.poll(
-				async () => (await f.runtime.runPromise(AgentsRuntime.read())).status,
-			)
-			.toBe("ready");
+		await f.runtime.runPromise(AgentsRuntime.read());
+		await f.runtimeReady;
 		expect(f.starts).toHaveLength(1);
 		f.exit();
 		await Promise.resolve();
@@ -177,10 +197,10 @@ it("CENTER-047 failed readiness cancels and stops only the owned fake process", 
 		const pending = Effect.runPromise(f.backend.start, {
 			signal: controller.signal,
 		});
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await f.healthStarted;
 		controller.abort();
 		await expect(pending).rejects.toThrow();
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await f.processStopped;
 		expect(f.stopped()).toBe(1);
 		expect(
 			createOwnedAgentRuntime({ root: f.root, command: "openclaw" }),

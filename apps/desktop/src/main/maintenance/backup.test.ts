@@ -15,6 +15,7 @@ import discord from "../../../../../packages/device/src/profiles/builtins/defaul
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
+	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	Profile,
 	ProfileEnvelope,
@@ -33,16 +34,15 @@ import { backupProjection, mergeBackup } from "./backup-merge";
 import { clearOwnedData, exportBackup, prepareRestore } from "./backup-store";
 
 const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
-const envelope = () =>
-	encodeProfileEnvelope(
-		Schema.decodeUnknownSync(ProfileEnvelope)({
-			schemaVersion: 1,
-			profiles: builtinProfiles("darwin").map((p) =>
-				Schema.encodeSync(Profile)(p),
-			),
-			activeByDevice: {},
-		}),
-	);
+// Archive/path/settings tests need one small native profile. Catalog payloads
+// are exercised separately below without exporting nine presets per archive.
+const envelope = () => {
+	const initial = createInitialProfileEnvelope();
+	return encodeProfileEnvelope({
+		...initial,
+		profiles: [{ ...initial.profiles[0], id: "1-0", name: "Discord" }],
+	});
+};
 function legacy() {
 	const key = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const files = new Map<string, Uint8Array>([
@@ -148,7 +148,7 @@ describe("authenticated backup compatibility", () => {
 			]),
 		);
 		const result = mergeBackup(files, envelope(), "/new/userData");
-		expect(result.envelope.profiles).toHaveLength(10);
+		expect(result.envelope.profiles).toHaveLength(2);
 		expect(result.imported).toBe(1);
 		expect(result.skipped).toBe(1);
 	});
@@ -173,10 +173,20 @@ describe("authenticated backup compatibility", () => {
 		const result = mergeBackup(files, envelope(), "/new/userData");
 		expect(result.imported).toBe(0);
 		expect(result.skipped).toBe(1);
-		expect(result.envelope.profiles).toHaveLength(9);
+		expect(result.envelope.profiles).toHaveLength(1);
 	});
 	it("projects knob data and encrypted profile titles into the DK format", () => {
-		const projected = backupProjection(envelope(), "/source", "darwin");
+		const initial = createInitialProfileEnvelope();
+		const profiles = builtinProfiles("darwin").filter(
+			(p) => p.id === "1-0" || p.id === "1-8",
+		);
+		const [first, ...rest] = profiles;
+		if (!first) throw new Error("Missing catalog fixture");
+		const projected = backupProjection(
+			encodeProfileEnvelope({ ...initial, profiles: [first, ...rest] }),
+			"/source",
+			"darwin",
+		);
 		const config = decodeAccountConfig(
 			projected.get("default_config.json") ?? new Uint8Array(),
 			"default",
@@ -400,9 +410,9 @@ describe("authenticated backup compatibility", () => {
 		const result = mergeBackup(decoded, envelope(), "/new/userData");
 		expect(result.imported).toBe(2);
 		expect(result.skipped).toBe(2);
-		expect(result.envelope.profiles).toHaveLength(10);
+		expect(result.envelope.profiles).toHaveLength(2);
 		const again = mergeBackup(decoded, result.envelope, "/new/userData");
-		expect(again.envelope.profiles).toHaveLength(10);
+		expect(again.envelope.profiles).toHaveLength(2);
 	});
 	it("export decrypts through an independent crypto/zip decoder", async () => {
 		const files = legacy();
