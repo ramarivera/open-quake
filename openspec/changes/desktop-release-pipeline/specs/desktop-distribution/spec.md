@@ -13,8 +13,14 @@ Tagged macOS releases SHALL use team TRGDCMBX3J's Developer ID Application ident
 - **THEN** it SHALL verify the app in each format for expected Developer ID authority/team, strict recursive signatures, hardened runtime, secure timestamp, a valid staple and Gatekeeper acceptance before collecting downloads
 
 #### Scenario: Local opt-in and PR isolation
-- **WHEN** a developer explicitly enables Apple signing locally with an existing signing identity and notarization profile or Apple ID credentials
+- **WHEN** a developer explicitly enables Apple signing locally with an existing signing identity and a complete notarization API credential, profile or Apple ID credential pair
 - **THEN** packaging SHALL sign/notarize without publishing, and pull-request builds SHALL reject signing opt-in without receiving release secrets
+
+#### Scenario: Reuse existing notarization API credentials
+
+- **WHEN** a trusted macOS tag build receives its existing notarization API key, identifier and issuer
+- **THEN** the private key SHALL be staged only in the signing temporary directory with private permissions and removed by the always-run cleanup
+- **AND** missing fields or mixed credential modes SHALL block packaging
 
 ### Requirement: Five-target desktop downloads
 The system SHALL produce macOS arm64 DMG/ZIP, Windows arm64 and x64 EXE, and Linux arm64 and x64 AppImage/DEB packages with correct version metadata and packaged native bindings.

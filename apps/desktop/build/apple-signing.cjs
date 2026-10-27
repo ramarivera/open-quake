@@ -25,20 +25,20 @@ function appleSigningOptions(env = process.env, platform = process.platform) {
 		fail(`APPLE_TEAM_ID must be ${APPLE_TEAM}`);
 	}
 	// Match electron-builder 26.18.0's notarization credential precedence.
-	// Support Apple ID credentials on release runners and an existing local
-	// notarytool profile. Do not silently fall through to a different account.
-	if (["APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"].some(present)) {
-		fail("use Apple ID credentials or an existing APPLE_KEYCHAIN_PROFILE");
-	}
+	// Support the existing Apple API identity as well as Apple ID credentials
+	// and a local notarytool profile. Reject mixed modes before builder precedence.
+	const apiKeys = ["APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"];
+	const api = apiKeys.some(present);
 	const appleId = present("APPLE_ID") || present("APPLE_APP_SPECIFIC_PASSWORD");
 	const profile = present("APPLE_KEYCHAIN_PROFILE");
 	if (
-		appleId === profile ||
+		Number(api) + Number(appleId) + Number(profile) !== 1 ||
+		(api && !apiKeys.every(present)) ||
 		(appleId &&
 			(!present("APPLE_ID") || !present("APPLE_APP_SPECIFIC_PASSWORD")))
 	) {
 		fail(
-			"provide APPLE_ID and APPLE_APP_SPECIFIC_PASSWORD, or only APPLE_KEYCHAIN_PROFILE",
+			"provide exactly one complete API key, Apple ID pair, or keychain profile",
 		);
 	}
 	if (env.GITHUB_ACTIONS === "true") {

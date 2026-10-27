@@ -73,12 +73,13 @@ An authorized operator must supply these repository or organization Actions secr
 | --- | --- |
 | `APPLE_CERTIFICATE_P12_BASE64` | Base64 PKCS#12 containing the existing Developer ID Application certificate and its private key |
 | `APPLE_CERTIFICATE_PASSWORD` | Nonempty password protecting that PKCS#12 |
-| `APPLE_ID` | Apple account allowed to notarize for team `TRGDCMBX3J` |
-| `APPLE_APP_SPECIFIC_PASSWORD` | That account's app-specific password for notarization |
+| `APPLE_API_KEY_P8` | Existing App Store Connect notarization private key in PEM format |
+| `APPLE_API_KEY_ID` | The existing notarization API key's identifier |
+| `APPLE_API_ISSUER` | The existing notarization API key's issuer identifier |
 
 Team `TRGDCMBX3J` and the identity qualifier `Ramiro Rivera (TRGDCMBX3J)` are public configuration. The builder chooses the Developer ID Application certificate type. No Developer ID Installer certificate or provisioning profile is required for these non-App-Store DMG/ZIP targets. The secret list was empty at the benchmark's start; this candidate doesn't provision secrets or export keys.
 
-Only the macOS tag packaging step receives secrets. Dependency installation and app compilation run before that step. electron-builder 26.18.0 imports `CSC_LINK` into a temporary keychain, configures noninteractive signing access and removes it on disposal. The workflow also deletes leftover keychains and certificate files in its dedicated runner temporary directory with `always()`. Secrets aren't written to `GITHUB_ENV`, caches, effective builder configuration or release assets. Don't enable shell tracing or builder debug logs around credentials. Tag creation must remain limited to trusted code; this workflow doesn't use `pull_request_target` or sign PR code.
+Only the macOS tag packaging step receives secrets. Dependency installation and app compilation run before that step. The API key is written with mode 0600 inside the dedicated signing temporary directory and removed from the packaging environment after staging. electron-builder 26.18.0 imports `CSC_LINK` into a temporary keychain, configures noninteractive signing access and removes it on disposal. The workflow also deletes the API key, leftover keychains and certificate files in its dedicated runner temporary directory with `always()`. Secrets aren't written to `GITHUB_ENV`, caches, effective builder configuration or release assets. Don't enable shell tracing or builder debug logs around credentials. Tag creation must remain limited to trusted code; this workflow doesn't use `pull_request_target` or sign PR code.
 
 Hardened runtime is on for signed builds. The explicit entitlement file preserves the pinned builder's Electron JIT, executable-memory and library-loading baseline and adds microphone access. It doesn't enable App Sandbox or debugging entitlement `get-task-allow`. node-hid, koffi and the native media framework stay outside ASAR; the canonical signer recursively signs Mach-O binaries, native modules, frameworks and Electron helpers. The existing microphone/audio purpose strings remain. These entitlements allow runtime operation, they don't grant user permissions or prove physical hardware/audio acceptance. Keep the packaged native smoke as the runtime compatibility gate.
 
@@ -96,7 +97,7 @@ pnpm --filter @open-quake/desktop package --mac --arm64
 pnpm --filter @open-quake/desktop test:package
 ```
 
-Packaging always uses `--publish never`. Signing and notarization still use the private key and submit the app to Apple; they're separate from release publication and weren't performed for this candidate. `APPLE_KEYCHAIN` can select an existing profile's keychain. Alternatively use the Apple ID pair from an already configured private environment, with no profile variables. Mixed credentials and API-key credentials are rejected explicitly to keep the supported path unambiguous. Ordinary local builds need none of these variables.
+Packaging always uses `--publish never`. Signing and notarization still use the private key and submit the app to Apple; they're separate from release publication and weren't performed for this candidate. `APPLE_KEYCHAIN` can select an existing profile's keychain. Alternatively use the existing `APPLE_API_KEY` file with `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`, or the `APPLE_ID` and `APPLE_APP_SPECIFIC_PASSWORD` pair from an already configured private environment. Mixed or incomplete credential modes are rejected before the builder chooses a credential. Ordinary local builds need none of these variables.
 
 For signature/ticket inspection alone, without launching the app, run `node apps/desktop/scripts/verify-apple-signing.mjs /path/to/open-quake.app`. For runtime verification, `test:package` additionally launches hidden smoke windows and loads native bindings, so follow the host's test authorization rules. Full signed/notarized artifact validation remains outstanding until the signing key and notarization account/profile are available through an authorized route.
 

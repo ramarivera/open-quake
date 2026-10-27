@@ -132,6 +132,38 @@ test("signed local profiles and release Apple ID credentials select distribution
 	}
 });
 
+test("existing API credentials select the same policy and reject incomplete or mixed modes", () => {
+	const api = {
+		...tag,
+		APPLE_TEAM_ID: policy.APPLE_TEAM,
+		APPLE_API_KEY: "/test/notarization.p8",
+		APPLE_API_KEY_ID: "TESTKEY123",
+		APPLE_API_ISSUER: "00000000-0000-0000-0000-000000000000",
+	};
+	assert.deepEqual(
+		policy.appleSigningOptions(api, "darwin"),
+		policy.appleSigningOptions(credentials, "darwin"),
+	);
+	for (const key of ["APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"]) {
+		assert.throws(
+			() => policy.appleSigningOptions({ ...api, [key]: "" }, "darwin"),
+			/Apple release signing:/,
+		);
+	}
+	for (const extra of [
+		{ APPLE_KEYCHAIN_PROFILE: "other-profile" },
+		{
+			APPLE_ID: "test@example.invalid",
+			APPLE_APP_SPECIFIC_PASSWORD: "test-only",
+		},
+	]) {
+		assert.throws(
+			() => policy.appleSigningOptions({ ...api, ...extra }, "darwin"),
+			/Apple release signing:/,
+		);
+	}
+});
+
 test("Windows and Linux never require Apple credentials, including on tags", () => {
 	for (const platform of ["win32", "linux"]) {
 		assert.equal(
@@ -224,6 +256,12 @@ test("release secrets are confined to the mac tag step and cleanup always follow
 		JSON.stringify(step).includes("secrets."),
 	);
 	assert.deepEqual(secretSteps, [signed]);
+	assert.equal(signed.env.APPLE_API_KEY_P8, "${{ secrets.APPLE_API_KEY_P8 }}");
+	assert.equal(signed.env.APPLE_ID, undefined);
+	assert.ok(
+		signed.run.includes('printf \'%s\' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"'),
+	);
+	assert.ok(signed.run.includes("unset APPLE_API_KEY_P8"));
 	const unsigned = job.steps.find(
 		(step) => step.name === "Package without distribution signing",
 	);
