@@ -5,10 +5,12 @@ import { platform } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { app, desktopCapturer, screen, shell } from "electron";
+import type { TypeObject } from "koffi";
 import { KeyFunctionUnavailable } from "../../../../../packages/device/src/actions/action-errors.js";
 import type { NativeApplicationPort } from "../profiles/native-actions";
 
 const run = promisify(execFile);
+let windowsEnumerationCallback: TypeObject | undefined;
 const macFocusScript =
 	'on run argv\ntell application "System Events" to set frontmost of first process whose unix id is (item 1 of argv as integer) to true\nend run';
 async function processList(
@@ -172,9 +174,11 @@ export const nativeApplicationPort: NativeApplicationPort = {
 		}
 		const k = await import("koffi");
 		const user = k.load("user32.dll");
-		const cb = k.proto(
-			"bool __stdcall OQKeyEnumWindows(void *hwnd, intptr_t data)",
-		);
+		if (!windowsEnumerationCallback)
+			windowsEnumerationCallback = k.proto(
+				"bool __stdcall OQKeyEnumWindows(void *hwnd, intptr_t data)",
+			);
+		const cb = windowsEnumerationCallback;
 		const getPid = user.func(
 			"uint32_t __stdcall GetWindowThreadProcessId(void *hwnd, _Out_ uint32_t *pid)",
 		);

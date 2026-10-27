@@ -60,3 +60,9 @@ Second-continuation verification: 184 focused device tests and 64 desktop adapte
 - [x] Retire display countdown ownership before native timer activation and normalize valid host:port URLs through sequence preflight and real profile import/desktop dispatch. Bead `open-quake-lih.10.29`. Parent owns remote gates; no merge or additional review loop.
 
 Extra-batch verification: 94 device action/runtime tests and 60 desktop adapter/mounted-renderer/sequence-editor tests passed. The unchanged 100/101 capacity consumer and existing mute alternate-visual consumer each passed separately. Nine finding-specific cases failed against old source, including the timer remaining running across the old display deadline. Device/desktop typechecks, scoped Biome and production desktop build passed. Ordinary owner-spec validation passes with existing length warnings; scoped Biome retains three existing template-placeholder warnings. No native device, host input, microphone, audio, provider, visible app, Installer or release tests ran. Parent owns replies, resolutions and remote gates; `open-quake-lih.10.29` stays open. Evidence is in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/extra-batch/`.
+
+## PR #127 repeated Windows focus correction
+
+- [x] Cache the Windows enumeration callback type across activations and retain per-call callback cleanup. Bead `open-quake-lih.10.30`. The production focus regression uses the real persistent Koffi type registry with fake Windows calls, reproducing the duplicate-type failure on the second activation before the fix. It also checks callback cleanup after an aborted activation. Actual Windows focus remains unverified.
+
+Verification: all 62 native-host and desktop runtime-port tests pass, desktop typecheck and scoped Biome pass, and owner-spec validation passes with the three existing length warnings. No Windows window was enumerated or focused during these tests.

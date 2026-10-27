@@ -10,7 +10,34 @@ const host = vi.hoisted(() => ({
 	readlink: vi.fn(),
 	realpath: vi.fn(),
 	stat: vi.fn(),
+	windowsFocus: vi.fn(() => true),
+	windowsEnumerate: vi.fn(),
+	windowsUnregister: vi.fn(),
 }));
+vi.mock("koffi", async () => {
+	const actual = await vi.importActual<typeof import("koffi")>("koffi");
+	return {
+		...actual,
+		load: () => ({
+			func: (declaration: string) => {
+				if (declaration.includes("GetWindowThreadProcessId"))
+					return (_window: unknown, pid: number[]) => {
+						pid[0] = 123;
+					};
+				if (declaration.includes("SetForegroundWindow"))
+					return host.windowsFocus;
+				if (declaration.includes("EnumWindows"))
+					return (visitor: (window: unknown) => boolean) => {
+						host.windowsEnumerate();
+						visitor("owned-window");
+					};
+				return () => true;
+			},
+		}),
+		register: (visitor: (window: unknown) => boolean) => visitor,
+		unregister: host.windowsUnregister,
+	};
+});
 vi.mock("node:child_process", () => ({
 	execFile: (
 		file: string,
@@ -170,4 +197,19 @@ it("review: Linux X11 focus uses structured PID argv and missing xdotool is unav
 		_tag: "KeyFunctionUnavailable",
 		reason: "adapter-missing",
 	});
+});
+
+it("review: Windows can focus twice with the real persistent Koffi type registry", async () => {
+	host.platform.mockReturnValue("win32");
+	await nativeApplicationPort.focus(123, "C:\\editor.exe");
+	await nativeApplicationPort.focus(123, "C:\\editor.exe");
+	expect(host.windowsEnumerate).toHaveBeenCalledTimes(2);
+	expect(host.windowsFocus).toHaveBeenCalledTimes(2);
+	expect(host.windowsUnregister).toHaveBeenCalledTimes(2);
+
+	await expect(
+		nativeApplicationPort.focus(123, "C:\\editor.exe", AbortSignal.abort()),
+	).rejects.toThrow();
+	expect(host.windowsEnumerate).toHaveBeenCalledTimes(2);
+	expect(host.windowsUnregister).toHaveBeenCalledTimes(3);
 });

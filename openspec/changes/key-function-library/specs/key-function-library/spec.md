@@ -231,3 +231,9 @@ Native actions SHALL preserve clipboard data on failed setup and interruption, c
 - **WHEN** a website import or sequence contains localhost:3000/path or example.org:8080/path, including title placeholders
 - **THEN** normalization adds HTTP before existing URL validation and the owning adapter dispatches the valid target
 - **AND** unsafe explicit schemes and invalid ports remain rejected before host effects
+
+#### Scenario: Repeated Windows application focus
+
+- **WHEN** an Open key focuses an already-running Windows application twice in the same desktop process
+- **THEN** both activations enumerate and focus its window using the same cached callback type
+- **AND** each callback registration is released, including when activation is aborted
