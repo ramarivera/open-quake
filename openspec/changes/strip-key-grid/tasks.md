@@ -95,5 +95,7 @@ beads remain open for lead integration.
 
 ## 8. key-runtime burn-down
 
-- [ ] 8.1 Render scoped countdown/alert/progress/artwork and page indicator; test EN/DE mock native views. Beads open-quake-lih.10.23/.24.
-- [ ] 8.2 Connect authorized management opening and specify/test multi-screen no-op. Bead open-quake-lih.10.22/.24.
+- [x] 8.1 Render scoped countdown/alert/progress/artwork and page indicator; test EN/DE mock native views. Beads open-quake-lih.10.23/.24.
+- [x] 8.2 Connect authorized management opening and specify/test multi-screen no-op. Bead open-quake-lih.10.22/.24.
+
+Key-runtime section 8 evidence: real hidden mock Electron timer zero/clear and typed completion, pageNo, 42% progress and checkmark passed with EN/DE captures on 2026-10-27. Root tests: 5001 passed, four existing skips. Build, both bundle checks, typecheck and Biome passed. Existing OpenSpec 1.15 strict long-requirement failures remain tracked in open-quake-lih.23.2; no added lane requirement has a diagnostic. Screenshots and logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/. Physical display acceptance remains unverified; beads remain open for lead integration.

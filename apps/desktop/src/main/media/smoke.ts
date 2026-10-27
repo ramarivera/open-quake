@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import type { Display } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import type { KeyDisplayEvent } from "../../../../../packages/device/src/actions/key-display-contracts.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -107,10 +108,7 @@ async function request(
 
 let managementWindow: BrowserWindow | undefined;
 /** Serves one committed fixture to both snapshot and key-runtime consumers. */
-function serveProfiles(envelope: EncodedProfileEnvelope): {
-	dispose: () => Promise<void>;
-	read: () => Promise<ProfileEnvelope>;
-} {
+function serveProfiles(envelope: EncodedProfileEnvelope) {
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(
@@ -143,6 +141,15 @@ function serveProfiles(envelope: EncodedProfileEnvelope): {
 	const snapshots = registerProfiles(runtime, renderer, false);
 	const keys = registerKeyLibrary(runtime, () => managementWindow, renderer);
 	return {
+		activate: (keyCode: string) =>
+			runtime.runPromise(
+				KeyRuntime.activate("smoke-A", keyCode, "release").pipe(
+					Effect.zipRight(KeyRuntime.activate("smoke-A", keyCode, "press")),
+				),
+			),
+		display: (event: KeyDisplayEvent) =>
+			runtime.runPromise(KeyRuntime.displayEvent(event)),
+		states: () => runtime.runPromise(KeyRuntime.snapshot),
 		read: () =>
 			runtime.runPromise(
 				ProfileService.loadProfiles().pipe(
@@ -1803,6 +1810,106 @@ async function smoke(): Promise<void> {
 		);
 	process.stdout.write(
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
+	);
+	// Capture this lane's real runtime and preload rendering in both app locales.
+	await profiles.dispose();
+	const keyBase = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const runtimeProfile: typeof Profile.Encoded = {
+		...quickProfile,
+		id: "fixture-key-runtime",
+		pages: [
+			{
+				id: "1",
+				keys: ["timer", "pageNo", "website", "website"].map((type, index) => ({
+					...keyBase,
+					keyCode: `1,${index + 1}`,
+					childrenName: type,
+					config: {
+						...keyBase.config,
+						type,
+						actions:
+							type === "timer"
+								? [
+										{ type: "time", value: 1000 },
+										{ type: "sound", value: "" },
+										{ type: "callback", value: 1 },
+									]
+								: type === "website"
+									? [{ type: "url", value: "https://example.org/" }]
+									: [],
+					},
+				})),
+			},
+		],
+	};
+	profiles = serveProfiles(stripFixtureEnvelope(runtimeProfile, "smoke-A"));
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await waitForVoice(panel, "!!document.querySelector('[data-page-number]')");
+	await profiles.activate("1,1");
+	await waitForVoice(
+		panel,
+		"document.querySelector('[data-kind=countdown]')?.textContent === '00:00:00'",
+	);
+	assert.equal(
+		(await profiles.states()).filter((state) => state.timerCompleted).length,
+		1,
+	);
+	for (const language of ["en", "de"]) {
+		await management.webContents.executeJavaScript(
+			`window.quakeLocale.set('${language}')`,
+		);
+		await profiles.display({
+			type: "progress",
+			deviceId: "smoke-A",
+			profileId: runtimeProfile.id,
+			pageId: "1",
+			revision: 0,
+			keyCode: "1,3",
+			percent: 42,
+		});
+		await profiles.display({
+			type: "showAlert",
+			deviceId: "smoke-A",
+			profileId: runtimeProfile.id,
+			pageId: "1",
+			revision: 0,
+			keyCode: "1,4",
+			alertType: 3,
+		});
+		await waitForVoice(
+			panel,
+			"document.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') === '42' && !!document.querySelector('[data-kind=checkmark]')",
+		);
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				"document.querySelector('[data-page-number]')?.textContent",
+			),
+			"1",
+		);
+		await waitForVoice(
+			panel,
+			`document.documentElement.lang === '${language}'`,
+		);
+		await panel.webContents.executeJavaScript(
+			"document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))",
+		);
+		await settle(150); // Let the native compositor paint the accepted DOM state.
+		if (artifacts)
+			await writeFile(
+				join(artifacts, `key-runtime-${language}.png`),
+				(await panel.webContents.capturePage()).toPNG(),
+			);
+	}
+	await profiles.activate("1,1");
+	await waitForVoice(panel, "!document.querySelector('[data-kind=countdown]')");
+	assert.equal(
+		(await profiles.states()).filter((state) => state.timerCompleted).length,
+		0,
+	);
+	process.stdout.write(
+		"Key runtime smoke PASS: owned timer callback and zero-clear, page indicator, scoped progress/checkmark, EN/DE captures. No native host action.\n",
 	);
 	removeDeviceReady();
 	unregisterHardware();

@@ -261,13 +261,13 @@ The device preview, profile thumbnail, key editor and panel SHALL retain one fix
 
 ### Requirement: Scoped rendered key runtime feedback
 
-The strip SHALL consume decoded runtime feedback only for the rendered device, profile, page and key. Countdown updates SHALL use the real timer lifetime, disappear on expiry, and show Alarm only if expiry belongs to the active profile. Progress below 100 SHALL draw a bounded bar, 100 SHALL remove it, and invalid-operation feedback SHALL render a labelled chip. Link loss SHALL clear rendered state through the runtime reset. Chips SHALL have opaque backgrounds and progress SHALL remain six logical pixels high. Evidence: WIDGETS-107.
+The strip SHALL consume decoded runtime feedback only for the rendered device, profile, page, revision and key. Countdown, alert and progress SHALL follow the scoped display-event lifetimes below, including retained zero at expiry. Link loss SHALL clear rendered state through the runtime reset. Evidence: WIDGETS-107, SCREEN-046, SCREEN-047, SCREEN-048.
 
 #### Scenario: Timer switches profile and disconnects
 
 - **WHEN** a two-second timer advances one second, its profile becomes inactive, then it expires
 - **THEN** its countdown stays hidden on the other profile and no alarm appears on returning
-- **AND** a new active expiry shows Alarm, another key's 42 percent progress and Invalid operation stay scoped to that key, completion removes the bar, and disconnect removes all runtime feedback
+- **AND** a new active expiry retains zero without an alarm icon, another key's 42 percent progress and Invalid operation stay scoped to that key, completion removes the bar after 1000 ms, and disconnect removes all runtime feedback
 
 ### Requirement: Exact retained AI and Vivid layouts
 The DKClaw catalog SHALL retain all recovered agent IDs, voice flags, TTS settings and knob route. Covered cells and hidden placeholders SHALL resolve through actual strip geometry. AI Chat SHALL occupy five by two cells with its immutable anchor. Vivid SHALL retain mode zero, empty artwork/actions and locked movement/overwrite. Sources: AI-146, MGMT-351, MGMT-353, MGMT-357.
@@ -375,11 +375,19 @@ The registry SHALL dispatch recovered monitor types to metric renderers consumin
 - **AND** another request with the same preference retries failed captures without regenerating successful ones
 
 ### Requirement: Scoped key display events
-SCREEN-038, SCREEN-046, SCREEN-047, SCREEN-048, MAIN-081 and MGMT-404 display events SHALL carry device/profile/page/revision/key identity. Unknown cells and obsolete revisions SHALL not change layout or feedback. Targeted artwork SHALL replace only the target cell icon immutably. Countdown SHALL apply only to timer cells and display HH:MM:SS, 48 px bold blue. Natural zero SHALL remain visible; -1 while running SHALL hide, while -1 after ALARM SHALL retain zero. First activation after zero SHALL clear without dispatch and positives arriving within 120 ms of that clear SHALL be suppressed. Returning to a profile SHALL restore its remaining endAt or zero, and callback SHALL belong to the main timer owner once. Alerts SHALL use a centered 50 px symbol on yellow, suppress ALARM and expire INVALID at 2000 ms. Progress SHALL use a dark track, cyan/blue fill, percent label and reduced-motion-aware animation with 1000 ms completion and 5000 ms inactivity expiry.
+SCREEN-038, SCREEN-046, SCREEN-047, SCREEN-048, MAIN-081 and MGMT-404 display events SHALL carry device/profile/page/revision/key identity.
 
 #### Scenario: Late artwork and feedback cannot repaint another key
 - **WHEN** a current targeted artwork/countdown/alert/progress event or an obsolete profile event arrives
 - **THEN** only the matching committed cell changes, expired feedback hides on the owning Effect clock, and old or non-timer countdown updates leave the current layout unchanged
+- **AND** Unknown cells and obsolete revisions SHALL not change layout or feedback.
+- **AND** Targeted artwork SHALL replace only the target cell icon immutably.
+- **AND** Countdown SHALL apply only to timer cells and display HH:MM:SS, 48 px bold blue.
+- **AND** Natural zero SHALL remain visible; -1 while running SHALL hide, while -1 after ALARM SHALL retain zero.
+- **AND** First activation after zero SHALL clear without dispatch and positives arriving within 120 ms of that clear SHALL be suppressed.
+- **AND** Returning to a profile SHALL restore its remaining endAt or zero, and callback SHALL belong to the main timer owner once.
+- **AND** Alerts SHALL use a centered 50 px symbol on yellow, suppress ALARM and expire INVALID at 2000 ms.
+- **AND** Progress SHALL use a dark track, cyan/blue fill, percent label and reduced-motion-aware animation with 1000 ms completion and 5000 ms inactivity expiry.
 
 ### Requirement: Page indicator follows navigation
 MGMT-172 pageNo tiles SHALL show the current one-based page number in 1..10 and update when the committed selection changes without dispatching a host action.

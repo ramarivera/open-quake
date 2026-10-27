@@ -139,25 +139,41 @@ multiActions SHALL contain an ordered non-recursive subActions list of validated
 - **AND** returning to the previous device or removing its active selection recalculates its effective selection
 
 ### Requirement: Saved native runtime actions
-The saved-key consumer SHALL dispatch close, cmd, managementCenter, screenshot and lock through typed native boundaries. MAIN-066, MAIN-068, MAIN-069, MAIN-070, MAIN-071, MAIN-072, MAIN-082, MAIN-097, MGMT-158, MGMT-196 and MGMT-210 apply. Clipboard paste SHALL preserve rich supported formats, wait 50 ms, restore only when the clipboard still belongs to the paste, then execute the saved optional second chord. Website templates SHALL substitute the key title without evaluation, add http:// for missing schemes and reject unsafe schemes. Close SHALL match exact executable identity and recheck the PID before termination. Cmd SHALL use the profile command approval owner, bind approval to exact saved content and require approval again after edits. Opening an existing app SHALL focus it without another launch. Screenshot SHALL capture all displays to Pictures as screenshot-<ms>-<i>.png; Windows command+l SHALL call LockWorkStation.
+The saved-key consumer SHALL dispatch close, cmd, managementCenter, screenshot and lock through typed native boundaries. MAIN-066, MAIN-068, MAIN-069, MAIN-070, MAIN-071, MAIN-072, MAIN-082, MAIN-097, MGMT-158, MGMT-196 and MGMT-210 apply.
 
 #### Scenario: Saved actions use their real host owners
 - **WHEN** an authorized committed key activates a native action or sequence step
 - **THEN** its decoded parameters reach the host boundary once, cancelled approval performs no launch, and errors produce scoped INVALID feedback without changing the saved key
+- **AND** Clipboard paste SHALL preserve rich supported formats, wait 50 ms, restore only when the clipboard still belongs to the paste, then execute the saved optional second chord.
+- **AND** Website templates SHALL substitute the key title without evaluation, add http:// for missing schemes and reject unsafe schemes.
+- **AND** Close SHALL match exact executable identity and recheck the PID before termination.
+- **AND** Cmd SHALL use the profile command approval owner, bind approval to exact saved content and require approval again after edits.
+- **AND** Opening an existing app SHALL focus it without another launch.
+- **AND** Screenshot SHALL capture all displays to Pictures as screenshot-<ms>-<i>.png; Windows command+l SHALL call LockWorkStation.
 
 ### Requirement: Ordered saved composite execution
-MAIN-076, MGMT-163, MGMT-206 and MGMT-210 sequences SHALL accept subActions-only imports, validate every step before execution, await native and plugin completion in order, apply each gap with default 100 ms, and stop on cancellation or the first failure. Close, playAudioLegacy, stopAudio and cmd SHALL enter their existing owners. A typed plugin port SHALL receive the committed parent activation plus plugin id, action and step index. Until the plugins lane registers a runtime, it SHALL fail with typed KeyFunctionUnavailable, code QUAKE.ACTION.UNAVAILABLE and reason plugin-runtime. MAIN-066 plugin inventory and MAIN-076 remain partial until that registration lands.
+MAIN-076, MGMT-163, MGMT-206 and MGMT-210 sequences SHALL accept subActions-only imports, validate every step before execution, await native and plugin completion in order, apply each gap with default 100 ms, and stop on cancellation or the first failure.
 
 #### Scenario: Nested plugin action completes before the next native action
 - **WHEN** a saved sequence contains delay, plugin and native steps
 - **THEN** TestClock-controlled delay and awaited plugin completion precede the last native effect, progress follows completed steps, and cancellation or plugin failure prevents remaining effects
+- **AND** Close, playAudioLegacy, stopAudio and cmd SHALL enter their existing owners.
+- **AND** A typed plugin port SHALL receive the committed parent activation plus plugin id, action and step index.
+- **AND** Until the plugins lane registers a runtime, it SHALL fail with typed KeyFunctionUnavailable, code QUAKE.ACTION.UNAVAILABLE and reason plugin-runtime.
+- **AND** MAIN-066 plugin inventory and MAIN-076 remain partial until that registration lands.
 
 ### Requirement: Scoped timer completion and feedback
-MAIN-075, MAIN-081, MGMT-138 and MGMT-404 timers SHALL store an absolute endAt scoped to device, profile, page, revision and key. Expiry SHALL retain zero until one activation clears it without restarting. Duplicate timer activation within 600 ms SHALL be ignored. The saved callback=1 SHALL emit exactly one typed completion for a still-active matching timer; callback=0, cancellation, revision replacement and disconnection SHALL emit none. Inactive timers SHALL retain zero for return without late alarm/audio/callback. STOP=0 clears alerts, INVALID=1 expires after 2000 ms, ALARM=2 retains zero without an alarm icon and CHECKMARK=3 remains until cleared. Progress below zero hides, progress 100 expires after 1000 ms, and changed incomplete progress expires after 5000 ms.
+MAIN-075, MAIN-081, MGMT-138 and MGMT-404 timers SHALL store an absolute endAt scoped to device, profile, page, revision and key.
 
 #### Scenario: Expiry, clear and restart preserve timer ownership
 - **WHEN** TestClock advances a saved timer to zero, the user clears it and then activates it again outside the debounce window
 - **THEN** zero persists through the first activation, the clear emits no host operation, the next activation starts a new endAt, and obsolete profile/page/revision completion cannot alert or callback
+- **AND** Expiry SHALL retain zero until one activation clears it without restarting.
+- **AND** Duplicate timer activation within 600 ms SHALL be ignored.
+- **AND** The saved callback=1 SHALL emit exactly one typed completion for a still-active matching timer; callback=0, cancellation, revision replacement and disconnection SHALL emit none.
+- **AND** Inactive timers SHALL retain zero for return without late alarm/audio/callback.
+- **AND** STOP=0 clears alerts, INVALID=1 expires after 2000 ms, ALARM=2 retains zero without an alarm icon and CHECKMARK=3 remains until cleared.
+- **AND** Progress below zero hides, progress 100 expires after 1000 ms, and changed incomplete progress expires after 5000 ms.
 
 ### Requirement: Saved folder and profile navigation
 MAIN-077, MAIN-078, MGMT-142 and MGMT-170 SHALL reuse allocated profile pages for folder/createFolder and Back, retain nested return contexts, and restore the prior profile/page after emojiBack. Invalid or stale destinations SHALL not select a fallback. switchProfile SHALL honor profile/page, -1 next, -2 previous and 0 default, skip empty or hidden groups and wrap in numeric profile order. Slides 0/1/2/3 SHALL use previous page/next page/previous group/next group.

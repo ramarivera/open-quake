@@ -331,13 +331,16 @@ it("MGMT-127 reads the recovered pluginAction manifest through legacy import and
 	expect(library[0]?.entries[0]?.disabled).toBe(true);
 });
 
-it("MGMT-107/127 mounts the translated sequence search and keeps unavailable operations disabled", async () => {
+it("MGMT-107/127/210 offers confirmed command steps and keeps unavailable operations disabled", async () => {
 	const f = await fixture(true);
 	vi.useFakeTimers();
 	expect(f.host.querySelector('[data-library-type="multiActions"]')).toBeNull();
 	expect(
 		query(f.host, '[data-library-type="cmd"]', HTMLButtonElement).disabled,
-	).toBe(true);
+	).toBe(false);
+	await click(query(f.host, '[data-library-type="cmd"]', HTMLButtonElement));
+	expect(f.choose).toHaveBeenCalledTimes(1);
+	expect(f.choose.mock.calls[0]?.[1].key.config.type).toBe("cmd");
 	await input(
 		query(f.host, "#keys-library-search", HTMLInputElement),
 		"GERÄTEMIKROFON",
@@ -345,6 +348,14 @@ it("MGMT-107/127 mounts the translated sequence search and keeps unavailable ope
 	await act(async () => vi.advanceTimersByTimeAsync(500));
 	expect(f.host.querySelector('[data-library-type="website"]')).toBeNull();
 	expect(f.host.querySelector('[data-library-type="mic"]')).not.toBeNull();
+	const microphone = query(
+		f.host,
+		'[data-library-type="mic"]',
+		HTMLButtonElement,
+	);
+	expect(microphone.disabled).toBe(true);
+	await click(microphone);
+	expect(f.choose).toHaveBeenCalledTimes(1);
 	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
 	expect(f.host.querySelector('[data-library-type="website"]')).not.toBeNull();
 });
