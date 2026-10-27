@@ -5,5 +5,10 @@
 		"jsx": "react-jsx",
 		"lib": ["ES2022", "DOM", "DOM.Iterable"]
 	},
-	"include": ["electron.vite.config.ts", "vitest.config.ts", "src"]
+	"include": [
+		"electron.vite.config.ts",
+		"vitest.config.ts",
+		"hardware.e2e.config.ts",
+		"src"
+	]
 }

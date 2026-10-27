@@ -8,6 +8,7 @@
 		"build": "electron-vite build",
 		"dev": "electron-vite dev",
 		"test": "vitest run",
+		"test:hardware": "vitest run --config hardware.e2e.config.ts",
 		"test:bundle": "node src/main/test/bundle-smoke.mjs",
 		"typecheck": "tsc --noEmit",
 		"package": "electron-builder --config electron-builder.config.cjs --publish never",
