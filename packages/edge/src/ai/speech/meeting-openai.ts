@@ -25,7 +25,7 @@ export const openaiMeeting = (
 	Effect.fn("OpenAIMeeting.transcribe")(function* (request: MeetingAsrRequest) {
 		const connection = yield* resolve(request.config);
 		return yield* Effect.acquireUseRelease(
-			resources.pcm(request.audioRef),
+			resources.pcm(request.audioRef).pipe(Effect.interruptible),
 			(audio) =>
 				withSocket(
 					transport,
@@ -182,14 +182,6 @@ export const openaiMeeting = (
 											format: { type: "audio/pcm", rate: 24000 },
 											transcription: {
 												model: "gpt-4o-transcribe",
-												...(/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(
-													request.config.outputLanguage,
-												)
-													? {
-															language:
-																request.config.outputLanguage.split("-")[0],
-														}
-													: {}),
 											},
 											noise_reduction: { type: "far_field" },
 											turn_detection: {
@@ -238,7 +230,7 @@ export const openaiMeeting = (
 										),
 									);
 								}),
-							);
+							).pipe(Effect.raceFirst(Fiber.join(reader)));
 							if (!sentMs) return yield* meetingError("NoValidSpeech");
 							// Drain automatic VAD commits before requesting the final manual flush.
 							// session.updated is ordered after prior audio and its VAD events.

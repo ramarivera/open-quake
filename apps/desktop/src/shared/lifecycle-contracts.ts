@@ -4,6 +4,11 @@ export const LifecycleCommand = Schema.Union(
 	Schema.Struct({ action: Schema.Literal("read") }),
 	Schema.Struct({ action: Schema.Literal("wizard"), open: Schema.Boolean }),
 	Schema.Struct({ action: Schema.Literal("redetect") }),
+	Schema.Struct({ action: Schema.Literal("bind-all") }),
+	Schema.Struct({
+		action: Schema.Literal("restart"),
+		serial: Schema.Trimmed.pipe(Schema.nonEmptyString(), Schema.maxLength(256)),
+	}),
 	Schema.Struct({ action: Schema.Literal("display-settings") }),
 	Schema.Struct({ action: Schema.Literal("repair-layout") }),
 );

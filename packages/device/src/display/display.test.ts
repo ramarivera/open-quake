@@ -91,10 +91,31 @@ describe("display contracts", () => {
 		{ displayMediaList: [{ ...image, duration: -1 }] },
 		{ displayMediaList: [{ ...image, duration: Number.POSITIVE_INFINITY }] },
 		{ displayMediaList: [{ ...image, duration: 2 }] },
-		{ displayMediaList: [{ ...image, format: "image/gif" }] },
+		{ displayMediaList: [{ ...image, format: "image/bmp" }] },
 		{ displayMediaList: [{ ...image, filePath: "file:///private/image.png" }] },
 	])("rejects invalid wallpaper patch %j", (patch) => {
 		expect(Schema.is(WallpaperSettings)({ ...settings, ...patch })).toBe(false);
+	});
+	it("WIDGETS-128/131 accepts transparent saved settings and GIF/MKV/AVI media", () => {
+		for (const [type, format] of [
+			["image", "image/gif"],
+			["video", "video/x-matroska"],
+			["video", "video/x-msvideo"],
+		]) {
+			expect(
+				Schema.is(SavedWallpaper)({
+					version: 1,
+					serial: "A",
+					revision: 0,
+					clock: defaultClockTile,
+					settings: {
+						...settings,
+						isTransparent: true,
+						displayMediaList: [{ ...image, type, format }],
+					},
+				}),
+			).toBe(true);
+		}
 	});
 	it("separates later media support from the static release", () => {
 		const video = {

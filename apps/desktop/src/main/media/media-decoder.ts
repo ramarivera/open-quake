@@ -1,17 +1,30 @@
 import { createHash } from "node:crypto";
 import { Effect, Schema } from "effect";
-import { BrowserWindow } from "electron";
+import { BrowserWindow, nativeImage } from "electron";
 import { DESKTOP_RESOURCE_LIMIT, MediaUnreadable } from "../../shared/display";
 import { type DecodedImage, ImageDecoder } from "./image-decoder";
 
 interface DecodedVideo {
-	readonly format: "video/mp4" | "video/quicktime" | "video/webm";
+	readonly format:
+		| "video/mp4"
+		| "video/quicktime"
+		| "video/webm"
+		| "video/x-matroska"
+		| "video/x-msvideo";
 	readonly width: number;
 	readonly height: number;
 	readonly durationMs: number;
 	readonly dataUrl: string;
 }
-export type DecodedMedia = DecodedImage | DecodedVideo;
+export type DecodedMedia =
+	| DecodedImage
+	| DecodedVideo
+	| {
+			readonly format: "image/gif";
+			readonly width: number;
+			readonly height: number;
+			readonly dataUrl: string;
+	  };
 export class MediaDecoder extends Effect.Service<MediaDecoder>()(
 	"MediaDecoder",
 	{
@@ -69,6 +82,32 @@ export class MediaDecoder extends Effect.Service<MediaDecoder>()(
 			return {
 				decode: Effect.fn("MediaDecoder.decode")(
 					(bytes: Buffer): Effect.Effect<DecodedMedia, MediaUnreadable> => {
+						if (
+							bytes.length >= 13 &&
+							/^GIF8[79]a$/.test(bytes.subarray(0, 6).toString("ascii"))
+						)
+							return Effect.try({
+								try: () => {
+									if (bytes.length > DESKTOP_RESOURCE_LIMIT)
+										throw new RangeError();
+									const image = nativeImage.createFromBuffer(bytes);
+									const { width, height } = image.getSize();
+									if (
+										image.isEmpty() ||
+										width <= 0 ||
+										height <= 0 ||
+										width * height > 64_000_000
+									)
+										throw new RangeError();
+									return {
+										format: "image/gif" as const,
+										width,
+										height,
+										dataUrl: `data:image/gif;base64,${bytes.toString("base64")}`,
+									};
+								},
+								catch: (cause) => new MediaUnreadable(cause),
+							});
 						const format = videoFormat(bytes);
 						return format ? video(bytes, format) : images.decode(bytes);
 					},
@@ -79,18 +118,36 @@ export class MediaDecoder extends Effect.Service<MediaDecoder>()(
 ) {}
 function videoFormat(
 	bytes: Buffer,
-): "video/mp4" | "video/quicktime" | "video/webm" | undefined {
+):
+	| "video/mp4"
+	| "video/quicktime"
+	| "video/webm"
+	| "video/x-matroska"
+	| "video/x-msvideo"
+	| undefined {
 	if (bytes.subarray(4, 8).toString("ascii") === "ftyp")
 		return bytes.subarray(8, 12).toString("ascii") === "qt  "
 			? "video/quicktime"
 			: "video/mp4";
 	if (bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])))
-		return "video/webm";
+		return bytes.subarray(0, 256).includes(Buffer.from("matroska"))
+			? "video/x-matroska"
+			: "video/webm";
+	if (
+		bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
+		bytes.subarray(8, 12).toString("ascii") === "AVI "
+	)
+		return "video/x-msvideo";
 }
 /** Metadata only. This worker is hidden, never plays, and cannot emit sound. */
 async function probeVideo(
 	bytes: Buffer,
-	format: "video/mp4" | "video/webm" | "video/quicktime",
+	format:
+		| "video/mp4"
+		| "video/webm"
+		| "video/quicktime"
+		| "video/x-matroska"
+		| "video/x-msvideo",
 	signal: AbortSignal,
 ): Promise<DecodedVideo> {
 	const window = new BrowserWindow({

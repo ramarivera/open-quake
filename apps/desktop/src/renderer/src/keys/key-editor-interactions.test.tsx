@@ -57,7 +57,10 @@ import type {
 import type { MeetingsBridge } from "../../../shared/meeting-bridge";
 import { readerSettings } from "../../../shared/reader-settings";
 import { selectStripPage } from "../../../shared/strip-selection";
-import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import type {
+	WallpaperCommand,
+	WallpaperSnapshot,
+} from "../../../shared/wallpaper-contracts";
 import { button, click, input, mount, query, settle } from "../../test/dom";
 import { appDictionaries } from "../i18n";
 import { stripLayout } from "../strip/geometry";
@@ -343,11 +346,15 @@ async function fixture({
 		normalizedFileUrl: false,
 		deviceDelivery: "unverified",
 	});
+	const wallpaperCalls: WallpaperCommand[] = [];
 	vi.stubGlobal("quakeWallpaper", {
-		request: async () => ({
-			_tag: "success",
-			snapshot: wallpaper("desktop-preview"),
-		}),
+		request: async (command: WallpaperCommand) => {
+			wallpaperCalls.push(command);
+			return {
+				_tag: "success",
+				snapshot: wallpaper("desktop-preview"),
+			};
+		},
 		onSnapshot: (callback: (snapshot: unknown) => void) => {
 			publishWallpaper = callback;
 			return () => {
@@ -380,6 +387,7 @@ async function fixture({
 		...mounted,
 		runtime,
 		calls,
+		wallpaperCalls,
 		device: async (serial: string) => {
 			await act(async () => publishWallpaper?.(wallpaper(serial)));
 		},
@@ -2196,6 +2204,56 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 	);
 	await click(button(f.host, "1,1"));
 	expect(f.host.querySelector("#key-title")).toBeNull();
+});
+
+it("MGMT-286 selected-key wallpaper host preserves serial and keeps key Save out of wallpaper drafts", async () => {
+	const f = await fixture({
+		configure: (value) => ({
+			...value,
+			profiles: EffectArray.map(value.profiles, (profile) =>
+				profile.id !== "p"
+					? profile
+					: {
+							...profile,
+							pages: EffectArray.map(profile.pages, (page) => ({
+								...page,
+								keys: page.keys.map((key) => ({
+									...key,
+									childrenName: "colorfulScreenSettings",
+									config: {
+										...key.config,
+										type: "colorfulScreenSettings",
+										actions: [],
+									},
+								})),
+							})),
+						},
+			),
+		}),
+	});
+	await f.device("MOCK-WALLPAPER-B");
+	await f.select();
+	const editor = query(
+		f.host,
+		'.wallpaper-settings[data-serial="MOCK-WALLPAPER-B"]',
+		HTMLElement,
+	);
+	await input(
+		query(editor, 'select[aria-label="Background method"]', HTMLSelectElement),
+		"transparent",
+	);
+	expect(f.wallpaperCalls.filter((command) => command._tag === "save")).toEqual(
+		[],
+	);
+	await click(button(editor, "Save"));
+	expect(f.wallpaperCalls).toContainEqual(
+		expect.objectContaining({
+			_tag: "save",
+			serial: "MOCK-WALLPAPER-B",
+			settings: expect.objectContaining({ isTransparent: true }),
+		}),
+	);
+	expect(f.calls.filter((command) => command.type === "save")).toEqual([]);
 });
 
 it("MGMT-386/387/388 places reusable presets through validated profile publication without consuming the library", async () => {
