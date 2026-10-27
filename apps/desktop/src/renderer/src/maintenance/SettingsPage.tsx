@@ -147,7 +147,7 @@ export function SettingsPage({
 							label="Version"
 							hint={
 								view.update.state === "disabled"
-									? "App updates are not configured for this build."
+									? "Use GitHub Releases for manual installation. Linux AppImages support automatic updates. Windows builds are unsigned; macOS signing and notarization await distributor credentials."
 									: view.update.state.replaceAll("_", " ")
 							}
 						>

@@ -126,6 +126,7 @@ export function MeetingDisplay({
 		}
 	};
 	const scale = Math.min(tile.box.width / 1196, tile.box.height / 456);
+	const stageHeight = tile.box.height / scale;
 	return (
 		<section
 			className="meeting-display"
@@ -138,7 +139,11 @@ export function MeetingDisplay({
 		>
 			<div
 				className="meeting-display-stage"
-				style={{ width: 1196, height: 456, transform: `scale(${scale})` }}
+				style={{
+					width: 1196,
+					height: stageHeight,
+					transform: `scale(${scale})`,
+				}}
 			>
 				<header>
 					<span>Meet AI</span>

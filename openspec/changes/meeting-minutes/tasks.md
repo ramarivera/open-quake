@@ -255,3 +255,18 @@ review round, merge, real provider, microphone, hardware or audible audio was
 used. The execution bead stays open for parent acceptance and hosted checks.
 The temporary fix worktree and generated build output are removed at handoff;
 the original lane worktree is untouched.
+
+## Decision follow-ups 2026-10-27
+
+- [x] AI-334 allow alternate viewer spans through editor/save/layout and retain reachable controls. Bead open-quake-zh8.15, parent open-quake-i3j.
+- [x] AI-283 implement consented native BlackHole package handoff with fake installer tests. Bead open-quake-zh8.15, parent open-quake-i3j.
+
+Real editor service, mounted Keys UI and hidden mock Electron smoke save a 3x1 viewer and retain pane controls. Fake-only installer tests cover consent, cancellation, retry, signature rejection, isolated copying, IPC authorization and mock/non-macOS refusal. Screenshots decision-blackhole-consent.png, decision-blackhole-cancelled.png and meetings-viewer-3x1.png were visually inspected under /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/decision-followups/screenshots. The smoke logs inherited missing quake:device-ready handlers and an offline overlay; no root/native acceptance claim. No host installer, driver, routing, microphone or hardware was used.
+
+- [x] PR131 fix1 bound installer retention with two persistent admission slots and real-filesystem/fake-handoff coverage, and localize setup plus native dialogs in EN/DE. Bead open-quake-i3j.1. No real installer or audio routing changes.
+
+- [x] PR131 continuation repair mounted meeting fixtures after audio setup localization. The shared fixture supplies the bundled GTProvider and an explicit locale; English and German setup tests use that same provider. All 45 previously failing history tests and 24 affected setup/display/animation tests pass with unchanged assertions, and desktop typecheck passes. Bead open-quake-i3j.3 remains open for hosted CI and review reconciliation. No production translation fallback, installer, microphone or audio changes.
+
+- [x] PR131 second/final continuation pin the independently inspected BlackHole installer Team ID and prove wrong-team rejection before native handoff with retry. Bead open-quake-i3j.3 stays open for parent gates.
+
+Signer evidence: the official HTTPS `https://existential.audio/downloads/BlackHole2ch-0.7.1.pkg`, 103021 bytes, has SHA-256 `57b540f27a3e29c37e310e01bee0fdfab76733087e47f997ef9dccf851400dcf`, matching Homebrew cask revision `64e1f5cac5710eae8e9146eb5dffe96c5adcd99c`. Read-only `pkgutil --check-signature` identifies `Developer ID Installer: Existential Audio Inc. (Q5C99V536K)` and Apple notarization. Installer was never opened. Native assessment still precedes the exact-team check. Both same-organization/wrong-team regressions fail before the fix; all eight audio-setup tests pass after, including storage, consent and retry assertions. The original 97855cf9 fixture assertions remain untouched. Full signature output and package provenance remain in SSD scratch continuation2, not the repository. Bead open-quake-i3j.3 remains open for parent gates.

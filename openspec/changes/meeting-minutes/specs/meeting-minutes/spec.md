@@ -182,7 +182,7 @@ Evidence: AI-299-317, SETTINGS-105-107.
 
 ### Requirement: Meeting viewer and animations
 
-The 5x2 viewer SHALL expose Main minutes, Temporary record and Live translation tabs,
+The viewer, defaulting to 5x2 with user-resizable spans, SHALL expose Main minutes, Temporary record and Live translation tabs,
 a floating 344px/44px expanded/collapsed toolbar, dock toggle, copy, clear, font changes
 by 2px within -10..20 per pane, 300px scrolling and 1200ms long-press top/bottom.
 Temporary record SHALL switch between summary/transcript with a 100px swipe.
@@ -269,7 +269,7 @@ panel-only bursts until 5000ms after accepted completion, never restart that win
 remount or failed regeneration, and allow a fresh successful completion. OS and app reduced
 motion SHALL disable recording/pulse/gears/fireworks/border animation and transitions while
 keeping status text visible. The viewer SHALL scale its 1196x456 base inside its actual
-box, retain the forced 5x2 span through the editing owner, keep Clear reachable, and clear only the selected pane without deleting saved
+box, accept alternate valid grid spans through the editing owner, keep Clear reachable, and clear only the selected pane without deleting saved
 minutes. Selected target language and bounded live translation updates SHALL reach the
 viewer. Evidence: AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152, MGMT-360.
 
@@ -277,7 +277,7 @@ viewer. Evidence: AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152, MGMT
 
 - **WHEN** capture readiness is delayed, a meeting crosses an hour, controls cool down and translated content arrives
 - **THEN** the timer, sweeps, active mark and selected translation pane follow authoritative snapshots without opening native capture
-- **AND** clearing Main, Temporary or Live affects only that pane, renderer boxes keep Clear within the visible frame, and the editing owner rejects alternate saved spans
+- **AND** clearing Main, Temporary or Live affects only that pane, renderer boxes keep Clear within the visible frame, and the editing owner saves alternate valid spans and retains collision and edit-lock checks
 
 #### Scenario: Completion and reduced motion remain bounded
 
@@ -369,7 +369,7 @@ Evidence: AI-111, AI-282, KNOB-056. Windows system capture SHALL use the trusted
 
 ### Requirement: User-directed macOS capture setup
 
-Evidence: AI-283. The settings SHALL offer an explicit setup/help view, enumerate installed BlackHole/Monitor inputs without opening them, explain multi-output routing and permission prerequisites, and allow refresh or cancel after setup fails. No installer, driver, aggregate device or host routing change SHALL run automatically. Actual driver installation and multi-output configuration require separate host approval and remain unverified.
+Evidence: AI-283. Settings SHALL enumerate installed inputs without opening them, explain routing and permission prerequisites, and allow refresh or cancel. Installation SHALL require user action and consent. The app SHALL hand a signed BlackHole package to macOS Installer and report handoff errors without claiming installation succeeded. It SHALL never change audio routing automatically.
 
 #### Scenario: Missing or installed virtual input
 - **WHEN** the user opens setup help with no BlackHole input, then refreshes after manually installing one or cancels
@@ -599,3 +599,29 @@ The system SHALL let the duration-based ASR deadline bound conversion and record
 
 - **WHEN** hourly capture replaces recorders while main and side capture share microphone and system sources
 - **THEN** at least five recorders remain recording before each predecessor stops, and the regression fails if predecessors stop before replacements start
+
+### Requirement: Consented BlackHole installer handoff
+
+AI-283 setup SHALL expose installation only on macOS. Main SHALL authenticate the management renderer, confirm the warning natively, accept only a BlackHole-named pkg selected by the user, and verify an Existential Audio Developer ID Installer signature before the native handoff. Mock mode SHALL never invoke installation.
+
+#### Scenario: Driver installation warning
+- **WHEN** a user considers installing BlackHole
+- **THEN** setup explains driver installation, the administrator password request and Multi-Output Device routing and volume-control effects before explicit consent
+
+#### Scenario: Cancellation and failed setup
+- **WHEN** consent or package selection is cancelled, signature validation fails, or the Installer handoff fails
+- **THEN** setup reports the outcome, permits retry, and never changes audio routing or claims successful capture
+
+#### Scenario: Bounded installer handoff storage
+- **WHEN** handoffs are retried, concurrent, or resumed after application restart
+- **THEN** at most two app-owned copies of at most 512 MiB each are admitted, failed attempts free their own slot, and handed-off or interrupted copies remain untouched until the user removes them after closing Installer
+- **AND** legacy copies count against admission; existing excess copies are preserved rather than automatically deleted
+
+#### Scenario: Localized setup consent and outcomes
+- **WHEN** the saved app language is English or German
+- **THEN** mounted setup help, consent, refresh, cancel, busy, failure, full storage and handoff status use bundled copy in that language, and native confirmation and package selection read the current saved language at action time
+
+#### Scenario: Exact BlackHole signing team
+
+- **WHEN** an assessed package claims the Existential Audio organization with a different Team ID
+- **THEN** the native handoff rejects it, releases its failed-attempt slot and allows retry with the verified Developer ID Installer team Q5C99V536K

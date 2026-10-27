@@ -62,6 +62,11 @@ it("returns only the catalog BackupFailed reply through actual maintenance expor
 			code: "QUAKE.BACKUP.FAILED",
 		});
 		expect(native.shell.showItemInFolder).not.toHaveBeenCalled();
+		const config = native.dialog.showSaveDialog.mock.calls[0]?.[1];
+		expect(config?.defaultPath).toMatch(
+			/^DK-Suite_default_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_export_resources\.zip$/,
+		);
+		expect(config?.defaultPath).not.toMatch(/[:\\]/);
 	} finally {
 		await owner.dispose();
 		await rm(root, { recursive: true, force: true });

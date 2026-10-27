@@ -73,7 +73,11 @@ export function keyTitle(
 	const text = key.config.title.text;
 	const isLegacyLabel = (name: string): boolean =>
 		ProfileLocale.literals.some((language) => text === keyText(name, language));
-	if (key.config.type === "hotkey" && isLegacyLabel("hotkey"))
+	if (
+		key.config.type === "hotkey" &&
+		key.config.userModifiedTitle === false &&
+		isLegacyLabel("hotkey")
+	)
 		return keyText("hotkey", locale);
 	if (key.config.type === "clawbot" && (!text || isLegacyLabel("clawbot"))) {
 		const agent = key.config.actions.find(
@@ -96,13 +100,15 @@ export function keyTitle(
 		(source._tag === "Right" ? source.right.config.title.i18nKey : undefined) ??
 		(key.config.type === "aiChat" && legacyAi[title.text]
 			? `defaultAiCopilotChatConfig.${legacyAi[title.text]}`
-			: legacy[title.text]);
+			: key.config.userModifiedTitle === false
+				? legacy[title.text]
+				: undefined);
 	if (i18n) {
 		const translated = keyText(i18n, locale);
 		if (translated !== i18n) return translated;
 	}
 	const children = Option.getOrElse(key.childrenName, () => "");
-	if (title.text && title.text !== keyText(children, "en")) return title.text;
+	if (title.text) return title.text;
 	const fallback = keyText(children, locale);
 	return fallback !== children ? fallback : title.text;
 }

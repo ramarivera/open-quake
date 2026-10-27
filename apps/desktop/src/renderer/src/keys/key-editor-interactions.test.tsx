@@ -1262,9 +1262,12 @@ it("MGMT-057/064/066 SCREEN-138 selects the covered anchor, visibly deselects an
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(0);
 });
 
-it("MGMT-066/067 SCREEN-138/143 excludes translation tiles and localizes empty/default guidance", async () => {
-	const f = await gridFixture([gridKey("1,1", "liveAudioTranslateDisplay")]);
-	await click(button(f.host, "1,4"));
+it("MGMT-066/067 SCREEN-138/143 localizes empty/default guidance beside resizable meeting tiles", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "liveAudioTranslateDisplay", { size: [5, 2] }),
+	]);
+	await click(button(f.host, "1,7"));
+	await click(button(f.host, "1,7"));
 	expect(f.host.querySelector("#key-title")).toBeNull();
 	expect(f.host.textContent).toContain(
 		"Drag an action from the sidebar and place it in the empty key above",
@@ -2640,6 +2643,22 @@ it("MGMT-401 uses only typed profile/page selects for switch-profile keys", asyn
 	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
 	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
 		"Next Profile",
+	);
+});
+
+it("AI-334 enables meeting viewer size controls and saves an alternate span", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "liveAudioTranslateDisplay", { size: [5, 2] }),
+	]);
+	await f.select();
+	const span = query(f.host, "#key-span", HTMLSelectElement);
+	expect(span.disabled).toBe(false);
+	await input(span, "3,1");
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.size).toEqual([
+			3, 1,
+		]),
 	);
 });
 

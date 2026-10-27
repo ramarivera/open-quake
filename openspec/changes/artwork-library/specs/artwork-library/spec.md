@@ -232,9 +232,14 @@ For WIDGETS-008 emoji artwork SHALL occupy floor(min(box) times 0.77) centered i
 
 ### Requirement: Internal helper ownership remains explicit
 
-MGMT-413 SHALL remain an open obligation until merge/deletion, image downloads, port probing and timestamp formatting have consumer-level requirements and tests or an explicit approved exclusion. This artwork lane SHALL NOT introduce unconsumed copies of DK internal helpers or label them complete from unit tests alone.
+MGMT-413 SHALL use existing configuration replacement/backup merge, emoji download and backup filename consumers. Replacement SHALL persist deletions. Downloads SHALL reject invalid responses before resource commit. Export names SHALL use safe timestamps. Port probing remains open until its DK call site and an existing production consumer are identified. No unconsumed helper copies SHALL be introduced.
 
 #### Scenario: Helper has no artwork consumer
 
 - **WHEN** a recovered helper belongs to another subsystem and lacks a defined artwork use
 - **THEN** its obligation stays open with that missing owner or decision recorded
+
+#### Scenario: Existing helper consumers
+
+- **WHEN** a key field is deleted and saved, a generated image fails download, or a backup is exported
+- **THEN** the owning consumer preserves deletion, avoids partial image writes, or emits a safe timestamped filename respectively

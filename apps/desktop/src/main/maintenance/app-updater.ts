@@ -38,10 +38,14 @@ export interface VerifiedUpdateArtifact {
 	readonly read: (buffer: Uint8Array, position: number) => Promise<number>;
 }
 export interface OwnedUpdateConfiguration {
-	readonly feed: string;
+	readonly feed?: string;
+	/** Owned source resolver, never provided by the renderer. */
+	readonly resolveRelease?: (
+		signal: AbortSignal,
+	) => Promise<AppRelease | undefined>;
 	readonly artifactOrigin: string;
 	/** PEM Ed25519 key pinned by the distributor, never supplied by release metadata. */
-	readonly publicKey: string;
+	readonly publicKey?: string;
 	/** The distributor must choose an installer policy before enabling this adapter. */
 	readonly install: (
 		artifact: VerifiedUpdateArtifact,
@@ -177,6 +181,23 @@ export function ownedAppUpdater(options: {
 				if (!config) return Option.none();
 				selected = undefined;
 				downloaded = undefined;
+				if (config.resolveRelease) {
+					const release = await config.resolveRelease(signal);
+					if (!release) return Option.none();
+					const decoded = Schema.decodeUnknownSync(Release)(release);
+					trustedUrl(
+						decoded.artifact,
+						trustedUrl(config.artifactOrigin).origin,
+					);
+					if (
+						decoded.platform !== options.platform ||
+						decoded.arch !== options.arch
+					)
+						throw new AppUpdateFailed();
+					selected = decoded;
+					return Option.some(decoded);
+				}
+				if (!config.feed || !config.publicKey) throw new AppUpdateFailed();
 				const url = trustedUrl(config.feed);
 				const origin = trustedUrl(config.artifactOrigin).origin;
 				const response = await transport(url.href, {

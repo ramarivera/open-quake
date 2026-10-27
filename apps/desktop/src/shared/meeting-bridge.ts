@@ -49,6 +49,9 @@ export const CaptureChunk = Schema.Struct({
 });
 export type CaptureChunk = typeof CaptureChunk.Type;
 export interface MeetingsBridge {
+	readonly audioSetup?: (request: {
+		action: "status" | "install";
+	}) => Promise<unknown>;
 	readonly request: (command: MeetingCommand) => Promise<unknown>;
 	readonly onSnapshot: (callback: (snapshot: unknown) => void) => () => void;
 	readonly onCapture: (

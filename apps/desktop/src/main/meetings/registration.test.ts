@@ -30,6 +30,11 @@ const ipc = vi.hoisted(() => ({
 	on: vi.fn(),
 	removeListener: vi.fn(),
 	reveal: vi.fn(),
+	confirmSetup: vi.fn(async () => ({ response: 0 })),
+	selectSetup: vi.fn(async () => ({
+		canceled: true,
+		filePaths: [] as string[],
+	})),
 	app: { on: vi.fn(), removeListener: vi.fn(), quit: vi.fn() },
 }));
 const capture = vi.hoisted(() => ({
@@ -67,7 +72,7 @@ vi.mock("electron", () => ({
 	app: ipc.app,
 	ipcMain: ipc,
 	BrowserWindow: { getAllWindows: () => [], fromWebContents: () => ({}) },
-	dialog: {},
+	dialog: { showMessageBox: ipc.confirmSetup, showOpenDialog: ipc.selectSetup },
 	shell: { showItemInFolder: ipc.reveal },
 }));
 vi.mock("./capture-port", () => ({
@@ -769,6 +774,91 @@ it("restricts remote file IPC to the management window's main frame", async () =
 	} finally {
 		files?.mockRestore();
 		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("AI-283 authenticates the setup handler and keeps mock install requests away from native dialogs", async () => {
+	const root = await mkdtemp(join(tmpdir(), "audio-setup-ipc-"));
+	const owner = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+		renderer: "https://fixture.invalid",
+		management: () => ({ webContents: { id: 42 } }),
+	});
+	try {
+		await owner.ready;
+		const setup = ipc.handlers.get("meetings:audio-setup");
+		const frame = { url: "https://fixture.invalid" };
+		const event = { sender: { id: 42, mainFrame: frame }, senderFrame: frame };
+		expect(await setup?.(event, { action: "install" })).toMatchObject({
+			state: "mock",
+		});
+		expect(
+			await setup?.(
+				{ ...event, sender: { id: 666, mainFrame: frame } },
+				{ action: "install" },
+			),
+		).toMatchObject({ state: "failed" });
+		expect(
+			await setup?.(event, { action: "exec", path: "/untrusted.pkg" }),
+		).toMatchObject({ state: "failed" });
+	} finally {
+		await owner.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+	expect(ipc.handlers.has("meetings:audio-setup")).toBe(false);
+});
+
+it("AI-283 native confirmation and package selection read the current saved EN/DE locale", async () => {
+	const platform = Object.getOwnPropertyDescriptor(process, "platform");
+	Object.defineProperty(process, "platform", { value: "darwin" });
+	const root = await mkdtemp(join(tmpdir(), "audio-setup-native-locale-"));
+	let locale = "en";
+	ipc.confirmSetup.mockClear();
+	ipc.selectSetup.mockClear();
+	ipc.confirmSetup.mockResolvedValue({ response: 1 });
+	const owner = registerMeetings({
+		userData: root,
+		mock: false,
+		hardware: () => undefined,
+		locale: () => locale,
+		renderer: "https://fixture.invalid",
+		management: () => ({ webContents: { id: 42 } }),
+	});
+	try {
+		await owner.ready;
+		const setup = ipc.handlers.get("meetings:audio-setup");
+		const frame = { url: "https://fixture.invalid" };
+		const event = { sender: { id: 42, mainFrame: frame }, senderFrame: frame };
+		for (const next of ["en", "de", "unknown"]) {
+			locale = next;
+			const { audioSetupText } = await import("../../shared/audio-setup");
+			const text = audioSetupText(locale);
+			expect(await setup?.(event, { action: "install" })).toMatchObject({
+				state: "cancelled",
+			});
+			expect(ipc.confirmSetup).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					message: text.nativeConfirm,
+					detail: `${text.warning}\n\n${text.retention}`,
+					buttons: [text.cancel, text.nativeChoose],
+					defaultId: 0,
+					cancelId: 0,
+				}),
+			);
+			expect(ipc.selectSetup).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					title: text.nativeTitle,
+					buttonLabel: text.nativeChoose,
+					filters: [{ name: text.nativeFilter, extensions: ["pkg"] }],
+				}),
+			);
+		}
+	} finally {
+		await owner.dispose();
+		if (platform) Object.defineProperty(process, "platform", platform);
 		await rm(root, { recursive: true, force: true });
 	}
 });

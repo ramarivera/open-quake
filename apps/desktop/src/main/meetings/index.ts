@@ -42,6 +42,11 @@ import {
 	MeetingService,
 } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
+	AUDIO_SETUP_CHANNEL,
+	AudioSetupRequest,
+	audioSetupText,
+} from "../../shared/audio-setup";
+import {
 	CAPTURE_CHUNK,
 	CAPTURE_LOST,
 	CAPTURE_PCM,
@@ -56,6 +61,7 @@ import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { meetingHardwareFeedback } from "../hardware/meeting-feedback";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { audioSetup, openBlackHoleInstaller } from "./audio-setup";
 import { createCapturePort } from "./capture-port";
 import { writePrivateFile } from "./private-files";
 import { liveMeetingProviders, type MeetingProviderOptions } from "./provider";
@@ -103,6 +109,7 @@ export function prepareMeetings(
 		microphone?: () => Effect.Effect<
 			import("../../shared/speech").MicrophoneIdentity | undefined
 		>;
+		locale?: () => string;
 		userData: string;
 		hardware: (serial?: string) => HardwareSession | undefined;
 		mock: boolean;
@@ -465,6 +472,61 @@ export function prepareMeetings(
 					}
 					return yield* snapshot;
 				});
+			const setup = audioSetup({
+				active: () => !disposed,
+				platform: process.platform,
+				mock: options.mock,
+				confirm: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
+					return (
+						(
+							await dialog.showMessageBox({
+								type: "warning",
+								message: text.nativeConfirm,
+								detail: `${text.warning}\n\n${text.retention}`,
+								buttons: [text.cancel, text.nativeChoose],
+								defaultId: 0,
+								cancelId: 0,
+							})
+						).response === 1
+					);
+				},
+				select: async () => {
+					const text = audioSetupText(options.locale?.() ?? "en");
+					const result = await dialog.showOpenDialog({
+						title: text.nativeTitle,
+						buttonLabel: text.nativeChoose,
+						properties: ["openFile"],
+						filters: [{ name: text.nativeFilter, extensions: ["pkg"] }],
+					});
+					return result.canceled ? undefined : result.filePaths[0];
+				},
+				openInstaller: (selected) =>
+					openBlackHoleInstaller({
+						selected,
+						root: join(root, "installer-handoffs"),
+						open: (path) => shell.openPath(path),
+					}),
+			});
+			ipcMain.handle(AUDIO_SETUP_CHANNEL, async (event, value: unknown) => {
+				if (
+					!agentRequestAllowed(
+						{
+							senderId: event.sender.id,
+							frameURL: event.senderFrame?.url ?? "",
+							mainFrame: event.senderFrame === event.sender.mainFrame,
+						},
+						options.management?.()?.webContents.id,
+						renderer,
+					) ||
+					!Schema.is(AudioSetupRequest)(value)
+				)
+					return { platform: process.platform, state: "failed" };
+				if (disposed) return { platform: process.platform, state: "failed" };
+				return value.action === "status"
+					? setup.status()
+					: Effect.runPromise(setup.install());
+			});
 			ipcMain.handle(
 				MEETING_REQUEST,
 				async (event, value: unknown): Promise<unknown> => {
@@ -563,6 +625,7 @@ export function prepareMeetings(
 				disposed = true;
 				disposal = (async () => {
 					ipcMain.removeHandler(MEETING_REQUEST);
+					ipcMain.removeHandler(AUDIO_SETUP_CHANNEL);
 					for (const fiber of jobs.values())
 						await runtime.runPromise(Fiber.interrupt(fiber));
 					await runtime.runPromiseExit(MeetingService.suspend());

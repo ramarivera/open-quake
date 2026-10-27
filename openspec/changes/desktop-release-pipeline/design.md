@@ -13,3 +13,9 @@ Unsigned macOS builds may require explicit Gatekeeper approval and Windows shows
 Ramiro narrowed macOS to Apple Silicon only on 2026-10-25. Intel Mac builds are excluded; Windows and Linux retain both architectures.
 
 FFmpeg remains a documented external prerequisite rather than a bundled executable. Before recording, probe its encoder list with an eight-second deadline and require libmp3lame. A missing, failed or incompatible converter produces a catalogued installation error before permission requests or capture-window creation. Mock capture and live translation do not need the recording converter.
+
+## Approved release policy 2026-10-27
+
+Linux AppImage is the primary automatic update target. The runtime resolves only stable releases in ramarivera/open-quake, verifies the GitHub asset SHA-256 and byte count, and atomically replaces the existing AppImage after confirmation. deb packages use the owned release page for manual installation. Windows remains unsigned with no paid signing service. No CI changes are part of open-quake-i3j.
+
+macOS distribution must move from the current ad-hoc builder configuration to Developer ID Application signing with hardened runtime and Apple notarization. This needs verified paid Developer Program membership, a Developer ID certificate/private key and notarization credentials entered through the secret mechanism. Those credentials are absent from this lane. The current config remains ad-hoc; no signed or notarized build is claimed. A release operator must explicitly enable and verify that configuration after credentials are provisioned.

@@ -281,7 +281,7 @@ The system SHALL display Accessibility, Input Monitoring, Microphone, Screen Rec
 
 ### Requirement: App-owned self-update scheduling
 
-The system SHALL check at 5000ms after launch and every 12 hours, support manual Check Update, and download background updates before offering installation. Checks/downloads SHALL be single-flight and failures recoverable. Production SHALL use a disabled open-quake feed until an owned release manifest and artifact trust policy exist; tests SHALL inject a fake feed and installer. No vendor feed SHALL be called. Evidence: SETTINGS-049, SETTINGS-050.
+The system SHALL check at 5000ms after launch and every 12 hours, support manual Check Update, and download background updates before offering installation. Checks/downloads SHALL be single-flight and failures recoverable. Production SHALL use the owned GitHub feed for packaged Linux AppImages and a manual owned-release notice for other formats; tests SHALL inject a fake feed and installer. No vendor feed SHALL be called. Evidence: SETTINGS-049, SETTINGS-050.
 
 #### Scenario: Background update
 
@@ -653,3 +653,33 @@ The retained ownership map is:
 
 - **WHEN** synthetic legacy account, plugin and history stores are imported
 - **THEN** canonical owners preserve supported durable data, remove credentials and transient launch values, and repeated imports do not overwrite explicit current choices
+
+### Requirement: Owned GitHub release delivery
+
+MAIN-114 and SETTINGS-006/049/050 SHALL use only ramarivera/open-quake GitHub Releases. Packaged Linux AppImages SHALL check stable releases, verify GitHub asset SHA-256 and size, and replace the running AppImage only after explicit install confirmation. Other packages SHALL show the owned releases notice. Windows SHALL remain unsigned. macOS signing requires distributor credentials.
+
+#### Scenario: AppImage release and rejected artifact
+- **WHEN** the feed returns a matching newer stable asset or a corrupt, foreign or digest-less asset
+- **THEN** the real maintenance consumer offers the verified update or reports failure before replacement
+
+#### Scenario: Published AppImage architecture names
+- **WHEN** a Linux x64 or arm64 AppImage checks the stable release
+- **THEN** asset lookup uses the publisher's x86_64 or arm64 filename respectively, while release metadata retains the runtime architecture x64 or arm64
+
+#### Scenario: Other distribution formats
+- **WHEN** a deb, Windows, macOS or development build opens update settings
+- **THEN** it exposes the owned releases page and explains manual installation and signing status
+
+#### Scenario: GitHub asset redirects retain mandatory verification
+- **WHEN** GitHub redirects the pinned repository asset to an allowlisted HTTPS host
+- **THEN** download and install still require the SHA-256 and size from the pinned repository API metadata, altered bytes never replace the AppImage, and nonstandard HTTPS ports are rejected before transport
+
+#### Scenario: Installed AppImage changes during replacement
+
+- **WHEN** the installed image is a symlink, is not executable, or its inode, device, modification time or size changes while verified bytes are copied
+- **THEN** replacement fails before rename, preserves the current installed contents and removes the temporary update file
+
+#### Scenario: No browser handler for manual releases
+
+- **WHEN** launching the releases page fails in a package with automatic updates disabled
+- **THEN** the maintenance request still checks update state and returns a refreshed view with the manual distribution notice, without a restore error

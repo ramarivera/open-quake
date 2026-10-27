@@ -725,6 +725,7 @@ if (!app.requestSingleInstanceLock()) {
 						const runtime = hardwareModule.runtime;
 						const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 						const meetingsModule = prepareMeetings({
+							locale: () => knobLocale,
 							management: () => managementWin,
 							renderer: rendererURL,
 							provider: {
