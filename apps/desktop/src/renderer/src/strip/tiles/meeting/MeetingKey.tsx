@@ -21,7 +21,7 @@ export function MeetingKey({
 }: StripTileProps): React.JSX.Element {
 	const { snapshot } = useMeetings();
 	const now = useMeetingNow();
-	const mic = snapshot ? Option.getOrUndefined(snapshot.mic) : undefined;
+	const mic = context.hardware?.available ? context.hardware.mic : undefined;
 	useEffect(() => {
 		if (tile.type !== "mic") return;
 		const timer = setInterval(() => {
@@ -80,8 +80,34 @@ export function MeetingKey({
 			data-meeting-action={tile.type}
 			aria-label={title}
 			aria-pressed={!!active}
-			aria-disabled={remaining > 0}
+			aria-disabled={
+				remaining > 0 || (tile.type === "mic" && mic === undefined)
+			}
+			disabled={
+				tile.type === "mic" &&
+				(mic === undefined || context.interactive === false)
+			}
 			onClick={() => {
+				if (tile.type === "mic") {
+					const target = context.keyTarget;
+					if (target)
+						void window.quakeKeyLibrary
+							?.request({
+								...target,
+								type: "activate",
+								keyCode: tile.keyCode,
+								kind: "press",
+							})
+							.finally(() =>
+								window.quakeKeyLibrary?.request({
+									...target,
+									type: "activate",
+									keyCode: tile.keyCode,
+									kind: "release",
+								}),
+							);
+					return;
+				}
 				void meetingRequest({
 					_tag: "action",
 					action: action.right,

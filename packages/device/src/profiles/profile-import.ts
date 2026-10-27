@@ -4,9 +4,11 @@ import {
 	legacyAssistantState,
 	migrateLegacyAiConfig,
 } from "../../../edge/src/ai/provider-catalog.js";
+import { normalizeActionImport } from "../actions/action-import.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
+import { upgradeAssistantTitle } from "./profile-assistant-migration.js";
 import {
 	createEmptyProfileKey,
 	Profile,
@@ -135,7 +137,10 @@ export function inspectProfileImport(
 	) => diagnostics.push({ code, path, blocking });
 	const normalizeKey = (input: unknown, path: string, pageId?: string) => {
 		const source = record(input);
-		const config = record(source?.config);
+		const normalized = source
+			? record(normalizeActionImport(source).normalized)
+			: undefined;
+		const config = record(normalized?.config);
 		if (!source || !config) {
 			report("invalid-field", path, true);
 			return input;
@@ -158,6 +163,10 @@ export function inspectProfileImport(
 			}
 		}
 
+		// Keep website templates editable; only validation and execution expand them.
+		const sourceActions = record(source.config)?.actions;
+		if (config.type === "website" && sourceActions !== undefined)
+			next.actions = sourceActions;
 		if (typeof config.errorCode === "number") {
 			const diagnosticCode = legacyDiagnosticCode(config.errorCode);
 			if (diagnosticCode)
@@ -245,14 +254,14 @@ export function inspectProfileImport(
 			}
 		}
 		const candidate = {
-			...source,
+			...normalized,
 			...(source.childrenName === "" || source.childrenName === null
 				? { childrenName: undefined }
 				: {}),
 			...(typeof next.type === "string" && next.type !== config.type
 				? { childrenName: next.type }
 				: {}),
-			config: next,
+			config: upgradeAssistantTitle({ ...source, config: next }).config,
 			compatibility: { ...record(source.compatibility), unsupported, source },
 		};
 		if (candidate.childrenName === undefined) delete candidate.childrenName;

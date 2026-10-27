@@ -2,7 +2,10 @@
 import { Option, Schema } from "effect";
 import { act, useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { KnobSlot } from "../../../../../../packages/device/src/knob/knob-contracts";
+import {
+	KnobResource,
+	type KnobSlot,
+} from "../../../../../../packages/device/src/knob/knob-contracts";
 import { defaultAssistantSettings } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	createEmptyProfileKey,
@@ -18,6 +21,8 @@ import type {
 } from "../../../shared/agents";
 import { button, click, input, mount, query, settle } from "../../test/dom";
 import { AssistantProviderSettings } from "../maintenance/AssistantProviderSettings";
+import { PersonaSettings } from "../management/agents/PersonaSettings";
+
 import { fakeBridge, wizard } from "../settings/test-fixtures";
 import { AssistantControls, AssistantEditor } from "./AssistantEditor";
 import { AssistantLink } from "./AssistantLink";
@@ -734,6 +739,191 @@ it("followed General provider changes reconcile checked controls and cross-provi
 	await f.render(<AssistantEditor keyValue={key} onChange={() => {}} />);
 	expect(field(f.host, "Enable Thinking").checked).toBe(false);
 	expect(field(f.host, "Web Search").checked).toBe(false);
+});
+
+it("AI-228/229/230 updates preset/custom persona and slider endpoints, then reloads the saved selection", async () => {
+	let saved = { ...defaultAssistantSettings(), useAgent: false };
+	const updates: (typeof saved)[] = [];
+	vi.stubGlobal("quakeChat", {
+		persona: {
+			read: async () => saved,
+			update: async (next: typeof saved) => {
+				saved = next;
+				updates.push(next);
+				return next;
+			},
+		},
+	});
+	const f = await mount(<PersonaSettings rows={rows} />);
+	closes.push(f.close);
+	await settle(() =>
+		expect(f.host.querySelector('input[type="range"]')).not.toBeNull(),
+	);
+	const personality = field(f.host, "Personality");
+	const quality = field(f.host, "Reply Quality");
+	expect([
+		personality.min,
+		personality.max,
+		personality.step,
+		personality.value,
+	]).toEqual(["0", "1", "0.05", "0.7"]);
+	expect([quality.min, quality.max, quality.step, quality.value]).toEqual([
+		"0",
+		"2",
+		"0.05",
+		"1",
+	]);
+	for (const text of ["Fastidious", "Flexible", "Conservative", "Gibberish"])
+		expect(f.host.textContent).toContain(text);
+	await input(query(f.host, 'select[id$="-role"]', HTMLSelectElement), "128");
+	await input(personality, "0");
+	await input(quality, "2");
+	await click(button(f.host, "Update"));
+	expect(saved).toMatchObject({ roleId: 128, topP: 0, temperature: 2 });
+	await click(field(f.host, "Custom Role"));
+	await input(
+		query(f.host, "textarea", HTMLTextAreaElement),
+		"Saved custom persona",
+	);
+	await input(personality, "0.05");
+	await input(quality, "1.95");
+	await click(button(f.host, "Update"));
+	expect(saved).toMatchObject({
+		roleId: -1,
+		customPrompt: "Saved custom persona",
+		topP: 0.05,
+		temperature: 1.95,
+	});
+	await f.render(<PersonaSettings key="reload" rows={rows} />);
+	await settle(() =>
+		expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
+			"Saved custom persona",
+		),
+	);
+	expect(field(f.host, "Custom Role").checked).toBe(true);
+	expect(field(f.host, "Personality").value).toBe("0.05");
+	await click(field(f.host, "Custom Role"));
+	await input(query(f.host, 'select[id$="-role"]', HTMLSelectElement), "6");
+	await click(button(f.host, "Update"));
+	expect(saved).toMatchObject({ roleId: 6, customPrompt: "", rolePrompt: "" });
+	expect(updates).toHaveLength(3);
+});
+
+it("AI-089 reviews a preserved legacy grid key before enabling the replacement", async () => {
+	bridge();
+	const legacy = {
+		aiModelType: "old-model",
+		useCustomPrompt: true,
+		systemPrompt: "Translate this",
+		enableWakeTalkWindow: true,
+	};
+	let saved = Schema.decodeUnknownSync(ProfileKey)({
+		...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")),
+		childrenName: "aiChat",
+		config: {
+			...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config,
+			type: "aiChat",
+			aiConfigData: legacy,
+		},
+	});
+	const f = await mount(
+		<AssistantEditor
+			keyValue={saved}
+			onChange={(next) => {
+				saved = next;
+			}}
+		/>,
+	);
+	closes.push(f.close);
+	expect(saved.config.assistantSettings).toBeUndefined();
+	await click(button(f.host, "Preview migration"));
+	await click(button(f.host, "Cancel migration"));
+	expect(saved.config.assistantSettings).toBeUndefined();
+	await click(button(f.host, "Preview migration"));
+	await click(button(f.host, "Use reviewed replacement"));
+	expect(saved.config.aiConfigData).toEqual(legacy);
+	expect(saved.config.assistantSettings).toMatchObject({
+		modelId: "old-model",
+		customPrompt: "Translate this",
+		useAgent: false,
+		enableWakeTalkWindow: true,
+	});
+});
+
+it("MGMT-213 assigns a saved HA key through KnobEditor Save and reopen without changing configData", async () => {
+	bridge();
+	const configData = JSON.stringify({
+		entity_id: "light.desk",
+		service: "toggle",
+		service_data: { brightness: 40 },
+		custom_display_type: "default",
+		custom_display_settings: { fontSize: 24 },
+		custom_display_detail: [],
+	});
+	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	let saved = Schema.decodeUnknownSync(Profile)({
+		id: "ha-profile",
+		name: "HA",
+		revision: 1,
+		pages: [
+			{
+				id: "one",
+				keys: [
+					{
+						...empty,
+						childrenName: "homeAssistant",
+						config: {
+							...empty.config,
+							type: "homeAssistant",
+							actions: [{ type: "configData", value: configData }],
+						},
+					},
+				],
+			},
+		],
+	});
+	let writes = 0;
+	vi.stubGlobal("quakeKeyLibrary", {
+		request: async (
+			command: import("../../../shared/key-library").KeyRequest,
+		) => {
+			if (command.type !== "save-knob") throw new Error("unexpected command");
+			writes++;
+			saved = Schema.decodeUnknownSync(Profile)({
+				...Schema.encodeSync(Profile)(saved),
+				revision: saved.revision + 1,
+				knob: command.knob,
+			});
+			return {
+				_tag: "success",
+				envelope: {
+					schemaVersion: 1,
+					profiles: [Schema.encodeSync(Profile)(saved)],
+					activeByDevice: {},
+				},
+			};
+		},
+	});
+	const f = await mount(<KnobEditor profile={saved} accept={() => {}} />);
+	closes.push(f.close);
+	await input(
+		query(f.host, "#knob-function", HTMLSelectElement),
+		"homeAssistant",
+	);
+	expect(button(f.host, "Save knob").disabled).toBe(true);
+	await input(query(f.host, "#knob-ha-key", HTMLSelectElement), "one/1,1");
+	await click(button(f.host, "Save knob"));
+	expect(writes).toBe(1);
+	expect(
+		Schema.decodeUnknownSync(KnobResource)(Option.getOrThrow(saved.knob)).config
+			.subActions[0].config.actions,
+	).toEqual([{ type: "configData", value: configData }]);
+	await f.render(
+		<KnobEditor key="reopened-ha" profile={saved} accept={() => {}} />,
+	);
+	expect(query(f.host, "#knob-ha-key", HTMLSelectElement).value).toBe(
+		"one/1,1",
+	);
 });
 
 it.each(["CN", "DE", "US"])(

@@ -38,7 +38,7 @@ export async function readDisplay(
 		if (reply._tag === "None") return { state: "failed" };
 		const value = reply.value;
 		if (value._tag === "offline") return { state: "offline" };
-		if (value._tag === "failure") return { state: "failed" };
+		if (value._tag !== "ready") return { state: "failed" };
 		return value.snapshot.available
 			? { state: "connected", serial: value.snapshot.serial, mock: value.mock }
 			: { state: "offline" };

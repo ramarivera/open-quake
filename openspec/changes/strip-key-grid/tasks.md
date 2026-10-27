@@ -92,3 +92,28 @@ beads remain open for lead integration.
 - [x] Isolate style-regeneration capture failures and retain same-value retries for failed profiles. Failing-first two-profile regression covers Codex 4380623860.
 
 - [x] Preserve retained thumbnail capture style through pending and failed regeneration. Main snapshots carry the captured border preference; a failing-first mounted controller regression also accepts identical replacement pixels. Codex 4380698050.
+
+## 8. key-runtime burn-down
+
+- [x] 8.1 Render scoped countdown/alert/progress/artwork and page indicator; test EN/DE mock native views. Beads open-quake-lih.10.23/.24.
+- [x] 8.2 Connect authorized management opening and specify/test multi-screen no-op. Bead open-quake-lih.10.22/.24.
+
+Key-runtime section 8 evidence: real hidden mock Electron timer zero/clear and typed completion, pageNo, 42% progress and checkmark passed with EN/DE captures on 2026-10-27. Root tests: 5001 passed, four existing skips. Build, both bundle checks, typecheck and Biome passed. Existing OpenSpec 1.15 strict long-requirement failures remain tracked in open-quake-lih.23.2; no added lane requirement has a diagnostic. Screenshots and logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/. Physical display acceptance remains unverified; beads remain open for lead integration.
+
+## PR #127 final hosted-validation fix
+
+- [x] Preserve grid-library capacity feedback and save behavior while removing repeated sequence dropdown construction. Bead `open-quake-lih.10.27`; implementation and focused regression evidence are recorded in `key-function-library/tasks.md`. Hosted validation of the new head remains for the lead.
+
+## PR #127 authorized residual continuation
+
+- [x] Include the owning revision when comparing progress so equal percentages in a replacement revision receive their own 1000 ms completion or 5000 ms inactivity expiry. Bead `open-quake-lih.10.28`. Effect-clock regressions preserve the new overlay at the old expiry and clear it at the replacement deadline; same-revision repeats don't extend it. Parent owns current-head CI/review acceptance.
+
+## PR #127 second and final continuation
+
+- [x] Scope countdown history, clear suppression and timer ownership to the incoming revision; clear runtime artwork on reset and verify the mounted renderer restores saved artwork. Bead `open-quake-lih.10.28`; parent owns remote gates.
+
+## PR #127 authorized extra batch
+
+- [x] Apply runtime artwork after primary/alternate visual selection for mute and hotkeySwitch, preserving alternate titles, revision scoping and mounted reset. Bead `open-quake-lih.10.29`. Parent owns remote gates; no merge or additional review loop.
+
+Extra-batch verification: 94 device action/runtime tests and 60 desktop adapter/mounted-renderer/sequence-editor tests passed. The unchanged 100/101 capacity consumer and existing mute alternate-visual consumer each passed separately. Nine finding-specific cases failed against old source, including the timer remaining running across the old display deadline. Device/desktop typechecks, scoped Biome and production desktop build passed. Ordinary owner-spec validation passes with existing length warnings; scoped Biome retains three existing template-placeholder warnings. No native device, host input, microphone, audio, provider, visible app, Installer or release tests ran. Parent owns replies, resolutions and remote gates; `open-quake-lih.10.29` stays open. Evidence is in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/key-runtime/extra-batch/`.

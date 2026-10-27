@@ -164,6 +164,13 @@ describe("desktop knob integration", () => {
 					expect([...((yield* fake.writes).at(-1) ?? [])].slice(3, 6)).toEqual([
 						1, 5, 229,
 					]);
+					yield* send({ _tag: "Rotate", delta: 1 });
+					expect((yield* hardware.snapshot()).luminance).toBe(255);
+					yield* send({ _tag: "Rotate", delta: 1 });
+					expect((yield* hardware.snapshot()).luminance).toBe(255);
+					for (let step = 0; step < 12; step++)
+						yield* send({ _tag: "Rotate", delta: -1 });
+					expect((yield* hardware.snapshot()).luminance).toBe(25);
 					yield* send({ _tag: "TapTile", keyCode: "1,2" });
 					yield* send({ _tag: "Rotate", delta: 1 });
 					expect(volumes).toEqual([51]);

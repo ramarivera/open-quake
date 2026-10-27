@@ -2,6 +2,16 @@ import { useCallback } from "react";
 import { useAppLocale } from "../i18n";
 
 const german: Readonly<Record<string, string>> = {
+	"Assistant personality": "Assistentenpersönlichkeit",
+	Update: "Aktualisieren",
+	"Prompt library": "Prompt-Bibliothek",
+	Reset: "Zurücksetzen",
+	"Assistant updated. New settings apply to the next turn.":
+		"Assistent aktualisiert. Die neuen Einstellungen gelten ab der nächsten Nachricht.",
+	"Assistant settings couldn't be loaded.":
+		"Die Assistenteneinstellungen konnten nicht geladen werden.",
+	"Assistant settings couldn't be saved.":
+		"Die Assistenteneinstellungen konnten nicht gespeichert werden.",
 	"After closing, only the chat function will be available, and device control will be disabled.":
 		"Nach dem Deaktivieren ist nur der Chat verfügbar. Die Gerätesteuerung ist deaktiviert.",
 	"Auto supports chat and allowed Home Assistant entities. Other device control routes are unavailable in this build.":

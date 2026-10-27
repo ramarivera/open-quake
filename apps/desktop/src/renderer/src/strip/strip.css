@@ -166,21 +166,13 @@
 	color: var(--strip-danger);
 	font-size: 22px;
 }
-.strip-key-progress {
-	position: absolute;
-	left: 16px;
-	right: 16px;
-	bottom: 14px;
-	height: 6px;
-	overflow: hidden;
-	border-radius: 3px;
-	background: var(--strip-line);
+.strip-key-progress > span:first-child {
+	transition: width 150ms linear;
 }
-.strip-key-progress > span {
-	display: block;
-	height: 100%;
-	border-radius: inherit;
-	background: var(--strip-accent);
+@media (prefers-reduced-motion: reduce) {
+	.strip-key-progress > span:first-child {
+		transition: none;
+	}
 }
 
 /* A full-strip status sheet, e.g. profiles unavailable. */

@@ -3,7 +3,11 @@ import type {
 	CommittedActionSnapshot,
 	MediaCommand,
 } from "./action-contracts.js";
-import type { ActionSnapshotFailed, HostActionError } from "./action-errors.js";
+import type {
+	ActionSnapshotFailed,
+	HostActionError,
+	KeyFunctionUnavailable,
+} from "./action-errors.js";
 
 export interface KeyboardActionAdapter {
 	readonly supportedTokens: ReadonlySet<string>;
@@ -21,7 +25,7 @@ export interface ApplicationActionAdapter {
 	/** A selected reference or absolute path, never a shell command. Check host support here. */
 	readonly launchApplication: (
 		reference: string,
-	) => Effect.Effect<void, HostActionError>;
+	) => Effect.Effect<void, HostActionError | KeyFunctionUnavailable>;
 }
 export interface MediaActionAdapter {
 	readonly observe?: (

@@ -10,11 +10,7 @@ export function meetingTouchAction(
 ): typeof MeetingAction.Type | undefined {
 	if (event.keyAction !== 1 || !event.voiceTouchEnd) return;
 	const tile = layout?.tiles.find((tile) => tile.keyCode === event.keyCode);
-	if (
-		!tile ||
-		(tile.type === "mic" && tile.cellTheme !== "meetingAssistantTheme")
-	)
-		return;
+	if (!tile || tile.type === "mic") return;
 	const action = Schema.decodeUnknownEither(MeetingAction)(tile.type);
 	return Either.isRight(action) ? action.right : undefined;
 }

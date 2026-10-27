@@ -27,6 +27,11 @@ export const fakeHardwareReply = (
 export const makeFakeHardwareTransport = (
 	options: {
 		readonly serial?: string;
+		readonly qmkProtocolVersion?: number;
+		readonly qmkValues?: readonly {
+			prefix: readonly number[];
+			values: readonly number[];
+		}[];
 		readonly onCommand?: (command: {
 			readonly opCode: number;
 			readonly cmdId: number;
@@ -48,6 +53,15 @@ export const makeFakeHardwareTransport = (
 		let mic = 1;
 		let knobLed = 1;
 		let luminance = 255;
+		const lighting = new Map<string, readonly number[]>([
+			["9", [128]],
+			["11", [100]],
+			["12", [0, 255]],
+			...(options.qmkValues ?? []).map((entry): [string, readonly number[]] => [
+				entry.prefix.join(","),
+				entry.values,
+			]),
+		]);
 		const transport: HidTransport["Type"] = {
 			discover: fake.transport.discover,
 			open: (info) =>
@@ -58,6 +72,37 @@ export const makeFakeHardwareTransport = (
 						write: (report) =>
 							Effect.gen(function* () {
 								yield* handle.write(report);
+								if ([1, 7, 8, 9].includes(report[1] ?? -1)) {
+									const body = new Uint8Array(32);
+									body.set(report.slice(1));
+									if (report[1] === 1) {
+										const version = options.qmkProtocolVersion ?? 10;
+										body[1] = version >> 8;
+										body[2] = version & 255;
+									}
+									const prefix = [...lighting.keys()]
+										.sort((a, b) => b.length - a.length)
+										.find((key) =>
+											key
+												.split(",")
+												.every(
+													(byte, index) => Number(byte) === report[index + 2],
+												),
+										);
+									if (prefix) {
+										const offset = 2 + prefix.split(",").length;
+										const length = lighting.get(prefix)?.length ?? 1;
+										if (report[1] === 7)
+											lighting.set(
+												prefix,
+												Array.from(report.slice(offset, offset + length)),
+											);
+										if (report[1] === 8)
+											body.set(lighting.get(prefix) ?? [], offset - 1);
+									}
+									yield* fake.emit(body);
+									return;
+								}
 								const command = yield* decodeHidReport(report).pipe(
 									Effect.orDie,
 									Effect.flatMap((bytes) =>

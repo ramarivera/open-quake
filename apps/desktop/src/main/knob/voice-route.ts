@@ -26,7 +26,22 @@ export const pinKnobProfile = Effect.fn("DesktopKnob.pinProfile")(function* (
 	})(center.config.actions);
 	if (Either.isLeft(actions))
 		return yield* new VoiceKnobRejected("RouteIncomplete", actions.left);
-	if (actions.right.find((a) => a.type === "voiceRoute")?.value !== "direct")
+	const route = actions.right.find((a) => a.type === "voiceRoute")?.value;
+	if (route === "dkclaw") {
+		const agentId =
+			actions.right.find((a) => a.type === "agentId")?.value || "main";
+		const modelId =
+			actions.right.find((a) => a.type === "dkclawModel")?.value || "";
+		return {
+			profileId: profile.id,
+			revision: profile.revision,
+			route: "dkclaw",
+			agentId,
+			modelId,
+			providerId: "",
+		};
+	}
+	if (route !== "direct")
 		return yield* new VoiceKnobRejected("RouteUnavailable");
 	const refs = directKnobRouteReferences(actions.right);
 	if (Option.isNone(refs))

@@ -148,3 +148,8 @@ Linux discovery and the native picker resolve executable symlinks with `realpath
 The main process registers the merged clock service alongside profiles and hardware controls. Native proof selects the built-in Clock profile and asserts the real `.oq-clock` renderer. Captures wait for clock readiness before writing thumbnails.
 
 The Windows per-probe PowerShell `Add-Type` remains deferred to `open-quake-lih.9.1.8`, OpenSpec task 1.8. The planned scoped helper compiles once, accepts request IDs over stdin/stdout, enforces one outstanding request and five-second deadlines, restarts after crashes, and stops on disposal. Native Windows latency and lifecycle validation remain required.
+
+Saved Open focuses an existing Linux process only in an X11 session with DISPLAY
+and xdotool available. Wayland and missing xdotool report typed
+QUAKE.ACTION.UNAVAILABLE with adapter-missing; they never launch a duplicate as
+fallback. Wayland support and native Linux focus acceptance remain incomplete.

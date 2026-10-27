@@ -1,9 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Either, Redacted } from "effect";
+import { Effect, Either, Option, Redacted } from "effect";
 import { expect, it } from "vitest";
 import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { initialAgentState } from "../../../../../packages/edge/src/agents/agents-invariants";
 import { AiAuthRequired } from "../../../../../packages/edge/src/ai/ai-errors";
@@ -12,6 +13,7 @@ import {
 	knobVoiceReady,
 } from "../../renderer/src/keys/knob-draft";
 import { createDirectChat } from "./host";
+import { assistantCapturePreparer } from "./voice";
 
 it.each<ModelRow["role"]>(["none", "default", "fallback"])(
 	"editor readiness and production knob pinning agree for saved role %s",
@@ -188,6 +190,105 @@ it.each(["private-model", "gpt-4o", " ", "x".repeat(201)])(
 		} finally {
 			await host.dispose();
 			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+it.each(["none", "fallback"] as const)(
+	"followed knob resolves each new default when the old row becomes %s",
+	async (role) => {
+		const directory = await mkdtemp(join(tmpdir(), "knob-follow-default-"));
+		const original: ModelRow = {
+			id: "old",
+			role: "default",
+			provider: "openai",
+			model: "gpt-4o",
+			baseUrl: "https://fake.invalid/v1",
+			maxTokens: 1024,
+			credentialRef: "00000000-0000-4000-8000-000000000001",
+		};
+		let rows: readonly ModelRow[] = [original];
+		const host = createDirectChat({
+			directory,
+			models: () => Effect.succeed(rows),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake")),
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const settings = { ...defaultAssistantSettings(), useAgent: false };
+			const first = await host.runtime.runPromise(
+				host.pinKnobModel("old", "gpt-4o", settings),
+			);
+			rows = [
+				{ ...original, role },
+				{ ...original, id: "new", role: "default", model: "gpt-4o-mini" },
+			];
+			const next = await host.runtime.runPromise(
+				host.pinKnobModel("old", "gpt-4o", settings),
+			);
+			expect(first.profile.modelId).toBe("gpt-4o");
+			expect(next.profile.modelId).toBe("gpt-4o-mini");
+			expect(next.profile.id).not.toBe(first.profile.id);
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+it.each(["", "qwen3.6-plus", "private-model", "explicit-model"])(
+	"PR128 capture resolves empty/changed-provider model %s before pinning",
+	async (modelId) => {
+		const directory = await mkdtemp(join(tmpdir(), "capture-model-"));
+		const host = createDirectChat({
+			directory,
+			online: () => true,
+			keySettings: () =>
+				Effect.succeed({
+					...defaultAssistantSettings(),
+					useAgent: false,
+					modelRowId:
+						modelId === "" || modelId === "explicit-model" ? "saved" : "",
+					modelId,
+				}),
+			models: () =>
+				Effect.succeed([
+					{
+						id: "saved",
+						role: "default",
+						provider: "deepseek",
+						model: "deepseek-v4-flash",
+						baseUrl: "https://fake.invalid/v1",
+						maxTokens: 1024,
+						credentialRef: "00000000-0000-4000-8000-000000000001",
+					},
+				]),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake")),
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const prepared = await Effect.runPromise(
+				assistantCapturePreparer(host)({
+					serial: "QK",
+					keyCode: "1,1",
+					type: "aiChat",
+					captureId: "test",
+					generation: 1,
+					agentId: Option.none(),
+				}),
+			);
+			expect(prepared.directModel?.profile.modelId).toBe(
+				modelId === "private-model" || modelId === "explicit-model"
+					? modelId
+					: "deepseek-v4-flash",
+			);
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true });
 		}
 	},
 );

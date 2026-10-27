@@ -9,7 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Cause, Effect, Option, Runtime } from "effect";
+import { Cause, Effect, Option, Runtime, Schema } from "effect";
 import { BrowserWindow, ipcMain, systemPreferences } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
@@ -17,6 +17,7 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	type Profile,
+	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
@@ -35,7 +36,7 @@ import {
 import { desktopKnobAdapters } from "../knob/desktop-adapters";
 import { knobProfileBinding } from "../knob/profile-binding";
 import { knobThumbnailReader } from "../knob/thumbnail-binding";
-import { registerProfiles } from "./index";
+import { registerTestProfiles } from "../test/profile-registration";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
 
 const png = Buffer.from(
@@ -65,6 +66,9 @@ vi.mock("./local-profile-storage", () => ({
 		},
 		recoveries: [],
 	}),
+}));
+vi.mock("../monitor/monitor-store", () => ({
+	monitorStorage: () => ({ load: async () => undefined }),
 }));
 vi.mock("./profile-ipc", () => ({
 	registerProfiles: () => ({ dispose: async () => {} }),
@@ -138,7 +142,26 @@ async function setup(
 		join(process.env.OPEN_QUAKE_TEST_SCRATCH ?? tmpdir(), "producer-"),
 	);
 	directories.push(fixture.root);
-	fixture.saved = encodeProfileEnvelope(createInitialProfileEnvelope());
+	// Cache/capture integration needs two installed profiles, not a fresh catalog.
+	const initial = encodeProfileEnvelope(createInitialProfileEnvelope());
+	fixture.saved = encodeProfileEnvelope(
+		Schema.decodeUnknownSync(ProfileEnvelope)({
+			...initial,
+			profiles: ["1-2", "1-3"].map((id) => ({
+				...initial.profiles[0],
+				id,
+				name: id,
+			})),
+			manager: {
+				revision: 1,
+				installed: true,
+				hidden: [],
+				links: [],
+				approvedCommands: [],
+				userHasSetDefault: false,
+			},
+		}),
+	);
 	fixture.windows.length = 0;
 	fixture.load.mockResolvedValue(undefined);
 	fixture.ready.mockResolvedValue(undefined);
@@ -148,7 +171,7 @@ async function setup(
 	});
 	await prepare?.(fixture.root);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
-	const profiles = registerProfiles(
+	const profiles = registerTestProfiles(
 		() => management,
 		"file:///application/index.html",
 		deliver,
@@ -533,6 +556,10 @@ describe("production manager thumbnail producer", () => {
 it("waits for asynchronous owned tile artwork and decoded images before capturing", async () => {
 	const profiles = await setup();
 	const checks: Array<() => void> = [];
+	let checking: () => void = () => {};
+	const artworkPending = new Promise<void>((resolve) => {
+		checking = resolve;
+	});
 	const image = { complete: false, naturalWidth: 0 };
 	const tile = {
 		dataset: { tileArtworkState: "pending" },
@@ -558,13 +585,16 @@ it("waits for asynchronous owned tile artwork and decoded images before capturin
 			{ querySelector: () => preview, fonts: { ready: Promise.resolve() } },
 			(callback: () => void) => callback(),
 			(callback: () => void, delay: number) => {
-				if (delay === 20) checks.push(callback);
+				if (delay === 20) {
+					checks.push(callback);
+					checking();
+				}
 			},
 		),
 	);
 	fixture.capture.mockClear();
 	const pending = profiles.thumbnail("1-2", "en", new AbortController().signal);
-	await vi.waitFor(() => expect(fixture.ready).toHaveBeenCalled());
+	await artworkPending;
 	expect(fixture.capture).not.toHaveBeenCalled();
 	expect(checks.length).toBe(1);
 	tile.dataset.tileArtworkState = "ready";

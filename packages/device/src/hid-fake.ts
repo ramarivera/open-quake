@@ -9,6 +9,7 @@ import { type HidConnection, HidTransport } from "./hid-transport.js";
 
 export const FAKE_QUAKE_DEVICE: HidDeviceInfo = {
 	path: "fake:quake",
+	serialNumber: "fake-quake",
 	...QUAKE_IDENTITY,
 };
 

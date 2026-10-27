@@ -1,18 +1,15 @@
 // @vitest-environment happy-dom
-import { Option, Schema } from "effect";
+import { Option } from "effect";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants";
-import {
-	builtinProfiles,
-	profileText,
-} from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { profileText } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import {
 	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
-	ProfileEnvelope,
+	type ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type {
 	ClockBridge,
@@ -155,9 +152,8 @@ it("CENTER-006 MGMT-327 SCREEN-011/099 SETTINGS-007/063/064: saved locale update
 				view: {
 					envelope: encodeProfileEnvelope({
 						...createInitialProfileEnvelope(),
-						profiles: Schema.validateSync(ProfileEnvelope.fields.profiles)(
-							builtinProfiles("darwin", locale),
-						),
+						// Locale propagation needs one row; real catalog geometry is covered in strip.test.ts.
+						profiles: createInitialProfileEnvelope().profiles,
 					}),
 					serials: [],
 					apps: [],

@@ -9,6 +9,7 @@ import {
 	systemPreferences,
 } from "electron";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
+import { ActionPermissionDenied } from "../../../../../packages/device/src/actions/action-errors.js";
 import {
 	type KeyActivation,
 	KeyRuntime,
@@ -61,7 +62,10 @@ import {
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { registerKeyLibrary } from "../key-library/registration";
-import { desktopKeyRuntimePort } from "../key-library/runtime-port";
+import {
+	type DesktopKeyRuntimeActions,
+	desktopKeyRuntimePort,
+} from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { monitorStorage } from "../monitor/monitor-store";
 import { monitorProfileStorage } from "../monitor/profile-migration";
@@ -96,7 +100,7 @@ export function prepareProfiles(
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	managementURL = renderer,
-	hardware: () => HardwareSession | undefined = () => undefined,
+	hardware: (serial?: string) => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
 	executeOwned?: (
 		key: ProfileKey,
@@ -107,6 +111,7 @@ export function prepareProfiles(
 	mediaActions?: MediaActionAdapter,
 	resetOwned?: (deviceId?: string) => Promise<void>,
 	panelSerial?: (sender: Electron.WebContents) => string | undefined,
+	keyActions: DesktopKeyRuntimeActions = {},
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -218,6 +223,13 @@ export function prepareProfiles(
 		),
 	);
 
+	let runSavedCommand:
+		| ((
+				key: ProfileKey,
+				signal: AbortSignal,
+				activation: KeyActivation,
+		  ) => Promise<boolean>)
+		| undefined;
 	const prepared = prepareDesktopModule(
 		Layer.mergeAll(
 			KeyEditing.DefaultWithoutDependencies,
@@ -227,9 +239,17 @@ export function prepareProfiles(
 						hardware,
 						(state) => broadcast(KEY_RUNTIME, state),
 						undefined,
-						executeOwned,
+						async (key, signal, activation) =>
+							key.config.type === "cmd"
+								? runSavedCommand
+									? runSavedCommand(key, signal, activation)
+									: false
+								: executeOwned
+									? executeOwned(key, signal, activation)
+									: false,
 						mediaActions,
 						resetOwned,
+						keyActions,
 					),
 				),
 			),
@@ -429,6 +449,17 @@ export function prepareProfiles(
 				});
 			});
 			const initializationLock = runtime.runSync(Effect.makeSemaphore(1));
+			runSavedCommand = async (key, signal, activation) => {
+				const accepted = await runtime.runPromise(
+					controller.pipe(
+						Effect.flatMap((owner) => owner.runKeyCommand(key, activation)),
+					),
+					{ signal },
+				);
+				if (!accepted) throw new ActionPermissionDenied(undefined);
+				return true;
+			};
+
 			let initialized:
 				| Effect.Effect.Success<ReturnType<typeof makeProfileController>>
 				| undefined;
