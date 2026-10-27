@@ -1,12 +1,13 @@
 import { expect, it } from "@effect/vitest";
 import { QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
-import { Effect, Fiber, Layer, Schema, TestClock } from "effect";
+import { Effect, Fiber, Layer, Option, Schema, TestClock } from "effect";
 import { createActionDraft } from "../../../../../packages/device/src/actions/action-registry";
 import {
 	executeHardwareKey,
 	HardwareKeyConfig,
 } from "../../../../../packages/device/src/hardware/hardware-actions";
+import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard";
 import { HardwareControls } from "../../../../../packages/device/src/hardware/hardware-service";
 import { LightingService } from "../../../../../packages/device/src/lighting/lighting-service";
 import { hostKeyboardAdapter } from "./host-keyboard";
@@ -14,24 +15,26 @@ import { linuxKeyboardPort } from "./host-keyboard-linux";
 import { sharedLighting } from "./qmk-lighting";
 import { viaPermissionBroker } from "./via-permissions";
 
-const setup = Effect.gen(function* () {
-	const fake = yield* makeFakeHardwareTransport({ serial: "A" });
-	const device = yield* QuakeDevice.pipe(
-		Effect.provide(
-			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(fake.layer)),
-		),
-	);
-	const connection = yield* device.connect();
-	const controls = yield* HardwareControls.pipe(
-		Effect.provide(HardwareControls.Default),
-	);
-	const session = yield* controls.create(connection, {
-		serial: "A",
-		session: "a1",
+const setupFor = (serial: string) =>
+	Effect.gen(function* () {
+		const fake = yield* makeFakeHardwareTransport({ serial });
+		const device = yield* QuakeDevice.pipe(
+			Effect.provide(
+				QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(fake.layer)),
+			),
+		);
+		const connection = yield* device.connect();
+		const controls = yield* HardwareControls.pipe(
+			Effect.provide(HardwareControls.Default),
+		);
+		const session = yield* controls.create(connection, {
+			serial,
+			session: "a1",
+		});
+		yield* session.refresh();
+		return { fake, session };
 	});
-	yield* session.refresh();
-	return { fake, session };
-});
+const setup = setupFor("A");
 it.scoped(
 	"saved buzzer/mic/game mode keys execute real registry configs with serial guards",
 	() =>
@@ -387,3 +390,224 @@ for (const [chord, codes] of [
 		}),
 	);
 }
+
+it.scoped(
+	"independent device adapters retain shared keys and aggregate modifier flags until final release",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+				},
+			};
+			const a = hostKeyboardAdapter(port),
+				b = hostKeyboardAdapter(port);
+			const releaseA = yield* a.holdChord("control+shift+a");
+			const releaseB = yield* b.holdChord("control+a");
+			yield* releaseA;
+			expect(posts).toEqual([
+				[59, true, 1 << 18],
+				[56, true, (1 << 18) | (1 << 17)],
+				[0, true, (1 << 18) | (1 << 17)],
+				[56, false, 1 << 18],
+			]);
+			yield* releaseA; // A release is idempotent and cannot consume B's ownership.
+			yield* releaseB;
+			expect(posts.slice(-2)).toEqual([
+				[0, false, 1 << 18],
+				[59, false, 0],
+			]);
+		}),
+);
+
+it.scoped(
+	"cancelling another device's control+b tap leaves control+a held",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+				},
+			};
+			const releaseA = yield* hostKeyboardAdapter(port).holdChord("control+a");
+			const tapping = yield* hostKeyboardAdapter(port)
+				.pressChord("control+b")
+				.pipe(Effect.fork);
+			yield* TestClock.adjust(10);
+			yield* Fiber.interrupt(tapping);
+			expect(posts).toEqual([
+				[59, true, 1 << 18],
+				[0, true, 1 << 18],
+				[11, true, 1 << 18],
+				[11, false, 1 << 18],
+			]);
+			yield* releaseA;
+			expect(posts.slice(-2)).toEqual([
+				[0, false, 1 << 18],
+				[59, false, 0],
+			]);
+		}),
+);
+
+it.scoped(
+	"failed device chord acquisition and release recover without releasing another adapter's modifier",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			let failDown = true,
+				failUp = true;
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+					if (args[0] === 11 && (args[1] ? failDown : failUp)) {
+						if (args[1]) failDown = false;
+						else failUp = false;
+						throw new Error("synthetic post failure");
+					}
+				},
+			};
+			const a = hostKeyboardAdapter(port),
+				b = hostKeyboardAdapter(port);
+			const releaseA = yield* a.holdChord("control+a");
+			expect((yield* b.holdChord("control+b").pipe(Effect.either))._tag).toBe(
+				"Left",
+			);
+			expect(posts.some(([key, down]) => key === 59 && !down)).toBe(false);
+			const releaseB = yield* b.holdChord("control+b");
+			yield* releaseB;
+			yield* releaseA;
+			expect(posts.slice(-4)).toEqual([
+				[11, true, 1 << 18],
+				[11, false, 1 << 18],
+				[0, false, 1 << 18],
+				[59, false, 0],
+			]);
+			const release = yield* b.holdChord("control+b");
+			yield* release;
+			expect(posts.slice(-4)).toEqual([
+				[59, true, 1 << 18],
+				[11, true, 1 << 18],
+				[11, false, 1 << 18],
+				[59, false, 0],
+			]);
+		}),
+);
+
+it.scoped(
+	"releasing left control preserves right control's shared macOS flag",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+				},
+			};
+			const left = yield* hostKeyboardAdapter(port).holdChord("control+a");
+			const right =
+				yield* hostKeyboardAdapter(port).holdChord("right_control+b");
+			yield* left;
+			expect(posts.slice(-2)).toEqual([
+				[0, false, 1 << 18],
+				[59, false, 1 << 18],
+			]);
+			yield* right;
+			expect(posts.slice(-2)).toEqual([
+				[11, false, 1 << 18],
+				[62, false, 0],
+			]);
+		}),
+);
+
+it.scoped(
+	"two real device sessions in host mode share native ownership across independent keyboard adapters",
+	() =>
+		Effect.gen(function* () {
+			const a = yield* setupFor("A"),
+				b = yield* setupFor("B");
+			yield* a.session.setInputMode("host");
+			yield* b.session.setInputMode("host");
+			const posts: [number, boolean, number][] = [];
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+				},
+			};
+			const keyA = hardwareKeyboardAdapter(
+				a.session,
+				Option.some(hostKeyboardAdapter(port)),
+			);
+			const keyB = hardwareKeyboardAdapter(
+				b.session,
+				Option.some(hostKeyboardAdapter(port)),
+			);
+			const pressingA = yield* keyA.pressChord("control+a").pipe(Effect.fork);
+			yield* TestClock.adjust(10);
+			const pressingB = yield* keyB.pressChord("control+b").pipe(Effect.fork);
+			yield* TestClock.adjust(10);
+			yield* Fiber.interrupt(pressingA);
+			expect(posts).toEqual([
+				[59, true, 1 << 18],
+				[0, true, 1 << 18],
+				[11, true, 1 << 18],
+				[0, false, 1 << 18],
+			]);
+			yield* TestClock.adjust(40);
+			yield* Fiber.join(pressingB);
+			expect(posts.slice(-2)).toEqual([
+				[11, false, 1 << 18],
+				[59, false, 0],
+			]);
+			for (const fake of [a.fake, b.fake])
+				expect(
+					(yield* fake.writes).some(
+						(report) => report[3] === 1 && report[4] === 0x10,
+					),
+				).toBe(false);
+		}),
+);
+
+it.scoped(
+	"a failed final key-up reports its error and recovers without consuming another device's control",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			let fail = true;
+			const port = {
+				available: () => true,
+				post: (...args: [number, boolean, number]) => {
+					posts.push(args);
+					if (args[0] === 11 && !args[1] && fail) {
+						fail = false;
+						throw new Error("synthetic key-up failure");
+					}
+				},
+			};
+			const a = hostKeyboardAdapter(port),
+				b = hostKeyboardAdapter(port);
+			const releaseA = yield* a.holdChord("control+a");
+			const releaseB = yield* b.holdChord("control+b");
+			const result = yield* releaseB.pipe(Effect.either);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.ACTION.HOST_FAILED",
+			);
+			expect(posts.some(([key, down]) => key === 59 && !down)).toBe(false);
+			const retry = yield* b.holdChord("control+b");
+			yield* retry;
+			yield* releaseB;
+			yield* releaseA;
+			expect(posts.slice(-4)).toEqual([
+				[11, true, 1 << 18],
+				[11, false, 1 << 18],
+				[0, false, 1 << 18],
+				[59, false, 0],
+			]);
+		}),
+);

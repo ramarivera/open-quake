@@ -24,6 +24,11 @@ Hotkeys SHALL default to device keyboard dispatch on each app launch, without pe
 - **WHEN** a committed hotkey action runs in default mode, then the user selects host mode
 - **THEN** the first action sends device press/release bytes with no host call and the next uses only the supplied host adapter
 
+#### Scenario: Shared host port ownership
+
+- **WHEN** separate device adapters hold overlapping host chords on one native port
+- **THEN** each key SHALL release only after its final owner releases, including cancellation and failed acquisition cleanup; each native event SHALL retain the flags of all remaining modifiers
+
 ### Requirement: Confirmed mic and native panel brightness
 
 The application SHALL implement the following confirmed mic and native panel brightness contract.
@@ -35,6 +40,11 @@ The application SHALL implement the following confirmed mic and native panel bri
 #### Scenario: Rejected mic and minimum brightness
 - **WHEN** an off mic write receives a failed ack, and a darker step runs at native 25
 - **THEN** mic remains on and brightness remains 25 without an unnecessary write
+
+#### Scenario: Low luminance readback remains usable
+
+- **WHEN** a device reports native luminance in 0..24
+- **THEN** snapshots and persisted observations SHALL accept that byte and survive replacement-session dirty-owner flush; outgoing luminance commands SHALL still require 25..255
 
 ### Requirement: Buzzer feedback and volume preference
 

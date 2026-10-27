@@ -111,6 +111,11 @@ export interface NativeKeyboardPort {
 	readonly close?: () => void;
 	readonly post: (key: number, down: boolean, flags: number) => void;
 }
+// Adapters for different devices share the cached native port and its held keys.
+const portKeys = new WeakMap<
+	NativeKeyboardPort,
+	Map<number, { owners: number; flag: number }>
+>();
 let native: NativeKeyboardPort | undefined;
 export function nativeKeyboardPort(): NativeKeyboardPort {
 	if (native) return native;
@@ -162,6 +167,14 @@ export const hostKeyboardAvailable = (): boolean => {
 export function hostKeyboardAdapter(
 	port: NativeKeyboardPort = nativeKeyboardPort(),
 ) {
+	let keys = portKeys.get(port);
+	if (!keys) {
+		keys = new Map();
+		portKeys.set(port, keys);
+	}
+	const owned = keys;
+	const flags = () =>
+		[...owned.values()].reduce((mask, key) => mask | key.flag, 0);
 	const holdChord = Effect.fn("HostKeyboard.holdChord")(function* (
 		chord: string,
 	) {
@@ -177,17 +190,17 @@ export function hostKeyboardAdapter(
 		if (usage !== 0 && key === undefined)
 			return yield* new HostActionFailed("host-keyboard-key-unavailable");
 		const held = modifiers.filter((m) => (mask & m.bit) !== 0);
-		const pressed: { key: number; flags: number }[] = [];
+		const pressed: number[] = [];
 		const release = Effect.try({
 			try: () => {
 				let failure: unknown;
-				for (const item of [...pressed].reverse())
+				for (const key of [...pressed].reverse())
 					try {
-						port.post(
-							item.key,
-							false,
-							pressed[pressed.indexOf(item) - 1]?.flags ?? 0,
-						);
+						const state = owned.get(key);
+						if (!state) continue;
+						if (--state.owners > 0) continue;
+						owned.delete(key);
+						port.post(key, false, flags());
 					} catch (cause) {
 						failure ??= cause;
 					}
@@ -198,20 +211,26 @@ export function hostKeyboardAdapter(
 		});
 		yield* Effect.try({
 			try: () => {
-				let flags = 0;
+				const press = (key: number, flag: number) => {
+					const state = owned.get(key);
+					pressed.push(key);
+					if (state) state.owners++;
+					else {
+						// Register before posting so a partially failed native post is released.
+						owned.set(key, { owners: 1, flag });
+						port.post(key, true, flags());
+					}
+				};
 				for (const m of held) {
-					flags |= m.flag;
 					const code = port.code
 						? port.code(224 + modifiers.indexOf(m))
 						: m.key;
 					if (code === undefined)
 						throw new Error("host-keyboard-modifier-unavailable");
-					pressed.push({ key: code, flags });
-					port.post(code, true, flags);
+					press(code, m.flag);
 				}
 				if (usage !== 0 && key !== undefined) {
-					pressed.push({ key, flags });
-					port.post(key, true, flags);
+					press(key, 0);
 				}
 			},
 			catch: (cause) => new HostActionFailed(cause),

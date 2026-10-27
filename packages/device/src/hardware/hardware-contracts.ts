@@ -7,7 +7,7 @@ export const HardwarePreferences = Schema.Struct({
 	alertVolume: AlertVolume,
 	/** Last acknowledged values. Never evidence of this session's live state. */
 	mic: Schema.optional(Schema.Boolean),
-	luminance: Schema.optional(Schema.Int.pipe(Schema.between(25, 255))),
+	luminance: Schema.optional(Schema.Uint8),
 });
 export type HardwarePreferences = typeof HardwarePreferences.Type;
 export const defaultHardwarePreferences: HardwarePreferences = {

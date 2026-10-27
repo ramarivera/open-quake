@@ -272,7 +272,9 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 													: Effect.void;
 											}),
 										);
-									}),
+										// Once written, a raw reply must be consumed before cancellation.
+										// The 1500ms timer still fails the exchange and stops the connection.
+									}).pipe(Effect.uninterruptible),
 								),
 						);
 						const write = (report: Uint8Array) =>
