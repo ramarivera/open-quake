@@ -183,7 +183,11 @@ export function hostKeyboardAdapter(
 				let failure: unknown;
 				for (const item of [...pressed].reverse())
 					try {
-						port.post(item.key, false, 0);
+						port.post(
+							item.key,
+							false,
+							pressed[pressed.indexOf(item) - 1]?.flags ?? 0,
+						);
 					} catch (cause) {
 						failure ??= cause;
 					}

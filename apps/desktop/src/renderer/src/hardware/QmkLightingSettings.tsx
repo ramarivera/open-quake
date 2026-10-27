@@ -5,6 +5,7 @@ import {
 	HardwareResponse,
 } from "../../../shared/hardware-contracts";
 import { Group, Row } from "../ui/Form";
+import { type HardwareTextKey, useHardwareText } from "./strings";
 
 const request = async (command: HardwareRequest) => {
 	const reply = Schema.decodeUnknownSync(HardwareResponse)(
@@ -14,19 +15,20 @@ const request = async (command: HardwareRequest) => {
 	return reply;
 };
 export function QmkLightingSettings(): React.JSX.Element {
+	const t = useHardwareText();
 	const [targets, setTargets] = useState<
 		readonly { serial: string; session: string }[]
 	>([]);
 	const [selected, setSelected] = useState("");
 	const [version, setVersion] = useState<number>();
-	const [error, setError] = useState("");
+	const [error, setError] = useState<HardwareTextKey>();
 	const [lighting, setLighting] =
 		useState<Extract<HardwareResponse, { _tag: "lighting" }>>();
 	const [busy, setBusy] = useState(false);
 
 	const refresh = useCallback(async () => {
 		setBusy(true);
-		setError("");
+		setError(undefined);
 		try {
 			const result = await request({ _tag: "qmkTargets" });
 			if (result._tag === "qmkTargets") {
@@ -38,7 +40,7 @@ export function QmkLightingSettings(): React.JSX.Element {
 				);
 			}
 		} catch {
-			setError("Failed to open DK device");
+			setError("openFailed");
 		} finally {
 			setBusy(false);
 		}
@@ -64,7 +66,7 @@ export function QmkLightingSettings(): React.JSX.Element {
 						);
 				})
 				.catch(() => {
-					if (live) setError("Failed to open DK device");
+					if (live) setError("openFailed");
 				});
 		if (target)
 			void request({ _tag: "lighting", ...target, action: { _tag: "select" } })
@@ -72,7 +74,7 @@ export function QmkLightingSettings(): React.JSX.Element {
 					if (live && reply._tag === "lighting") setLighting(reply);
 				})
 				.catch(() => {
-					if (live) setError("Failed to open DK device");
+					if (live) setError("openFailed");
 				});
 		return () => {
 			live = false;
@@ -84,27 +86,27 @@ export function QmkLightingSettings(): React.JSX.Element {
 		const target = targets.find((t) => t.session === selected);
 		if (!target) return;
 		setBusy(true);
-		setError("");
+		setError(undefined);
 		try {
 			const reply = await request({ _tag: "lighting", ...target, action });
 			if (reply._tag === "lighting" && reply.session === selected)
 				setLighting(reply);
 		} catch {
-			setError("Lighting change failed. Refresh and try again.");
+			setError("lightingFailed");
 		} finally {
 			setBusy(false);
 		}
 	};
 	return (
-		<Group title="DK device lighting">
-			<Row label="DK device" htmlFor="qmk-target">
+		<Group title={t("lighting")}>
+			<Row label={t("dkDevice")} htmlFor="qmk-target">
 				<select
 					id="qmk-target"
 					value={selected}
 					disabled={busy}
 					onChange={(e) => setSelected(e.target.value)}
 				>
-					<option value="">Select QMK HID path</option>
+					<option value="">{t("selectQmk")}</option>
 					{targets.map((t) => (
 						<option key={t.session} value={t.session}>
 							QUAKE · {t.serial}
@@ -117,10 +119,10 @@ export function QmkLightingSettings(): React.JSX.Element {
 					disabled={busy}
 					onClick={() => void refresh()}
 				>
-					Refresh
+					{t("refresh")}
 				</button>
 			</Row>
-			<Row label="Protocol Version">
+			<Row label={t("protocolVersion")}>
 				<output>{version ?? "--"}</output>
 			</Row>
 			{lighting?.fields
@@ -134,14 +136,14 @@ export function QmkLightingSettings(): React.JSX.Element {
 					return (
 						<Row
 							key={field.field}
-							label={
-								field.field === "brightness" ? "Brightness" : "Effect speed"
-							}
+							label={t(
+								field.field === "brightness" ? "brightness" : "effectSpeed",
+							)}
 						>
 							<input
-								aria-label={
-									field.field === "brightness" ? "Brightness" : "Effect speed"
-								}
+								aria-label={t(
+									field.field === "brightness" ? "brightness" : "effectSpeed",
+								)}
 								type="range"
 								min={field.range.min}
 								max={field.range.max}
@@ -169,15 +171,12 @@ export function QmkLightingSettings(): React.JSX.Element {
 				)?.value;
 				if (typeof value !== "object") return null;
 				return (
-					<Row
-						key={field.field}
-						label={field.field === "color1" ? "Color 1" : "Color 2"}
-					>
+					<Row key={field.field} label={t(field.field)}>
 						{(["hue", "saturation"] as const).map((part) => (
 							<label key={part}>
-								{part}
+								{t(part)}
 								<input
-									aria-label={`${field.field} ${part}`}
+									aria-label={`${t(field.field)} ${t(part)}`}
 									type="range"
 									min={field[part].min}
 									max={field[part].max}
@@ -201,22 +200,33 @@ export function QmkLightingSettings(): React.JSX.Element {
 				);
 			})}
 			{lighting?.status === "ready" && (
-				<Row label="Save lighting">
+				<Row label={t("saveLighting")}>
 					<button
 						type="button"
 						className="button"
 						disabled={busy}
 						onClick={() => void update({ _tag: "save" })}
 					>
-						Save
+						{t("save")}
 					</button>
-					<output>{lighting.saveStatus}</output>
+					<output>
+						{t(
+							(
+								{
+									unknown: "saveUnknown",
+									unsaved: "saveUnsaved",
+									saved: "saveSaved",
+									failed: "saveFailed",
+								} as const
+							)[lighting.saveStatus],
+						)}
+					</output>
 				</Row>
 			)}
 			{lighting?.status === "unavailable" && (
-				<p role="status">No qualified lighting controls for this firmware.</p>
+				<p role="status">{t("lightingUnavailable")}</p>
 			)}
-			{error && <p role="alert">{error}</p>}
+			{error && <p role="alert">{t(error)}</p>}
 		</Group>
 	);
 }

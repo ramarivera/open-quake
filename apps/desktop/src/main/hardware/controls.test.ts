@@ -320,3 +320,27 @@ it.scoped(
 			}).pipe(Effect.provide(sharedLighting(() => [session])));
 		}),
 );
+
+it.scoped(
+	"macOS chord key-up retains remaining modifiers in reverse release order",
+	() =>
+		Effect.gen(function* () {
+			const posts: [number, boolean, number][] = [];
+			const keyboard = hostKeyboardAdapter({
+				available: () => true,
+				post: (...args) => {
+					posts.push(args);
+				},
+			});
+			const release = yield* keyboard.holdChord("control+shift+a");
+			yield* release;
+			expect(posts).toEqual([
+				[59, true, 1 << 18],
+				[56, true, (1 << 18) | (1 << 17)],
+				[0, true, (1 << 18) | (1 << 17)],
+				[0, false, (1 << 18) | (1 << 17)],
+				[56, false, 1 << 18],
+				[59, false, 0],
+			]);
+		}),
+);

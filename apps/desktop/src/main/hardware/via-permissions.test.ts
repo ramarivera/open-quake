@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
 	registerViaPermissions,
 	selectViaDevice,
@@ -57,45 +57,187 @@ it("MAIN-107 disposal waits for an in-flight release and resumes it without gran
 	expect(broker.permitted("http://localhost:3010", d)).toBe(false);
 	expect(await broker.select("http://localhost:3010", [d])).toBe("");
 });
-it("MAIN-107 Electron registration denies null frames and unrelated removals retain the lease", async () => {
+
+vi.mock("electron", () => ({
+	webContents: { fromFrame: (frame: { contents?: unknown }) => frame.contents },
+}));
+afterEach(() => vi.useRealTimers());
+function registration() {
+	vi.useFakeTimers();
 	const session = Object.assign(new EventEmitter(), {
 		setDevicePermissionHandler: vi.fn(),
 	});
+	const contents = Object.assign(new EventEmitter(), {
+		isDestroyed: () => false,
+	});
+	const frame = {
+		url: "http://localhost:3010/via",
+		isDestroyed: () => false,
+		detached: false,
+		contents,
+	};
 	const resume = vi.fn(async () => {});
-	const release = vi.fn(async () => resume);
+	const release = vi.fn<() => Promise<() => Promise<void>>>(async () => resume);
+	const isPresent = vi.fn(async () => true);
 	const dispose: () => Promise<void> = Reflect.apply(
 		registerViaPermissions,
 		undefined,
 		[
 			session,
-			{ origin: "http://localhost:3010", selectedSerial: () => "A", release },
+			{
+				origin: "http://localhost:3010",
+				selectedSerial: () => "A",
+				release,
+				isPresent,
+			},
 		],
 	);
-	const preventDefault = vi.fn();
-	const select = (frame: { url: string } | null) =>
+	const select = (selectedFrame: typeof frame | null = frame) =>
 		new Promise<string>((callback) =>
 			session.emit(
 				"select-hid-device",
-				{ preventDefault },
-				{ frame, deviceList: [d] },
+				{ preventDefault: vi.fn() },
+				{ frame: selectedFrame, deviceList: [d] },
 				callback,
 			),
 		);
-	expect(await select(null)).toBe("");
-	expect(release).not.toHaveBeenCalled();
-	expect(await select({ url: "http://localhost:3010/via" })).toBe("quake");
-	session.emit(
+	const permitted = () => {
+		const handler = session.setDevicePermissionHandler.mock.calls[0]?.[0];
+		if (typeof handler !== "function")
+			throw new Error("Missing actual permission consumer");
+		return handler({
+			deviceType: "hid",
+			origin: "http://localhost:3010",
+			device: d,
+		});
+	};
+	return {
+		session,
+		contents,
+		frame,
+		resume,
+		release,
+		isPresent,
+		dispose,
+		select,
+		permitted,
+	};
+}
+it("MAIN-107 Electron registration denies null frames, ignores unrelated removals and cleans listeners", async () => {
+	const f = registration();
+	expect(await f.select(null)).toBe("");
+	expect(f.release).not.toHaveBeenCalled();
+	expect(await f.select()).toBe("quake");
+	expect(f.permitted()).toBe(true);
+	f.session.emit(
 		"hid-device-removed",
 		{},
 		{ device: { ...d, deviceId: "other" } },
 	);
 	await Promise.resolve();
-	expect(resume).not.toHaveBeenCalled();
-	session.emit("hid-device-removed", {}, { device: d });
+	expect(f.resume).not.toHaveBeenCalled();
+	f.session.emit("hid-device-removed", {}, { device: d });
 	await Promise.resolve();
-	expect(resume).toHaveBeenCalledTimes(1);
-	await dispose();
-	expect(session.listenerCount("select-hid-device")).toBe(0);
-	expect(session.listenerCount("hid-device-removed")).toBe(0);
-	expect(session.setDevicePermissionHandler).toHaveBeenLastCalledWith(null);
+	expect(f.resume).toHaveBeenCalledTimes(1);
+	expect(f.permitted()).toBe(false);
+	await f.dispose();
+	for (const name of [
+		"select-hid-device",
+		"hid-device-removed",
+		"hid-device-revoked",
+	])
+		expect(f.session.listenerCount(name)).toBe(0);
+	for (const name of [
+		"did-start-navigation",
+		"destroyed",
+		"render-process-gone",
+	])
+		expect(f.contents.listenerCount(name)).toBe(0);
+	expect(f.session.setDevicePermissionHandler).toHaveBeenLastCalledWith(null);
+});
+it("established VIA unplug resumes native reconnect without a chooser removal event and permits reselection", async () => {
+	const f = registration();
+	expect(await f.select()).toBe("quake");
+	f.isPresent.mockResolvedValue(false);
+	await vi.advanceTimersByTimeAsync(500);
+	expect(f.resume).toHaveBeenCalledTimes(1);
+	expect(f.permitted()).toBe(false);
+	f.isPresent.mockResolvedValue(true);
+	expect(await f.select()).toBe("quake");
+	expect(f.permitted()).toBe(true);
+	await f.dispose();
+	expect(f.resume).toHaveBeenCalledTimes(2);
+});
+for (const ended of [
+	"revoked",
+	"navigate",
+	"destroyed",
+	"crash",
+	"detached",
+] as const) {
+	it(`established VIA ${ended} denies the grant and resumes its bus exactly once`, async () => {
+		const f = registration();
+		expect(await f.select()).toBe("quake");
+		if (ended === "revoked") {
+			f.session.emit(
+				"hid-device-revoked",
+				{},
+				{ device: d, origin: "http://unrelated:3010" },
+			);
+			expect(f.resume).not.toHaveBeenCalled();
+			f.session.emit(
+				"hid-device-revoked",
+				{},
+				{ device: d, origin: "http://localhost:3010" },
+			);
+		} else if (ended === "navigate") {
+			f.contents.emit("did-start-navigation", {
+				isSameDocument: true,
+				isMainFrame: true,
+				frame: f.frame,
+			});
+			f.contents.emit("did-start-navigation", {
+				isSameDocument: false,
+				isMainFrame: false,
+				frame: {},
+			});
+			expect(f.permitted()).toBe(true);
+			f.contents.emit("did-start-navigation", {
+				isSameDocument: false,
+				isMainFrame: true,
+				frame: f.frame,
+			});
+		} else if (ended === "detached") {
+			f.frame.detached = true;
+			expect(f.permitted()).toBe(false);
+			await vi.advanceTimersByTimeAsync(500);
+		} else
+			f.contents.emit(ended === "crash" ? "render-process-gone" : "destroyed");
+		await Promise.resolve();
+		expect(f.permitted()).toBe(false);
+		expect(f.resume).toHaveBeenCalledTimes(1);
+		await f.dispose();
+		expect(f.resume).toHaveBeenCalledTimes(1);
+	});
+}
+it("navigation during pending handoff cancels the grant and awaits native resume", async () => {
+	const f = registration();
+	let finish: ((resume: () => Promise<void>) => void) | undefined;
+	f.release.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+	);
+	const selecting = f.select();
+	f.contents.emit("did-start-navigation", {
+		isSameDocument: false,
+		isMainFrame: true,
+		frame: f.frame,
+	});
+	finish?.(f.resume);
+	expect(await selecting).toBe("");
+	expect(f.permitted()).toBe(false);
+	expect(f.resume).toHaveBeenCalledTimes(1);
+	await f.dispose();
 });

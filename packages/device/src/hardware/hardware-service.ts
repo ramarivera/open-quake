@@ -56,7 +56,16 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 			// This is app-lifetime state. It deliberately is not persisted per serial.
 			const inputMode = yield* Ref.make<InputMode>("device");
 			const preferenceLock = yield* Effect.makeSemaphore(1);
-			const owners = new Map<string, string>();
+			const creationLock = yield* Effect.makeSemaphore(1);
+			const owners = new Map<
+				string,
+				{
+					session: string;
+					preferences: HardwarePreferences;
+					dirty: boolean;
+					mutationLock: Effect.Semaphore;
+				}
+			>();
 			const create = Effect.fn("HardwareControls.create")(function* (
 				connection: QuakeConnection,
 				identity: { readonly serial: string; readonly session: string },
@@ -107,14 +116,36 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				if (!identity.serial || !identity.session)
 					return yield* new HardwareUnavailable();
 				const scope = yield* Effect.scope;
-				const initial = yield* preferenceLock.withPermits(1)(
-					store.read(identity.serial),
+				const mutationLock = yield* Effect.makeSemaphore(1);
+				const owner = yield* creationLock.withPermits(1)(
+					Effect.suspend(() => {
+						const previous = owners.get(identity.serial);
+						return (previous?.mutationLock ?? mutationLock).withPermits(1)(
+							preferenceLock.withPermits(1)(
+								Effect.gen(function* () {
+									const previous = owners.get(identity.serial);
+									if (previous?.dirty) {
+										yield* store.write(identity.serial, previous.preferences);
+										previous.dirty = false;
+									}
+									const initial = yield* store.read(identity.serial);
+									const next = {
+										session: identity.session,
+										mutationLock,
+										preferences: Option.getOrElse(
+											initial,
+											() => defaultHardwarePreferences,
+										),
+										dirty: false,
+									};
+									owners.set(identity.serial, next);
+									return next;
+								}).pipe(Effect.uninterruptible),
+							),
+						);
+					}),
 				);
-				owners.set(identity.serial, identity.session);
-				let preferences = Option.getOrElse(
-					initial,
-					() => defaultHardwarePreferences,
-				);
+				let preferences = owner.preferences;
 				let pendingStateSync = false;
 				let stateSyncSuccess = false;
 				let mic: boolean | undefined;
@@ -125,7 +156,6 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				let lockCycle = false;
 				let restoreKnobLed = false;
 				let poisoned = false;
-				let dirty = false;
 				let errorCode: string | undefined;
 				let backgroundError: Option.Option<HardwarePreferencesFailed> =
 					Option.none();
@@ -134,8 +164,10 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					readonly result: Deferred.Deferred<HardwareReply, HardwareError>;
 				}> = Option.none();
 				const wireLock = yield* Effect.makeSemaphore(1);
-				const mutationLock = yield* Effect.makeSemaphore(1);
 				const toneLock = yield* Effect.makeSemaphore(1);
+				let sequenceStop:
+					| { stop: Deferred.Deferred<void>; done: Deferred.Deferred<void> }
+					| undefined;
 				let preview: Option.Option<Fiber.RuntimeFiber<void, never>> =
 					Option.none();
 				let longTone: Option.Option<Fiber.RuntimeFiber<void, never>> =
@@ -144,7 +176,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					Option.none();
 				const ensureActive = (): Effect.Effect<void, HardwareUnavailable> =>
 					active &&
-					owners.get(identity.serial) === identity.session &&
+					owners.get(identity.serial) === owner &&
 					!poisoned &&
 					!firmwareLocked
 						? Effect.void
@@ -328,27 +360,47 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									)
 										return;
 									const volume = preferences.alertVolume;
-									for (const [level, duration] of decoded.right) {
-										if (
-											!preferences.buzzerEnabled ||
-											preferences.alertVolume === 0
-										)
-											break;
-										yield* send({
-											_tag: "Buzzer",
-											level: level === 0 ? 0 : volume,
-										}).pipe(Effect.uninterruptible);
-										yield* Effect.sleep(duration);
-										yield* send({ _tag: "Buzzer", level: 0 }).pipe(
-											Effect.uninterruptible,
-										);
-										yield* Effect.sleep(10);
-									}
-								}).pipe(
-									Effect.onExit((exit) =>
-										Exit.isFailure(exit) ? silence : Effect.void,
-									),
-								),
+									const playback = {
+										stop: yield* Deferred.make<void>(),
+										done: yield* Deferred.make<void>(),
+									};
+									sequenceStop = playback;
+									let sounding = false;
+									yield* Effect.gen(function* () {
+										for (const [level, duration] of decoded.right) {
+											if (
+												!preferences.buzzerEnabled ||
+												preferences.alertVolume === 0
+											)
+												break;
+											sounding = level !== 0;
+											yield* send({
+												_tag: "Buzzer",
+												level: level === 0 ? 0 : volume,
+											}).pipe(Effect.uninterruptible);
+											yield* Effect.sleep(duration);
+											yield* send({ _tag: "Buzzer", level: 0 }).pipe(
+												Effect.uninterruptible,
+											);
+											sounding = false;
+											yield* Effect.sleep(10);
+										}
+									}).pipe(
+										Effect.raceFirst(Deferred.await(playback.stop)),
+										Effect.onExit((exit) =>
+											Effect.gen(function* () {
+												if (
+													sounding &&
+													(Exit.isFailure(exit) ||
+														(yield* Deferred.isDone(playback.stop)))
+												)
+													yield* silence;
+												yield* Deferred.succeed(playback.done, undefined);
+												if (sequenceStop === playback) sequenceStop = undefined;
+											}),
+										),
+									);
+								}),
 							);
 						}),
 				);
@@ -383,7 +435,17 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									}).pipe(Effect.ensuring(silence)),
 								)
 								.pipe(
-									Effect.tapError((error) => Deferred.fail(started, error)),
+									Effect.onExit((exit) =>
+										Exit.isFailure(exit)
+											? Deferred.fail(
+													started,
+													Option.getOrElse(
+														Cause.failureOption(exit.cause),
+														() => new HardwareUnavailable(),
+													),
+												)
+											: Deferred.succeed(started, undefined),
+									),
 									Effect.ignore,
 									Effect.forkIn(scope),
 								),
@@ -395,17 +457,18 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					(): Effect.Effect<void, HardwarePreferencesFailed> =>
 						preferenceLock.withPermits(1)(
 							Effect.gen(function* () {
-								if (!dirty || owners.get(identity.serial) !== identity.session)
+								if (!owner.dirty || owners.get(identity.serial) !== owner)
 									return;
-								const savingPreferences = preferences;
+								const savingPreferences = owner.preferences;
 								yield* store.write(identity.serial, savingPreferences);
-								if (preferences === savingPreferences) dirty = false;
+								if (preferences === savingPreferences) owner.dirty = false;
 								backgroundError = Option.none();
 							}).pipe(Effect.uninterruptible),
 						),
 				);
 				const saveSoon = Effect.fn("HardwareControls.saveSoon")(function* () {
-					dirty = true;
+					owner.preferences = preferences;
+					owner.dirty = true;
 					if (Option.isSome(saving)) yield* Fiber.interrupt(saving.value);
 					saving = Option.some(
 						yield* Effect.sleep(500).pipe(
@@ -570,12 +633,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 								...identity,
 								available:
 									active &&
-									owners.get(identity.serial) === identity.session &&
+									owners.get(identity.serial) === owner &&
 									!poisoned &&
 									!firmwareLocked,
 								preferenceStatus: Option.isSome(backgroundError)
 									? "failed"
-									: dirty
+									: owner.dirty
 										? "pending"
 										: "saved",
 								...(errorCode ? { errorCode } : {}),
@@ -689,12 +752,18 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										!preferences.buzzerEnabled ||
 										preferences.alertVolume === 0
 									) {
+										const playback = sequenceStop;
+										if (playback) {
+											yield* Deferred.succeed(playback.stop, undefined);
+											yield* Deferred.await(playback.done);
+										}
 										if (Option.isSome(longTone)) {
 											yield* Fiber.interrupt(longTone.value);
 											longTone = Option.none();
 										}
 									}
-									dirty = true;
+									owner.preferences = preferences;
+									owner.dirty = true;
 									if (Option.isSome(preview))
 										yield* Fiber.interrupt(preview.value);
 									if (Option.isSome(saving))

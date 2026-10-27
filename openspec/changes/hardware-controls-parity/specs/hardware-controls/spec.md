@@ -149,3 +149,28 @@ The application SHALL implement the following quake lighting and permission owne
 - **WHEN** Linux enumeration returns QUAKE hidraw collections, an ARIS-68 keyboard, another vendor, a wrong usage and an ambiguous serial
 - **THEN** only the exact 4158:514B FF60:61 collection is eligible and ambiguous serials fail closed
 - **AND** udev permissions grant the active local user access only to QUAKE, without world-writable rules
+
+### Requirement: Live localized hardware controls
+
+The application SHALL render hardware settings, qualified QMK lighting controls and game-mode consumers through bundled copy for all eight supported application locales. Labels, accessibility names, file/folder/application picker actions, operational states and failures SHALL follow the current saved locale without remounting controls, restarting hardware requests or replacing drafts. Protocol identifiers, error codes, serials and user target paths SHALL retain their original values.
+
+#### Scenario: Change language with mounted hardware consumers
+- **WHEN** the saved application language changes while hardware controls, a target draft, a game tile or a failure message are mounted
+- **THEN** their visible copy and accessibility names update immediately in the new locale, including existing failures and lighting save states
+- **AND** the target draft, selected device and pending hardware operation remain intact
+
+### Requirement: Bounded hardware lifecycle and exclusive handoff
+
+The application SHALL bound hardware lifecycle waits and release exclusive handoffs.
+
+#### Scenario: Hardware lifecycle guarantees
+- **WHEN** hardware operations overlap or their owners end
+- **THEN** the application SHALL settle raw reply waits within 1500 milliseconds even inside a reversible probe and fail pending waits before native handle close. Long-tone startup SHALL settle on every exit, including cancellation while awaiting the tone lock. Disabling the buzzer or setting zero volume SHALL stop active sequences and await trailing silence. Replacement sessions SHALL flush the preceding owner's acknowledged preferences before reading storage and transferring ownership. Native MeetAI mic touches SHALL activate only the saved hardware key. Host chord release SHALL preserve remaining modifier flags on key-up.
+
+#### Scenario: Interrupted or silent hardware
+- **WHEN** a probe loses a reply, a queued long tone is cancelled, or the buzzer is disabled during a long sequence
+- **THEN** the request settles, owned locks become available, and teardown completes with silence where delivery is available
+
+#### Scenario: VIA lease ends
+- **WHEN** its selected device disappears from enumeration, its permission is revoked, or its owning document navigates or ends
+- **THEN** the established VIA lease is denied and released, native reconnect resumes, and unrelated chooser events do not release another lease

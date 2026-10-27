@@ -212,7 +212,7 @@ async function smoke(): Promise<void> {
 	await wait(
 		async () =>
 			(await js(
-				'Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save").closest(".row").querySelector("output").textContent === "saved"',
+				'Array.from(document.querySelectorAll("button")).find(b => b.textContent === "Save").closest(".row").querySelector("output").textContent === "Saved"',
 			)) === true,
 	);
 	rejectRefresh = true;
@@ -323,7 +323,35 @@ async function smoke(): Promise<void> {
 		);
 	}
 	await js("window.quakeLocale.set('de')");
-	await new Promise<void>((done) => setTimeout(done, 300));
+	await wait(
+		async () =>
+			(await js('document.querySelector("#device-mic")?.textContent')) ===
+			"Aus",
+	);
+	assert.equal(
+		await js(
+			'document.querySelector(".hardware-settings").textContent.includes("Gerätemikrofon")',
+		),
+		true,
+	);
+	assert.equal(
+		await js(
+			'document.querySelector(".hardware-settings").textContent.includes("Beleuchtung speichern")',
+		),
+		true,
+	);
+	assert.equal(
+		await js(
+			'document.querySelector(".hardware-settings").textContent.includes("Farbe 1")',
+		),
+		true,
+	);
+	assert.equal(
+		await js(
+			`!!document.querySelector('[aria-label="Gerätehelligkeit verringern"]')`,
+		),
+		true,
+	);
 	await writeFile(
 		join(artifacts, "hardware-de.png"),
 		(await window.webContents.capturePage()).toPNG(),

@@ -6,12 +6,14 @@ import {
 } from "../../../shared/monitor-contracts";
 import type { StripTileProps } from "../strip/tileRegistry";
 import { useMonitor } from "../strip/tiles/monitor/useMonitor";
+import { useHardwareText } from "./strings";
 import "./hardware.css";
 
 export function GameModeTile({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element {
+	const t = useHardwareText();
 	const state = context.hardware;
 	const gaming = state?.available ? state.inputMode === "device" : undefined;
 	const [artwork, setArtwork] = useState("");
@@ -51,7 +53,7 @@ export function GameModeTile({
 			className="hardware-game-tile"
 			data-gaming={gaming}
 			data-failed={failed}
-			aria-label="Game mode"
+			aria-label={t("gameMode")}
 			aria-pressed={gaming}
 			disabled={context.interactive === false || gaming === undefined}
 			onClick={async () => {
@@ -81,7 +83,7 @@ export function GameModeTile({
 				<img
 					className="hardware-game-artwork"
 					src={artwork}
-					alt="Foreground application"
+					alt={t("foreground")}
 				/>
 			) : (
 				<svg viewBox="0 0 100 64" aria-hidden="true">
@@ -98,12 +100,12 @@ export function GameModeTile({
 			)}
 			<span role="status">
 				{failed
-					? "Mode change failed"
+					? t("modeFailed")
 					: gaming === undefined
-						? "Device not connected"
+						? t("offline")
 						: gaming
-							? "Gaming"
-							: "Normal"}
+							? t("gaming")
+							: t("normal")}
 			</span>
 		</button>
 	);

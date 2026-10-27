@@ -10,16 +10,18 @@ import {
 } from "../../../shared/hardware-contracts";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { QmkLightingSettings } from "./QmkLightingSettings";
+import { type HardwareTextKey, useHardwareText } from "./strings";
 import "./hardware.css";
 
 // Recovered locale-en.json: version, settings.knobLEDAlwaysOn, settings.buzzerAlertVolume,
 // mic, luminance, buzzer, settings.firmwareUpgrade.rowStatus.deviceOffline.
 export function HardwareSettings(): React.JSX.Element {
+	const t = useHardwareText();
 	const [snapshot, setSnapshot] = useState<HardwareSnapshot>();
 	const [mock, setMock] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
+	const [error, setError] = useState<{ key: HardwareTextKey; code?: string }>();
 	const [desiredVolume, setDesiredVolume] = useState<{
 		session: string;
 		volume: number;
@@ -43,7 +45,7 @@ export function HardwareSettings(): React.JSX.Element {
 			if (!mounted.current || id !== sequence.current) return;
 			const decoded = Schema.decodeUnknownEither(HardwareResponse)(value);
 			if (Either.isLeft(decoded)) {
-				setError("Device response could not be read.");
+				setError({ key: "responseFailed" });
 				return;
 			}
 			const reply = decoded.right;
@@ -51,17 +53,15 @@ export function HardwareSettings(): React.JSX.Element {
 				currentSnapshot.current = reply.snapshot;
 				setSnapshot(reply.snapshot);
 				setMock(reply.mock);
-				setError("");
+				setError(undefined);
 			} else if (reply._tag === "offline") {
 				currentSnapshot.current = undefined;
 				setSnapshot(undefined);
 			} else if (reply._tag === "failure")
-				setError(
-					`Device control failed (${reply.code}). Reconnect the device and try again.`,
-				);
+				setError({ key: "controlRetry", code: reply.code });
 		} catch {
 			if (mounted.current && id === sequence.current)
-				setError("Device controls could not be reached. Try again.");
+				setError({ key: "requestFailed" });
 		} finally {
 			if (mounted.current && id === sequence.current) setLoading(false);
 		}
@@ -95,7 +95,7 @@ export function HardwareSettings(): React.JSX.Element {
 		if (pending.current) return;
 		pending.current = true;
 		setBusy(true);
-		setError("");
+		setError(undefined);
 		let command = input;
 		while (mounted.current) {
 			await request(command);
@@ -140,14 +140,14 @@ export function HardwareSettings(): React.JSX.Element {
 	return (
 		<div className="page hardware-settings">
 			<PageHeader
-				title="Device controls"
+				title={t("title")}
 				description={
 					<span role="status">
 						{loading
-							? "Loading device…"
+							? t("loading")
 							: snapshot
-								? `${snapshot.serial}${mock ? " · Mock device" : ""}`
-								: "Device not connected"}
+								? `${snapshot.serial}${mock ? ` · ${t("mock")}` : ""}`
+								: t("offline")}
 					</span>
 				}
 			>
@@ -157,19 +157,19 @@ export function HardwareSettings(): React.JSX.Element {
 					disabled={disabled}
 					onClick={() => void change({ _tag: "refresh", session })}
 				>
-					Refresh
+					{t("refresh")}
 				</button>
 			</PageHeader>
 			<QmkLightingSettings />
-			<Group title="Device">
-				<Row label="Firmware Version">
+			<Group title={t("device")}>
+				<Row label={t("firmware")}>
 					<output className="value mono" data-testid="hardware-firmware">
 						{snapshot?.firmware
 							? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
 							: "--"}
 					</output>
 				</Row>
-				<Row label="Device Mic" htmlFor="device-mic">
+				<Row label={t("mic")} htmlFor="device-mic">
 					<button
 						className="button"
 						id="device-mic"
@@ -178,15 +178,19 @@ export function HardwareSettings(): React.JSX.Element {
 						disabled={disabled || snapshot?.mic === undefined}
 						onClick={() => void change({ _tag: "toggleMic", session })}
 					>
-						{snapshot?.mic === undefined ? "--" : snapshot.mic ? "On" : "Off"}
+						{snapshot?.mic === undefined
+							? "--"
+							: snapshot.mic
+								? t("on")
+								: t("off")}
 					</button>
 				</Row>
-				<Row label="Device Luminance">
+				<Row label={t("luminance")}>
 					<div className="hardware-stepper">
 						<button
 							className="button"
 							type="button"
-							aria-label="Decrease Device Luminance"
+							aria-label={t("decreaseLuminance")}
 							disabled={
 								disabled ||
 								snapshot?.luminance === undefined ||
@@ -206,7 +210,7 @@ export function HardwareSettings(): React.JSX.Element {
 						<button
 							className="button"
 							type="button"
-							aria-label="Increase Device Luminance"
+							aria-label={t("increaseLuminance")}
 							disabled={
 								disabled ||
 								snapshot?.luminance === undefined ||
@@ -221,12 +225,8 @@ export function HardwareSettings(): React.JSX.Element {
 					</div>
 				</Row>
 			</Group>
-			<Group title="Feedback">
-				<Row
-					label="Knob LED stays on"
-					htmlFor="knob-led"
-					hint="Keep the knob lit while your computer is locked."
-				>
+			<Group title={t("feedback")}>
+				<Row label={t("knobLed")} htmlFor="knob-led" hint={t("knobLedHint")}>
 					<input
 						id="knob-led"
 						type="checkbox"
@@ -238,7 +238,7 @@ export function HardwareSettings(): React.JSX.Element {
 						}}
 					/>
 				</Row>
-				<Row label="Buzzer" htmlFor="buzzer-enabled">
+				<Row label={t("buzzer")} htmlFor="buzzer-enabled">
 					<input
 						id="buzzer-enabled"
 						type="checkbox"
@@ -250,7 +250,7 @@ export function HardwareSettings(): React.JSX.Element {
 						}}
 					/>
 				</Row>
-				<Row label="Buzzer test">
+				<Row label={t("buzzerTest")}>
 					<button
 						type="button"
 						className="button"
@@ -278,10 +278,10 @@ export function HardwareSettings(): React.JSX.Element {
 							void request({ _tag: "longTone", session, on: false })
 						}
 					>
-						Hold to test buzzer
+						{t("holdBuzzer")}
 					</button>
 				</Row>
-				<Row label="Device Alert Volume" htmlFor="alert-volume">
+				<Row label={t("alertVolume")} htmlFor="alert-volume">
 					<div className="hardware-slider">
 						<input
 							id="alert-volume"
@@ -291,7 +291,7 @@ export function HardwareSettings(): React.JSX.Element {
 							step="1"
 							disabled={!snapshot?.available}
 							value={volumeToSlider(volume)}
-							aria-valuetext={volume === 0 ? "Silent" : String(volume)}
+							aria-valuetext={volume === 0 ? t("silent") : String(volume)}
 							onChange={(e) => changeVolume(Number(e.target.value))}
 						/>
 						<output htmlFor="alert-volume">
@@ -300,11 +300,11 @@ export function HardwareSettings(): React.JSX.Element {
 					</div>
 				</Row>
 			</Group>
-			<Group title="Keyboard">
+			<Group title={t("keyboard")}>
 				<Row
-					label="Hotkey output"
+					label={t("hotkeyOutput")}
 					htmlFor="hotkey-route"
-					hint="Device keyboard sends shortcuts through QUAKE. Host keyboard requires macOS Accessibility permission."
+					hint={t("hotkeyHint")}
 				>
 					<select
 						className="text-field"
@@ -320,31 +320,31 @@ export function HardwareSettings(): React.JSX.Element {
 								});
 						}}
 					>
-						<option value="device">Device keyboard</option>
-						<option value="host">Host keyboard</option>
+						<option value="device">{t("deviceKeyboard")}</option>
+						<option value="host">{t("hostKeyboard")}</option>
 					</select>
 				</Row>
 			</Group>
 			<div className="hardware-notices">
 				{snapshot?.preferenceStatus === "pending" && (
 					<p className="muted" role="status">
-						Saving…
+						{t("saving")}
 					</p>
 				)}
 				{snapshot?.preferenceStatus === "failed" && (
-					<p role="alert">
-						Device preferences could not be saved. Change the setting to retry.
-					</p>
+					<p role="alert">{t("preferencesFailed")}</p>
 				)}
 				{snapshot && !snapshot.available && (
-					<p role="alert">
-						Device controls are unavailable. Reconnect the device.
-					</p>
+					<p role="alert">{t("unavailable")}</p>
 				)}
 				{snapshot?.errorCode && (
-					<p role="alert">Device control failed ({snapshot.errorCode}).</p>
+					<p role="alert">
+						{t("controlFailed").replace("{code}", snapshot.errorCode)}
+					</p>
 				)}
-				{error && <p role="alert">{error}</p>}
+				{error && (
+					<p role="alert">{t(error.key).replace("{code}", error.code ?? "")}</p>
+				)}
 			</div>
 		</div>
 	);

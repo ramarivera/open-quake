@@ -279,7 +279,7 @@ it.scoped(
 );
 
 it.scoped(
-	"MAIN-013 replacement invalidates old writes and old pending saves",
+	"MAIN-013 replacement flushes old pending preferences before invalidating old writes",
 	() =>
 		Effect.gen(function* () {
 			const { connect, saved } = yield* setup();
@@ -289,6 +289,9 @@ it.scoped(
 				buzzerEnabled: false,
 			});
 			const replacement = yield* connect("A");
+			expect(
+				(yield* replacement.session.snapshot()).preferences.buzzerEnabled,
+			).toBe(false);
 			expect((yield* old.session.snapshot()).available).toBe(false);
 			expect(
 				Either.isLeft(
@@ -345,5 +348,187 @@ it.scoped(
 				),
 			).toBe(true);
 			expect(yield* fake.writes).toHaveLength(writes);
+		}),
+);
+
+it.scoped(
+	"queued long-tone startup settles when released before acquiring toneLock",
+	() =>
+		Effect.gen(function* () {
+			const { connect } = yield* setup();
+			const { session, fake } = yield* connect("tone-start");
+			const sequence = yield* session
+				.playSequence([[80, 60000]])
+				.pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			const starting = yield* session
+				.setLongTone(true)
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(0);
+			expect(Option.isNone(yield* Fiber.poll(starting))).toBe(true);
+			yield* session.setLongTone(false);
+			expect(Option.isSome(yield* Fiber.poll(starting))).toBe(true);
+			const result = yield* Fiber.join(starting);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.HARDWARE.UNAVAILABLE",
+			);
+			yield* Fiber.interrupt(sequence);
+			expect((yield* fake.writes).at(-1)?.[5]).toBe(0);
+		}),
+);
+for (const silent of ["disabled", "zero"] as const) {
+	it.scoped(
+		`master ${silent} stops an active 60-second sequence before configure settles`,
+		() =>
+			Effect.gen(function* () {
+				const { connect } = yield* setup();
+				const { session, fake } = yield* connect(silent);
+				const sequence = yield* session
+					.playSequence([[80, 60000]])
+					.pipe(Effect.fork);
+				yield* TestClock.adjust(1);
+				expect((yield* fake.writes).at(-1)?.[5]).toBe(84);
+				yield* session.configure({
+					...defaultHardwarePreferences,
+					...(silent === "disabled"
+						? { buzzerEnabled: false }
+						: { alertVolume: 0 }),
+				});
+				expect((yield* fake.writes).at(-1)?.[5]).toBe(0);
+				expect(Option.isSome(yield* Fiber.poll(sequence))).toBe(true);
+				yield* Fiber.join(sequence);
+			}),
+	);
+}
+it.scoped(
+	"reconnect within debounce preserves acknowledged mic, brightness and disabled buzzer",
+	() =>
+		Effect.gen(function* () {
+			const { connect, saved } = yield* setup();
+			const old = yield* connect("reconnect");
+			yield* old.session.refresh();
+			yield* old.session.toggleMic();
+			yield* old.session.stepBrightness(-1);
+			yield* old.session.configure({
+				...defaultHardwarePreferences,
+				buzzerEnabled: false,
+			});
+			expect(saved.has("reconnect")).toBe(false);
+			const replacement = yield* connect("reconnect");
+			expect((yield* replacement.session.snapshot()).preferences).toMatchObject(
+				{ buzzerEnabled: false, mic: false, luminance: 229 },
+			);
+			expect(saved.get("reconnect")).toMatchObject({
+				buzzerEnabled: false,
+				mic: false,
+				luminance: 229,
+			});
+			yield* TestClock.adjust(500);
+			expect(saved.get("reconnect")?.buzzerEnabled).toBe(false);
+		}),
+);
+for (const lost of ["write", "read", "restore"] as const) {
+	it.scoped(
+		`reversible probe missing ${lost} reply releases locks and closes the native owner`,
+		() =>
+			Effect.gen(function* () {
+				const { makeFakeHidTransport } = yield* Effect.promise(
+					() => import("../../src/hid-fake.js"),
+				);
+				const { HidTransport } = yield* Effect.promise(
+					() => import("../../src/hid-transport.js"),
+				);
+				const fake = yield* makeFakeHidTransport();
+				let raw = 0;
+				const replies = [
+					1,
+					...(lost === "write" ? [] : [2]),
+					...(lost === "restore" ? [3] : []),
+				];
+				const transport = {
+					...fake.transport,
+					open: (info: Parameters<typeof fake.transport.open>[0]) =>
+						fake.transport.open(info).pipe(
+							Effect.map((handle) => ({
+								...handle,
+								write: (report: Uint8Array) =>
+									handle.write(report).pipe(
+										Effect.zipRight(
+											Effect.suspend(() => {
+												if (report[1] !== 7 && report[1] !== 8)
+													return Effect.void;
+												raw++;
+												return replies.includes(raw)
+													? fake.emit(report.slice(1))
+													: Effect.void;
+											}),
+										),
+									),
+							})),
+						),
+				};
+				const device = yield* QuakeDevice.pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(Layer.succeed(HidTransport, transport)),
+						),
+					),
+				);
+				const connection = yield* device.connect();
+				const controls = yield* HardwareControls.pipe(
+					Effect.provide(HardwareControls.Default),
+				);
+				const session = yield* controls.create(connection, {
+					serial: "probe",
+					session: "s",
+				});
+				const probing = yield* session
+					.qmk([
+						{ _tag: "probe", name: "brightness", prefix: [9], values: [180] },
+					])
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(1500);
+				expect(Option.isSome(yield* Fiber.poll(probing))).toBe(true);
+				expect((yield* Fiber.join(probing))._tag).toBe("Left");
+				yield* connection.disconnect();
+				expect(yield* fake.closes).toBe(1);
+				expect((yield* session.snapshot()).available).toBe(false);
+			}),
+	);
+}
+
+it.scoped(
+	"replacement waits for a started acknowledged mic mutation before flushing and transferring ownership",
+	() =>
+		Effect.gen(function* () {
+			let held = false;
+			const { connect, saved } = yield* setup({
+				onCommand: (c) =>
+					c.opCode === 2
+						? [
+								fakeHardwareReply(
+									c.cmdId,
+									c.cmdId === 46 ? [1, 1, 0, 21] : [c.cmdId === 3 ? 1 : 255],
+								),
+							]
+						: held
+							? []
+							: [fakeHardwareReply(0, [0x90])],
+			});
+			const old = yield* connect("racing-reconnect");
+			yield* old.session.refresh();
+			held = true;
+			const changing = yield* old.session.toggleMic().pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			const replacing = yield* connect("racing-reconnect").pipe(Effect.fork);
+			yield* TestClock.adjust(0);
+			expect(Option.isNone(yield* Fiber.poll(replacing))).toBe(true);
+			yield* old.fake.emit(fakeHardwareReply(0, [0x90]));
+			yield* Fiber.join(changing);
+			const replacement = yield* Fiber.join(replacing);
+			expect((yield* replacement.session.snapshot()).recovered?.mic).toBe(
+				false,
+			);
+			expect(saved.get("racing-reconnect")?.mic).toBe(false);
 		}),
 );

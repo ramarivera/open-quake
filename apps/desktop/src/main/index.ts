@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { HardwareControls, QuakeDevice } from "@open-quake/device";
+import {
+	canonicalHidSerial,
+	HardwareControls,
+	QuakeDevice,
+} from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, Stream } from "effect";
 import {
@@ -1224,6 +1228,19 @@ if (!app.requestSingleInstanceLock()) {
 							managementWin.webContents.session,
 							{
 								origin: process.env.OPEN_QUAKE_VIA_ORIGIN ?? "",
+								isPresent: (serial) =>
+									runtime.runPromise(
+										QuakeDevice.pipe(
+											Effect.flatMap((device) => device.discover()),
+											Effect.map((devices) =>
+												devices.some(
+													(device) =>
+														canonicalHidSerial(device.serialNumber ?? "") ===
+														canonicalHidSerial(serial),
+												),
+											),
+										),
+									),
 								selectedSerial: () => viaSerial ?? activeDeviceId(),
 								release: async (serial) => {
 									const target =

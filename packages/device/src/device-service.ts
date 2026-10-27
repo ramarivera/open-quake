@@ -182,6 +182,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				const lifetime = Effect.scoped(
 					Effect.gen(function* () {
 						const hardwareWriteLock = yield* Effect.makeSemaphore(1);
+						const rawScope = yield* Effect.scope;
 						let acceptingWrites = true;
 						let rawPending:
 							| {
@@ -200,6 +201,16 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 								Effect.sync(() => {
 									acceptingWrites = false;
 								}).pipe(
+									Effect.zipRight(
+										Effect.suspend(() =>
+											rawPending
+												? Deferred.fail(
+														rawPending.reply,
+														new QuakeConnectionClosed(),
+													)
+												: Effect.void,
+										),
+									),
 									Effect.zipRight(
 										hardwareWriteLock.withPermits(1)(
 											Deferred.complete(closed, handle.close()),
@@ -240,13 +251,20 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 											QuakeConnectionClosed
 										>();
 										rawPending = { matches, reply };
+										const timeout = yield* Effect.sleep(1500).pipe(
+											Effect.zipRight(
+												Deferred.fail(reply, new QuakeConnectionClosed()),
+											),
+											Effect.interruptible,
+											Effect.ensuring(
+												Deferred.fail(reply, new QuakeConnectionClosed()),
+											),
+											Effect.forkIn(rawScope),
+										);
 										return yield* handle.write(report).pipe(
 											Effect.uninterruptible,
 											Effect.zipRight(Deferred.await(reply)),
-											Effect.timeoutFail({
-												duration: 1500,
-												onTimeout: () => new QuakeConnectionClosed(),
-											}),
+											Effect.ensuring(Fiber.interrupt(timeout)),
 											Effect.onExit((exit) => {
 												rawPending = undefined;
 												return Exit.isFailure(exit)

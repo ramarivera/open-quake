@@ -183,8 +183,10 @@ const systemPreferences = {
 	},
 	getMediaAccessStatus: () => "denied",
 };
+const webContents = { fromFrame: () => undefined };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
+	webContents,
 	desktopCapturer,
 	systemPreferences,
 	powerMonitor,
@@ -218,7 +220,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, Menu, Tray, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, Menu, Tray, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences, webContents } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
