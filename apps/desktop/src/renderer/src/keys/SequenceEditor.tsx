@@ -175,9 +175,14 @@ export function SequenceEditor({
 													(Schema.is(Schema.encodedSchema(SequenceLeaf))(
 														entry.defaultConfig,
 													) ||
-														["website", "hotkey", "text", "open"].includes(
-															type,
-														)));
+														[
+															"website",
+															"hotkey",
+															"text",
+															"open",
+															"close",
+															"cmd",
+														].includes(type)));
 											return (
 												<option key={type} disabled={!supported}>
 													{type}

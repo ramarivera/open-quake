@@ -89,12 +89,18 @@ export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 			if (
 				config.actions.length === 2 &&
 				(Option.isNone(adapters.keyboard) ||
-					!adapters.keyboard.value.supportedTokens.has("enter"))
+					!config.actions[1].value
+						.split("+")
+						.every(
+							(token) =>
+								Option.isSome(adapters.keyboard) &&
+								adapters.keyboard.value.supportedTokens.has(token),
+						))
 			)
 				return yield* Effect.fail(missing());
 			yield* adapters.text.value.insertText(config.actions[0].value);
 			if (config.actions.length === 2 && Option.isSome(adapters.keyboard))
-				yield* adapters.keyboard.value.pressChord("enter");
+				yield* adapters.keyboard.value.pressChord(config.actions[1].value);
 			return;
 		}
 		case "open": {

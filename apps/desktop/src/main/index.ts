@@ -508,6 +508,7 @@ if (!app.requestSingleInstanceLock()) {
 							mediaActions,
 							speech.resetSoundKeys,
 							panelSerial,
+							{ management: (tab) => desktopShell.open(tab) },
 						);
 						const localAgentState = createLocalAgentState(
 							join(app.getPath("userData"), "channel-runtime-v1"),
@@ -1537,11 +1538,7 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								},
 								management: async (tab) => {
-									managementWin.webContents.send(
-										"management:activate",
-										tab ?? "profiles",
-									);
-									managementWin.show();
+									desktopShell.open(tab);
 								},
 							},
 						});

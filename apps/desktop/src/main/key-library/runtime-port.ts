@@ -1,10 +1,9 @@
-import { execFile } from "node:child_process";
 import { platform } from "node:os";
-import { promisify } from "node:util";
 import { Effect, Layer, Option, Queue, Schema } from "effect";
 import { clipboard, shell } from "electron";
 import type {
 	ActionHostAdapters,
+	KeyboardActionAdapter,
 	MediaActionAdapter,
 } from "../../../../../packages/device/src/actions/action-adapters.js";
 import {
@@ -22,6 +21,7 @@ import {
 	type KeyActivation,
 	type KeyFeedback,
 	KeyRuntimePort,
+	unavailablePluginAction,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { encodeDeviceChord } from "../../../../../packages/device/src/hardware/hardware-invariants.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
@@ -29,9 +29,29 @@ import type { HardwareSession } from "../../../../../packages/device/src/hardwar
 import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileKey as ProfileKeySchema } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import {
+	type NativeApplicationPort,
+	runApplicationAction,
+} from "../profiles/native-actions";
 import { playKeyAlarm } from "./alarm";
-
-const runFile = promisify(execFile);
+import {
+	captureScreenshots,
+	lockWorkstation,
+	nativeApplicationPort,
+	type ScreenshotPort,
+	screenshotPort,
+} from "./native-host";
+export interface DesktopKeyRuntimeActions {
+	readonly keyboard?: KeyboardActionAdapter;
+	readonly application?: NativeApplicationPort;
+	readonly screenshots?: ScreenshotPort;
+	readonly lock?: () => Promise<void>;
+	readonly management?: (
+		tab: "profiles" | "keys" | "agents" | "settings" | undefined,
+	) => void;
+	readonly plugin?: KeyRuntimePort["Type"]["executePlugin"];
+	readonly timerCompleted?: KeyRuntimePort["Type"]["timerCompleted"];
+}
 
 export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
@@ -44,17 +64,35 @@ export const desktopKeyRuntimePort = (
 	) => Promise<boolean>,
 	mediaActions?: MediaActionAdapter,
 	resetOwned?: (deviceId?: string) => Promise<void>,
+	runtimeActions: DesktopKeyRuntimeActions = {},
 ) =>
 	Layer.scoped(
 		KeyRuntimePort,
 		Effect.gen(function* () {
 			const profiles = yield* ProfileService;
-			const keyboard = {
+			const keyboard = runtimeActions.keyboard ?? {
 				supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),
 				pressChord: Effect.fn("DesktopKeys.pressChord")(function* (
 					chord: string,
 				) {
 					if (mock) return;
+					if (chord === "printscreen") {
+						yield* Effect.tryPromise({
+							try: () =>
+								captureScreenshots(
+									runtimeActions.screenshots ?? screenshotPort,
+								),
+							catch: (cause) => new HostActionFailed(cause),
+						});
+						return;
+					}
+					if (chord === "command+l" && platform() === "win32") {
+						yield* Effect.tryPromise({
+							try: () => (runtimeActions.lock ?? lockWorkstation)(),
+							catch: (cause) => new HostActionFailed(cause),
+						});
+						return;
+					}
 					const session = hardware();
 					if (!session)
 						return yield* Effect.fail(
@@ -136,7 +174,10 @@ export const desktopKeyRuntimePort = (
 							});
 							yield* Effect.acquireUseRelease(
 								Effect.try({
-									try: () => clipboard.writeText(text),
+									try: () => {
+										clipboard.clear();
+										clipboard.writeText(text);
+									},
 									catch: (cause) => new HostActionFailed(cause),
 								}),
 								() =>
@@ -144,7 +185,7 @@ export const desktopKeyRuntimePort = (
 										.pressChord(
 											process.platform === "darwin" ? "command+v" : "control+v",
 										)
-										.pipe(Effect.zipRight(Effect.sleep(150))),
+										.pipe(Effect.zipRight(Effect.sleep(50))),
 								() =>
 									Effect.sync(() => {
 										if (
@@ -175,25 +216,22 @@ export const desktopKeyRuntimePort = (
 							reference: string,
 						): Effect.fn.Return<void, HostActionFailed> {
 							if (mock) return;
-							if (reference.slice(0, 4).toLowerCase() === "app:") {
-								if (platform() !== "darwin")
-									return yield* Effect.fail(
-										new HostActionFailed(
-											"application-reference-platform-unavailable",
-										),
-									);
-								yield* Effect.tryPromise({
-									try: () =>
-										runFile("/usr/bin/open", ["-b", reference.slice(4)]),
-									catch: (cause) => new HostActionFailed(cause),
-								});
-								return;
-							}
-							const error = yield* Effect.tryPromise({
-								try: () => shell.openPath(reference),
+							yield* Effect.tryPromise({
+								try: (signal) =>
+									runApplicationAction(
+										runtimeActions.application ?? nativeApplicationPort,
+										platform() === "darwin"
+											? "darwin"
+											: platform() === "win32"
+												? "win32"
+												: "linux",
+										reference,
+										"open",
+										false,
+										signal,
+									),
 								catch: (cause) => new HostActionFailed(cause),
 							});
-							if (error) return yield* Effect.fail(new HostActionFailed(error));
 						},
 					),
 				}),
@@ -211,7 +249,63 @@ export const desktopKeyRuntimePort = (
 							Effect.fail(new ActionSnapshotFailed(c)),
 					}),
 				),
-				execute: (config) => executeActionLeaf(config, adapters),
+				execute: (config) =>
+					Effect.gen(function* () {
+						if (config.type === "managementCenter") {
+							if (mock) return;
+							if (!runtimeActions.management)
+								return yield* new HostActionFailed("management-unavailable");
+							yield* Effect.sync(() =>
+								runtimeActions.management?.(config.actions[0]?.value),
+							);
+							return;
+						}
+						if (config.type === "close") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: (signal) =>
+									runApplicationAction(
+										runtimeActions.application ?? nativeApplicationPort,
+										platform() === "darwin"
+											? "darwin"
+											: platform() === "win32"
+												? "win32"
+												: "linux",
+										config.actions[0].value,
+										"close",
+										config.actions[1].value === 1 ||
+											config.actions[1].value === true,
+										signal,
+									),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							return;
+						}
+						if (config.type === "screenshot") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: () =>
+									captureScreenshots(
+										runtimeActions.screenshots ?? screenshotPort,
+									),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							return;
+						}
+						if (config.type === "lock") {
+							if (mock) return;
+							yield* Effect.tryPromise({
+								try: () => (runtimeActions.lock ?? lockWorkstation)(),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							return;
+						}
+						yield* executeActionLeaf(config, adapters);
+					}),
+				executePlugin: runtimeActions.plugin ?? unavailablePluginAction,
+				...(runtimeActions.timerCompleted
+					? { timerCompleted: runtimeActions.timerCompleted }
+					: {}),
 				holdHotkey: (key) =>
 					Effect.gen(function* () {
 						const decoded = Schema.decodeUnknownEither(HotkeyConfig)(
@@ -220,6 +314,13 @@ export const desktopKeyRuntimePort = (
 						if (decoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(decoded.left));
 						const chord = decoded.right.actions[0].value;
+						if (
+							chord === "printscreen" ||
+							(chord === "command+l" && platform() === "win32")
+						) {
+							yield* keyboard.pressChord(chord);
+							return Effect.void;
+						}
 						if (Schema.is(MediaCommand)(chord)) {
 							yield* executeActionLeaf(
 								{ type: "hotkey", actions: [{ type: "key", value: chord }] },

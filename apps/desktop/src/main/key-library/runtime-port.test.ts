@@ -1,6 +1,14 @@
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
-import { Deferred, Effect, Layer, Schema } from "effect";
+import {
+	Deferred,
+	Effect,
+	Fiber,
+	Layer,
+	Schema,
+	TestClock,
+	TestContext,
+} from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
@@ -22,7 +30,15 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service.js";
 import { systemMediaKeyActions } from "../weather-media/key-actions";
-import { desktopKeyRuntimePort } from "./runtime-port";
+import {
+	captureScreenshots,
+	lockWorkstation,
+	nativeApplicationPort,
+} from "./native-host";
+import {
+	type DesktopKeyRuntimeActions,
+	desktopKeyRuntimePort,
+} from "./runtime-port";
 
 const files = vi.hoisted(() => ({
 	stat: vi.fn(),
@@ -41,7 +57,14 @@ const os = vi.hoisted(() => ({
 	openPath: vi.fn(async (_path: string) => ""),
 	openExternal: vi.fn(async (_url: string) => {}),
 	exec: vi.fn<(file: string, args: readonly string[]) => void>(),
-	clipboard: vi.fn(),
+	clipboard: vi.fn<() => string[]>(() => ["text/plain"]),
+	readText: vi.fn(() => "before"),
+	readHTML: vi.fn(() => "<b>before</b>"),
+	readRTF: vi.fn(() => "rich"),
+	readImage: vi.fn(() => ({})),
+	clear: vi.fn(),
+	writeText: vi.fn(),
+	write: vi.fn(),
 	worker: vi.fn(),
 }));
 vi.mock("node:os", () => ({ platform: os.platform }));
@@ -49,26 +72,38 @@ vi.mock("node:child_process", () => ({
 	execFile: (
 		file: string,
 		args: readonly string[],
-		callback: (error: unknown) => void,
+		callback: (error: unknown, stdout: string, stderr: string) => void,
 	) => {
 		try {
 			os.exec(file, args);
-			callback(null);
+			callback(null, "", "");
 		} catch (cause) {
-			callback(cause);
+			callback(cause, "", "");
 		}
 	},
 }));
 vi.mock("electron", () => ({
 	BrowserWindow: os.worker,
 	shell: { openPath: os.openPath, openExternal: os.openExternal },
-	clipboard: { availableFormats: os.clipboard },
+	clipboard: {
+		availableFormats: os.clipboard,
+		readText: os.readText,
+		readHTML: os.readHTML,
+		readRTF: os.readRTF,
+		readImage: os.readImage,
+		clear: os.clear,
+		writeText: os.writeText,
+		write: os.write,
+	},
 }));
 afterEach(() => {
 	vi.clearAllMocks();
 	os.platform.mockReturnValue("darwin");
 	os.openPath.mockResolvedValue("");
 	os.exec.mockReset();
+	os.clipboard.mockReturnValue(["text/plain"]);
+	os.readText.mockReturnValue("before");
+	os.writeText.mockReset();
 });
 const open = (value: string) => ({
 	type: "open" as const,
@@ -81,6 +116,7 @@ function layer(
 	savedKey?: typeof ProfileKey.Encoded,
 	owned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 	hardware: () => HardwareSession | undefined = () => undefined,
+	runtimeActions: DesktopKeyRuntimeActions = {},
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -133,6 +169,17 @@ function layer(
 		mock,
 		owned,
 		media,
+		undefined,
+		{
+			application: {
+				launch: nativeApplicationPort.launch,
+				focus: nativeApplicationPort.focus,
+				terminate: nativeApplicationPort.terminate,
+				list: async () => [],
+				identity: async () => undefined,
+			},
+			...runtimeActions,
+		},
 	).pipe(Layer.provide(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
 }
@@ -646,3 +693,199 @@ it.each(["up", "cancel", "reset"] as const)(
 		);
 	},
 );
+
+it.each([false, true])(
+	"MAIN-068: rich clipboard restores after 50 ms and then arbitrary chord, concurrent edit=%s",
+	async (changed) => {
+		os.clipboard.mockReturnValue([
+			"text/plain",
+			"text/html",
+			"text/rtf",
+			"image/png",
+		]);
+		os.writeText.mockImplementation(() => {
+			os.readText.mockReturnValue("inserted");
+			os.clipboard.mockReturnValue(["text/plain"]);
+		});
+		const trace: string[] = [];
+		const chords: string[] = [];
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const p = yield* KeyRuntimePort;
+				const fiber = yield* Effect.fork(
+					p
+						.execute({
+							type: "text",
+							actions: [
+								{ type: "text", value: "inserted" },
+								{ type: "key", value: "control+shift+s" },
+							],
+						})
+						.pipe(Effect.tap(() => Effect.sync(() => trace.push("done")))),
+				);
+				yield* TestClock.adjust(49);
+				expect(os.write).not.toHaveBeenCalled();
+				expect(trace).toEqual([]);
+				if (changed) os.readText.mockReturnValue("user copy");
+				yield* TestClock.adjust(1);
+				yield* Fiber.join(fiber);
+				expect(os.write).toHaveBeenCalledTimes(changed ? 0 : 1);
+				if (!changed)
+					expect(os.write).toHaveBeenCalledWith({
+						text: "before",
+						html: "<b>before</b>",
+						rtf: "rich",
+						image: {},
+					});
+				expect(trace).toEqual(["done"]);
+				expect(chords).toEqual([
+					process.platform === "darwin" ? "command+v" : "control+v",
+					"control+shift+s",
+				]);
+			}).pipe(
+				Effect.provide(
+					layer(false, undefined, undefined, undefined, undefined, undefined, {
+						keyboard: {
+							supportedTokens: new Set([
+								"command",
+								"control",
+								"shift",
+								"v",
+								"s",
+							]),
+							pressChord: (chord) =>
+								Effect.sync(() => {
+									chords.push(chord);
+								}),
+						},
+					}),
+				),
+				Effect.provide(TestContext.TestContext),
+				Effect.scoped,
+			),
+		);
+	},
+);
+it("MAIN-097: screenshots size all displays and save exact indexed names without native capture", async () => {
+	const writes: { path: string; bytes: Uint8Array }[] = [];
+	const capture = vi.fn(async () => [new Uint8Array([1]), new Uint8Array([2])]);
+	await captureScreenshots({
+		displays: () => [
+			{ workAreaSize: { width: 200, height: 80 } },
+			{ workAreaSize: { width: 100, height: 120 } },
+		],
+		capture,
+		pictures: () => "/Pictures",
+		now: () => 123,
+		write: async (path, bytes) => {
+			writes.push({ path, bytes });
+		},
+	});
+	expect(capture).toHaveBeenCalledWith({ width: 200, height: 120 });
+	expect(writes.map((w) => w.path)).toEqual([
+		"/Pictures/screenshot-123-0.png",
+		"/Pictures/screenshot-123-1.png",
+	]);
+	os.platform.mockReturnValue("win32");
+	await lockWorkstation();
+	expect(os.exec).toHaveBeenCalledWith("rundll32.exe", [
+		"user32.dll,LockWorkStation",
+	]);
+});
+it.each(["close", "screenshot", "lock", "managementCenter"] as const)(
+	"saved %s enters the desktop adapter exactly once",
+	async (type) => {
+		const close = vi.fn(async () => {}),
+			lock = vi.fn(async () => {}),
+			management = vi.fn();
+		const write = vi.fn(async () => {});
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const saved = {
+			...empty,
+			childrenName: type,
+			config: {
+				...empty.config,
+				type,
+				actions:
+					type === "close"
+						? [
+								{ type: "path", value: "/App" },
+								{ type: "force", value: "" },
+							]
+						: type === "managementCenter"
+							? [{ type: "tabType", value: "keys" }]
+							: [],
+			},
+		};
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const r = yield* KeyRuntime;
+				yield* r.activate("device", "1,1", "down");
+				yield* r.activate("device", "1,1", "up");
+			}).pipe(
+				Effect.provide(
+					layer(false, undefined, undefined, saved, undefined, undefined, {
+						application: {
+							list: async () => [{ pid: 31, path: "/App" }],
+							identity: async () => "/App",
+							focus: async () => {},
+							launch: async () => {},
+							terminate: close,
+						},
+						lock,
+						management,
+						screenshots: {
+							displays: () => [],
+							capture: async () => [new Uint8Array([1])],
+							write,
+							pictures: () => "/Pictures",
+							now: () => 1,
+						},
+					}),
+				),
+				Effect.scoped,
+			),
+		);
+		expect(close).toHaveBeenCalledTimes(type === "close" ? 1 : 0);
+		expect(lock).toHaveBeenCalledTimes(type === "lock" ? 1 : 0);
+		expect(management).toHaveBeenCalledTimes(
+			type === "managementCenter" ? 1 : 0,
+		);
+		expect(write).toHaveBeenCalledTimes(type === "screenshot" ? 1 : 0);
+	},
+);
+
+it("MAIN-076: desktop plugin port returns the typed unavailable error until plugins registers it", async () => {
+	await Effect.runPromise(
+		Effect.gen(function* () {
+			const port = yield* KeyRuntimePort;
+			if (!port.executePlugin)
+				throw new Error("Missing typed plugin dispatch seam");
+			const result = yield* Effect.either(
+				port.executePlugin(
+					{
+						isPlugin: true,
+						pluginId: "example",
+						config: { type: "action", actions: [] },
+					},
+					{
+						deviceId: "device",
+						profileId: "p",
+						pageId: "one",
+						revision: 0,
+						keyCode: "1,1",
+						stepIndex: 0,
+					},
+				),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: {
+					_tag: "KeyFunctionUnavailable",
+					code: "QUAKE.ACTION.UNAVAILABLE",
+					reason: "plugin-runtime",
+				},
+			});
+		}).pipe(Effect.provide(layer()), Effect.scoped),
+	);
+});

@@ -15,11 +15,14 @@ import {
 } from "../profiles/profile-contracts.js";
 import { isUnsupportedProfileKey } from "../profiles/profile-function-contracts.js";
 import {
+	FolderConfig,
 	GoToPageConfig,
 	HotkeySwitchConfig,
 	MultiActionConfig,
 	NextPageConfig,
+	normalizeWebsiteUrl,
 	PreviousPageConfig,
+	SwitchProfileConfig,
 	TimerConfig,
 } from "./action-contracts.js";
 import {
@@ -28,13 +31,19 @@ import {
 	KeyFunctionUnavailable,
 } from "./action-errors.js";
 import { validateAction } from "./action-invariants.js";
-import type { ActionConfig } from "./action-registry.js";
+import { type ActionConfig, retainedActionOwner } from "./action-registry.js";
+import { KeyDisplayEvent, KeyPanelMessage } from "./key-display-contracts.js";
 import { isObsId } from "./obs-contracts.js";
 export interface KeyFeedback {
 	readonly deviceId: string;
 	readonly profileId: string;
 	readonly pageId: string;
 	readonly keyCode: string;
+	readonly revision?: number;
+	readonly icon?: string;
+	readonly countdownPhase?: "running" | "expired" | "hidden";
+	readonly endAt?: number;
+	readonly timerCompleted?: boolean;
 	readonly alternate?: 0 | 1;
 	readonly volume?: number;
 	readonly muted?: boolean;
@@ -47,6 +56,16 @@ export interface KeyActivation {
 	readonly profileId: string;
 	readonly pageId: string;
 	readonly revision: number;
+}
+/** Awaitable plugin boundary. The plugins lane owns runtime registration. */
+export interface PluginActionPort {
+	readonly execute: (
+		step: typeof import("./action-contracts.js").PluginSequenceStep.Type,
+		activation: KeyActivation & {
+			readonly keyCode: string;
+			readonly stepIndex: number;
+		},
+	) => Effect.Effect<void, ActionError>;
 }
 export class KeyRuntimePort extends Context.Tag(
 	"@open-quake/device/KeyRuntimePort",
@@ -62,6 +81,11 @@ export class KeyRuntimePort extends Context.Tag(
 			key: ProfileKey,
 			activation: KeyActivation,
 		) => Effect.Effect<boolean, ActionError>;
+		/** The plugins lane supplies the real executor. Interruption cancels awaited work. */
+		readonly executePlugin?: PluginActionPort["execute"];
+		readonly timerCompleted?: (
+			activation: KeyActivation & { readonly keyCode: string },
+		) => Effect.Effect<void, ActionError>;
 		readonly resetOwned?: (deviceId?: string) => Effect.Effect<void>;
 		/** Acquires a held chord and returns release bound to that keyboard session. */
 		readonly holdHotkey?: (
@@ -80,6 +104,8 @@ export class KeyRuntimePort extends Context.Tag(
 		) => Effect.Effect<void, ActionError>;
 	}
 >() {}
+export const unavailablePluginAction: PluginActionPort["execute"] = () =>
+	Effect.fail(new KeyFunctionUnavailable("plugin-runtime"));
 const unavailable = Effect.fail(new KeyFunctionUnavailable("owning-runtime"));
 const NoPort = Layer.succeed(KeyRuntimePort, {
 	read: unavailable,
@@ -97,6 +123,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const port = yield* KeyRuntimePort,
 				scope = yield* Effect.scope;
 			const states = new Map<string, KeyFeedback>();
+			const alertVersions = new Map<string, number>();
+			const progressVersions = new Map<string, number>();
+			const clearedAt = new Map<string, number>();
+			const timerTaps = new Map<string, number>();
+			const displayTimers = new Map<string, Fiber.RuntimeFiber<void, never>>();
+			const returnContexts = new Map<string, KeyActivation[]>();
 			const stateId = (state: KeyFeedback): string =>
 				JSON.stringify([
 					state.deviceId,
@@ -142,13 +174,69 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					const { profile, page } = current(active.value, state.deviceId);
 					const visible =
 						profile.id === state.profileId && page.id === state.pageId;
+					const owner = active.value.profiles.find(
+						(p) => p.id === state.profileId,
+					);
+					if (
+						!owner ||
+						(state.revision !== undefined && owner.revision !== state.revision)
+					)
+						return;
+					const previous = states.get(stateId(state));
 					const value = {
-						...states.get(stateId(state)),
+						...(previous?.revision === state.revision ? previous : undefined),
 						...state,
 						...(!visible ? { alert: 0 as const } : {}),
 					};
 					states.set(stateId(state), value);
 					if (visible) yield* port.publish(value);
+					const id = stateId(state);
+					const target = {
+						deviceId: state.deviceId,
+						profileId: state.profileId,
+						pageId: state.pageId,
+						keyCode: state.keyCode,
+						...(state.revision === undefined
+							? {}
+							: { revision: state.revision }),
+					};
+					if (state.alert !== undefined) {
+						const version = (alertVersions.get(id) ?? 0) + 1;
+						alertVersions.set(id, version);
+						if (state.alert === 1)
+							yield* Effect.forkIn(
+								Effect.sleep(2000).pipe(
+									Effect.zipRight(
+										Effect.suspend(() =>
+											alertVersions.get(id) === version
+												? feedback({ ...target, alert: 0 })
+												: Effect.void,
+										),
+									),
+								),
+								scope,
+							);
+					}
+					if (
+						state.progress !== undefined &&
+						state.progress !== previous?.progress
+					) {
+						const version = (progressVersions.get(id) ?? 0) + 1;
+						progressVersions.set(id, version);
+						if (state.progress >= 0)
+							yield* Effect.forkIn(
+								Effect.sleep(state.progress >= 100 ? 1000 : 5000).pipe(
+									Effect.zipRight(
+										Effect.suspend(() =>
+											progressVersions.get(id) === version
+												? feedback({ ...target, progress: -1 })
+												: Effect.void,
+										),
+									),
+								),
+								scope,
+							);
+					}
 				}
 			});
 			const refresh = Effect.fn("KeyRuntime.refresh")(function* (
@@ -160,7 +248,9 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					if (
 						value.deviceId === deviceId &&
 						value.profileId === profile.id &&
-						value.pageId === page.id
+						value.pageId === page.id &&
+						(value.revision === undefined ||
+							value.revision === profile.revision)
 					)
 						yield* port.publish(value);
 			});
@@ -192,10 +282,19 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				const hidden = Option.isSome(env.manager)
 					? env.manager.value.hidden
 					: [];
-				const visible = env.profiles.filter(
-					(p) =>
-						!hidden.includes(p.id) && p.pages.some((page) => page.keys.length),
-				);
+				const visible = env.profiles
+					.filter(
+						(p) =>
+							!hidden.includes(p.id) &&
+							p.pages.some((page) =>
+								page.keys.some(
+									(key) => key.config.display && key.config.type !== "",
+								),
+							),
+					)
+					.sort((a, b) =>
+						a.name.localeCompare(b.name, undefined, { numeric: true }),
+					);
 				const next =
 					visible[
 						pageIndex(
@@ -300,6 +399,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					profileId: profile.id,
 					pageId: page.id,
 					keyCode,
+					revision: profile.revision,
 				};
 				const input = Schema.encodeSync(ProfileKey)(key).config;
 				const type = key.config.type;
@@ -326,6 +426,80 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					audioPresses.delete(control);
 					return;
 				}
+				if (
+					[
+						"folder",
+						"createFolder",
+						"back",
+						"emojiFolder",
+						"emojiBack",
+					].includes(type)
+				) {
+					const decoded = Schema.decodeUnknownEither(FolderConfig)(input);
+					if (decoded._tag === "Left")
+						return yield* new InvalidKeyAction("config.actions", decoded.left);
+					const stack = returnContexts.get(deviceId) ?? [];
+					const last = stack.at(-1);
+					const ref = decoded.right.actions[0]?.value;
+					const back = type === "back" || type === "emojiBack";
+					const destination =
+						back && last
+							? { profileId: last.profileId, pageId: last.pageId }
+							: { profileId: profile.id, pageId: ref };
+					const targetProfile = env.profiles.find(
+						(p) => p.id === destination.profileId,
+					);
+					const targetPage = targetProfile?.pages.find(
+						(p) => p.id === destination.pageId,
+					);
+					if (
+						!targetProfile ||
+						!targetPage ||
+						(back && last && targetProfile.revision !== last.revision)
+					)
+						return yield* new InvalidKeyAction("config.actions");
+					yield* port.select(deviceId, targetProfile.id, targetPage.id);
+					returnContexts.set(
+						deviceId,
+						back ? stack.slice(0, -1) : [...stack, { ...base }],
+					);
+					yield* refresh(deviceId);
+					return;
+				}
+				if (type === "switchProfile") {
+					const decoded =
+						Schema.decodeUnknownEither(SwitchProfileConfig)(input);
+					if (decoded._tag === "Left")
+						return yield* new InvalidKeyAction("config.actions", decoded.left);
+					const ref = decoded.right.actions[0].value;
+					if (ref === "-1" || ref === "-2") {
+						yield* navigate(deviceId, ref === "-1" ? 3 : 2);
+						return;
+					}
+					const startup =
+						Option.isSome(env.manager) &&
+						Option.isSome(env.manager.value.startup)
+							? env.manager.value.startup.value
+							: undefined;
+					const targetProfile = env.profiles.find(
+						(p) =>
+							p.id === (ref === "0" ? (startup ?? env.profiles[0]?.id) : ref),
+					);
+					const targetPage =
+						targetProfile?.pages[decoded.right.actions[1].value - 1];
+					if (
+						!targetProfile ||
+						!targetPage ||
+						(Option.isSome(env.manager) &&
+							env.manager.value.hidden.includes(targetProfile.id))
+					)
+						return yield* new InvalidKeyAction("config.actions");
+					yield* port.select(deviceId, targetProfile.id, targetPage.id);
+					yield* refresh(deviceId);
+					return;
+				}
+				if (retainedActionOwner(type) === "display") return;
+
 				if (type === "hotkeySwitch") {
 					const decoded = Schema.decodeUnknownEither(HotkeySwitchConfig)(input);
 					if (decoded._tag === "Left")
@@ -380,6 +554,28 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					return;
 				}
 				if (type === "timer" || type === "multiActions") {
+					if (type === "timer") {
+						const now = yield* Clock.currentTimeMillis;
+						const state = states.get(identity);
+						if (
+							state?.countdownPhase === "expired" &&
+							state.revision === profile.revision
+						) {
+							clearedAt.set(identity, now);
+							timerTaps.set(identity, now);
+							yield* feedback({
+								...base,
+								countdown: -1,
+								countdownPhase: "hidden",
+								alert: 0,
+								timerCompleted: false,
+							});
+							return;
+						}
+						const previousTap = timerTaps.get(identity);
+						if (previousTap !== undefined && now - previousTap < 600) return;
+						timerTaps.set(identity, now);
+					}
 					const previous = running.get(identity);
 					if (previous) {
 						running.delete(identity);
@@ -387,6 +583,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						yield* feedback({
 							...base,
 							countdown: -1,
+							countdownPhase: "hidden",
 							progress: 100,
 							alert: 0,
 						});
@@ -409,7 +606,14 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							return yield* Effect.fail(new InvalidKeyAction("config.actions"));
 						work = Effect.gen(function* () {
 							const end = (yield* Clock.currentTimeMillis) + duration;
-							yield* feedback({ ...base, countdown: duration, alert: 0 });
+							yield* feedback({
+								...base,
+								countdown: duration,
+								endAt: end,
+								countdownPhase: "running",
+								timerCompleted: false,
+								alert: 0,
+							});
 							let remaining = duration;
 							while (remaining > 0) {
 								yield* Effect.sleep(Math.min(1000, remaining));
@@ -417,7 +621,29 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								if (remaining > 0)
 									yield* feedback({ ...base, countdown: remaining });
 							}
-							yield* feedback({ ...base, countdown: -1, alert: 2 });
+							yield* feedback({
+								...base,
+								countdown: -1,
+								countdownPhase: "expired",
+								alert: 2,
+							});
+							const latest = yield* port.read;
+							const selected = latest.activeByDevice[deviceId];
+							const owner = latest.profiles.find((p) => p.id === profile.id);
+							if (
+								selected?.profileId !== profile.id ||
+								selected.pageId !== page.id ||
+								owner?.revision !== profile.revision
+							)
+								return;
+							if (
+								decoded.right.actions.some(
+									(a) => a.type === "callback" && a.value === 1,
+								)
+							) {
+								if (port.timerCompleted) yield* port.timerCompleted(base);
+								yield* feedback({ ...base, timerCompleted: true });
+							}
 							if (typeof sound === "string" && sound)
 								yield* port.alarm(deviceId, sound);
 						});
@@ -431,7 +657,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						// Validate the entire sequence before the first host effect.
 						for (const step of decoded.right.subActions)
 							if (
-								step.config.type !== "delay" &&
+								step.isPlugin !== true &&
+								!["delay", "playAudioLegacy", "stopAudio"].includes(
+									step.config.type,
+								) &&
 								validateAction(step.config.type, step.config)._tag === "Left"
 							)
 								return yield* Effect.fail(
@@ -441,11 +670,35 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 							const steps = decoded.right.subActions;
 							yield* feedback({ ...base, progress: 0, alert: 0 });
 							for (let i = 0; i < steps.length; i++) {
-								const config = steps[i]?.config;
-								if (!config) continue;
-								if (config.type === "delay")
-									yield* Effect.sleep(config.actions[0].value);
-								else {
+								const step = steps[i];
+								const config = step?.config;
+								if (!config || !step) continue;
+								if (step.isPlugin === true) {
+									yield* (port.executePlugin ?? unavailablePluginAction)(step, {
+										...base,
+										stepIndex: i,
+									});
+								} else if (config.type === "delay")
+									yield* Effect.sleep(
+										typeof config.actions[0]?.value === "number"
+											? config.actions[0].value
+											: 0,
+									);
+								else if (
+									config.type === "playAudioLegacy" ||
+									config.type === "stopAudio" ||
+									config.type === "cmd"
+								) {
+									if (!port.executeOwned)
+										return yield* new KeyFunctionUnavailable("owning-runtime");
+									const nested = Schema.decodeUnknownSync(ProfileKey)({
+										...Schema.encodeSync(ProfileKey)(key),
+										childrenName: config.type,
+										config: { ...input, ...config },
+									});
+									if (!(yield* port.executeOwned(nested, { ...base })))
+										return yield* new KeyFunctionUnavailable("owning-runtime");
+								} else {
 									const action = validateAction(config.type, config);
 									if (action._tag === "Left")
 										return yield* Effect.fail(action.left);
@@ -486,7 +739,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					return;
 				}
 				if (
-					(type === "homeAssistant" || localAudio || isObsId(type)) &&
+					(type === "homeAssistant" ||
+						localAudio ||
+						isObsId(type) ||
+						type === "cmd") &&
 					port.executeOwned
 				) {
 					if (ownedControls.has(control)) return;
@@ -525,6 +781,21 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					ownedControls.add(control);
 					return Fiber.join(fiber);
 				}
+				if (type === "website") {
+					const url = (input.actions ?? []).find(
+						(a) => a.type === "url",
+					)?.value;
+					const normalized =
+						typeof url === "string"
+							? normalizeWebsiteUrl(url, key.config.title.text)
+							: undefined;
+					if (!normalized) return yield* new InvalidKeyAction("config.actions");
+					yield* port.execute({
+						type: "website",
+						actions: [{ type: "url", value: normalized }],
+					});
+					return;
+				}
 				const action = validateAction(
 					Option.getOrElse(key.childrenName, () => type),
 					input,
@@ -532,6 +803,127 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				if (action._tag === "Left") return yield* Effect.fail(action.left);
 				yield* port.execute(action.right);
 			});
+			const displayEvent = Effect.fn("KeyRuntime.displayEvent")(function* (
+				input: unknown,
+			): Effect.fn.Return<void, ActionError> {
+				const decoded = Schema.decodeUnknownEither(KeyDisplayEvent)(input);
+				if (decoded._tag === "Left")
+					return yield* new InvalidKeyAction("activation", decoded.left);
+				const event = decoded.right;
+				const env = yield* port.read;
+				if (!env.activeByDevice[event.deviceId]) return;
+				const { profile, page } = current(env, event.deviceId);
+				const key = page.keys.find(
+					(k) => k.keyCode === event.keyCode && k.config.display,
+				);
+				if (
+					!key ||
+					isUnsupportedProfileKey(key) ||
+					profile.id !== event.profileId ||
+					page.id !== event.pageId ||
+					profile.revision !== event.revision
+				)
+					return;
+				const id = stateId(event);
+				switch (event.type) {
+					case "showAnimation":
+						yield* feedback({ ...event, icon: event.resourceId });
+						break;
+					case "showAlert":
+						yield* feedback({ ...event, alert: event.alertType });
+						break;
+					case "progress":
+						yield* feedback({ ...event, progress: event.percent });
+						break;
+					case "countdown": {
+						if (key.config.type !== "timer") return;
+						const now = yield* Clock.currentTimeMillis;
+						const previous = states.get(id);
+						if (event.time > 0 && now - (clearedAt.get(id) ?? -Infinity) < 120)
+							return;
+						if (event.time > 0 && previous?.countdownPhase === "expired") {
+							clearedAt.set(id, now);
+							const pending = displayTimers.get(id);
+							if (pending) {
+								yield* Fiber.interrupt(pending);
+								displayTimers.delete(id);
+							}
+							yield* feedback({
+								...event,
+								countdown: -1,
+								countdownPhase: "hidden",
+								alert: 0,
+							});
+							return;
+						}
+						const oldTimer = displayTimers.get(id);
+						if (oldTimer) {
+							yield* Fiber.interrupt(oldTimer);
+							displayTimers.delete(id);
+						}
+						const expired =
+							previous?.alert === 2 || previous?.countdownPhase === "expired";
+						yield* feedback({
+							...event,
+							countdown: event.time,
+							countdownPhase:
+								event.time < 0
+									? expired
+										? "expired"
+										: "hidden"
+									: event.time === 0
+										? "expired"
+										: "running",
+							...(event.time > 0 ? { endAt: now + event.time } : {}),
+						});
+						if (event.time > 0 && !running.has(id)) {
+							const end = now + event.time;
+							const tick = Effect.gen(function* () {
+								let remaining = event.time;
+								while (remaining > 0) {
+									yield* Effect.sleep(Math.min(1000, remaining));
+									remaining = Math.max(
+										0,
+										end - (yield* Clock.currentTimeMillis),
+									);
+									yield* feedback({
+										...event,
+										countdown: remaining,
+										countdownPhase: remaining > 0 ? "running" : "expired",
+									});
+								}
+							}).pipe(
+								Effect.ensuring(Effect.sync(() => displayTimers.delete(id))),
+							);
+							displayTimers.set(id, yield* Effect.forkIn(tick, scope));
+						}
+					}
+				}
+			});
+
+			const panelMessage = Effect.fn("KeyRuntime.panelMessage")(function* (
+				deviceId: string,
+				input: unknown,
+			): Effect.fn.Return<void, ActionError> {
+				const decoded = Schema.decodeUnknownEither(KeyPanelMessage)(input);
+				if (decoded._tag === "Left")
+					return yield* new InvalidKeyAction("activation", decoded.left);
+				const message = decoded.right;
+				if (message.type === "globalAlert") return;
+				const env = yield* port.read;
+				if (!env.activeByDevice[deviceId]) return;
+				if (message.type === "slide")
+					return yield* navigate(deviceId, message.direction);
+				if (message.type === "functionKeyPressed")
+					return yield* port.execute({
+						type: "managementCenter",
+						actions: message.tabType
+							? [{ type: "tabType", value: message.tabType }]
+							: [],
+					});
+				if (message.deviceId === deviceId) yield* displayEvent(message);
+			});
+
 			const preparePlayerControl = Effect.fn("KeyRuntime.preparePlayerControl")(
 				function* (
 					activation: KeyActivation & { readonly keyCode: string },
@@ -638,13 +1030,29 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						running.delete(key);
 					}
 
+				for (const [id, fiber] of displayTimers)
+					if (!deviceId || JSON.parse(id)[0] === deviceId) {
+						yield* Fiber.interrupt(fiber);
+						displayTimers.delete(id);
+					}
+				for (const map of [
+					clearedAt,
+					timerTaps,
+					alertVersions,
+					progressVersions,
+				])
+					for (const id of map.keys())
+						if (!deviceId || JSON.parse(id)[0] === deviceId) map.delete(id);
+				if (deviceId) returnContexts.delete(deviceId);
+				else returnContexts.clear();
 				for (const [id, value] of states)
 					if (!deviceId || value.deviceId === deviceId) {
 						yield* port.publish({
 							...value,
 							alternate: 0,
 							countdown: -1,
-							progress: 100,
+							countdownPhase: "hidden",
+							progress: -1,
 							alert: 0,
 						});
 						states.delete(id);
@@ -657,11 +1065,37 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						alternates.delete(key);
 				if (releaseError) return yield* Effect.fail(releaseError);
 			});
-			const prepareActivation = (...args: Parameters<typeof activate>) =>
-				activate(...args).pipe(
+			const prepareActivation = (...args: Parameters<typeof activate>) => {
+				const report = (_error: ActionError) =>
+					Effect.gen(function* () {
+						const env = yield* port.read.pipe(Effect.option);
+						if (Option.isNone(env)) return;
+						const { profile, page } = current(env.value, args[0]);
+						const expected = args[3];
+						if (
+							expected &&
+							(expected.profileId !== profile.id ||
+								expected.pageId !== page.id ||
+								expected.revision !== profile.revision)
+						)
+							return;
+						yield* feedback({
+							deviceId: args[0],
+							profileId: profile.id,
+							pageId: page.id,
+							revision: profile.revision,
+							keyCode: args[1],
+							alert: 1,
+						});
+					});
+				return activate(...args).pipe(
+					Effect.tapError(report),
 					lock.withPermits(1),
-					Effect.map((work) => work ?? Effect.void),
+					Effect.map((work) =>
+						(work ?? Effect.void).pipe(Effect.tapError(report)),
+					),
 				);
+			};
 			yield* Effect.addFinalizer(() =>
 				reset().pipe(
 					Effect.retry({ times: 1 }),
@@ -678,6 +1112,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					prepareActivation(...args).pipe(Effect.flatten),
 				navigate: (...args: Parameters<typeof navigate>) =>
 					navigate(...args).pipe(lock.withPermits(1)),
+				displayEvent: (...args: Parameters<typeof displayEvent>) =>
+					displayEvent(...args).pipe(lock.withPermits(1)),
+				panelMessage: (...args: Parameters<typeof panelMessage>) =>
+					panelMessage(...args).pipe(lock.withPermits(1)),
 				refresh,
 				snapshot: Effect.sync(() => [...states.values()]),
 				reset: (deviceId?: string) => reset(deviceId).pipe(lock.withPermits(1)),

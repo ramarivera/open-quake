@@ -1,5 +1,6 @@
 import { Option } from "effect";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { formatCountdown } from "../../../../../../packages/device/src/actions/key-display-contracts.js";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
@@ -27,45 +28,98 @@ import "./strip.css";
 const palette = stripPaletteProperties();
 
 /** Countdown, progress, alarm and invalid operation, drawn inside the tile. */
-function KeyState({
+export function KeyState({
 	state,
 }: {
 	state: KeyRuntimeState | undefined;
 }): React.JSX.Element | null {
 	if (!state) return null;
 	const countdown =
-		state.countdown !== undefined && state.countdown >= 0
-			? Math.ceil(state.countdown / 1000)
-			: undefined;
+		state.countdownPhase === "expired"
+			? 0
+			: state.countdown !== undefined && state.countdown >= 0
+				? state.countdown
+				: undefined;
 	const progress =
-		state.progress !== undefined && state.progress < 100
-			? Math.max(0, state.progress)
+		state.progress !== undefined && state.progress >= 0
+			? state.progress
 			: undefined;
-	const chip =
-		state.alert === 1 ? (
-			<span className="strip-key-chip" data-kind="invalid" role="status">
-				Invalid operation
-			</span>
-		) : state.alert === 2 ? (
-			<span className="strip-key-chip" data-kind="alarm" role="status">
-				Alarm
-			</span>
-		) : countdown !== undefined ? (
-			<span className="strip-key-chip" data-kind="countdown">
-				{countdown}
-			</span>
-		) : null;
-	if (!chip && progress === undefined) return null;
+	const alert = state.alert === 1 ? "!" : state.alert === 3 ? "✓" : undefined;
+	if (countdown === undefined && progress === undefined && !alert) return null;
 	return (
-		<div className="strip-key-state">
-			{chip}
+		<div
+			className="strip-key-state"
+			style={{
+				position: "absolute",
+				inset: 0,
+				zIndex: 3001,
+				pointerEvents: "none",
+				display: "grid",
+				placeItems: "center",
+			}}
+		>
+			{countdown !== undefined ? (
+				<span
+					data-kind="countdown"
+					style={{ fontSize: 48, fontWeight: 700, color: "#0000ff" }}
+				>
+					{formatCountdown(countdown)}
+				</span>
+			) : null}
+			{alert ? (
+				<span
+					data-kind={state.alert === 1 ? "invalid" : "checkmark"}
+					role="status"
+					aria-label={state.alert === 1 ? "Invalid operation" : "Complete"}
+					style={{
+						width: 50,
+						height: 50,
+						background: "rgb(255,255,100)",
+						color: "black",
+						fontSize: 42,
+						textAlign: "center",
+					}}
+				>
+					{alert}
+				</span>
+			) : null}
 			{progress !== undefined ? (
 				<div
 					className="strip-key-progress"
 					role="progressbar"
+					aria-valuemin={0}
+					aria-valuemax={100}
 					aria-valuenow={Math.round(progress)}
+					style={{
+						position: "absolute",
+						inset: 0,
+						background: "#0a0a1a",
+						overflow: "hidden",
+					}}
 				>
-					<span style={{ width: `${progress}%` }} />
+					<span
+						style={{
+							display: "block",
+							height: "100%",
+							width: `${progress}%`,
+							background: "linear-gradient(45deg,#00f7ff,#0066ff)",
+							borderRight: "4px solid #00f7ff",
+						}}
+					/>
+					<span
+						style={{
+							position: "absolute",
+							bottom: 8,
+							right: 8,
+							color: "#00ff9d",
+							fontSize: 20,
+							width: "auto",
+							height: "auto",
+							background: "none",
+						}}
+					>
+						{Math.round(progress)}%
+					</span>
 				</div>
 			) : null}
 		</div>
@@ -82,7 +136,9 @@ function StripGrid({
 	interactive,
 	runtime,
 	clockSelection,
+	currentPage,
 }: {
+	currentPage?: number | undefined;
 	clockSelection?:
 		| {
 				readonly profileId: string;
@@ -161,6 +217,7 @@ function StripGrid({
 								now,
 								hourFormat,
 								voice,
+								currentPage,
 								interactive,
 								keyTarget: clockSelection,
 								clockTarget: clockSelection
@@ -317,13 +374,23 @@ export function StripScreen({
 							key.keyCode,
 						]),
 					);
+					const validState =
+						state?.revision === undefined || state.revision === profile.revision
+							? state
+							: undefined;
 					const translated =
 						titles === "provided" ? key : localizedKey(key, locale);
-					return (key.config.type === "hotkeySwitch" ||
-						key.config.type === "mute") &&
-						state?.alternate === 1
+					const decorated = validState?.icon
 						? {
 								...translated,
+								config: { ...translated.config, icon: validState.icon },
+							}
+						: translated;
+					return (key.config.type === "hotkeySwitch" ||
+						key.config.type === "mute") &&
+						validState?.alternate === 1
+						? {
+								...decorated,
 								config: {
 									...translated.config,
 									icon: Option.getOrElse(
@@ -336,7 +403,7 @@ export function StripScreen({
 									),
 								},
 							}
-						: translated;
+						: decorated;
 				}),
 			},
 			rows,
@@ -351,17 +418,28 @@ export function StripScreen({
 		profiles._tag === "ready"
 			? selectStripPage(profiles.envelope, serial)
 			: undefined;
-	const runtime = (keyCode: string): KeyRuntimeState | undefined =>
-		selection
-			? runtimeStates.get(
-					JSON.stringify([
-						serial ?? "desktop-preview",
-						selection.profile.id,
-						selection.page.id,
-						keyCode,
-					]),
-				)
-			: undefined;
+	const runtime = (keyCode: string): KeyRuntimeState | undefined => {
+		if (!selection) return undefined;
+		const state = runtimeStates.get(
+			JSON.stringify([
+				serial ?? "desktop-preview",
+				selection.profile.id,
+				selection.page.id,
+				keyCode,
+			]),
+		);
+		if (
+			state?.revision !== undefined &&
+			state.revision !== selection.profile.revision
+		)
+			return undefined;
+		const key = selection.page.keys.find((key) => key.keyCode === keyCode);
+		return key?.config.type === "timer"
+			? state
+			: state
+				? { ...state, countdown: -1, countdownPhase: "hidden" }
+				: undefined;
+	};
 	const now = wallpaper ? new Date(wallpaper.clock.epochMillis) : undefined;
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";
 	return (
@@ -385,6 +463,16 @@ export function StripScreen({
 			{!vivid && layout ? (
 				<StripGrid
 					layout={layout}
+					currentPage={
+						selection
+							? Math.min(
+									10,
+									selection.profile.pages.findIndex(
+										(p) => p.id === selection.page.id,
+									) + 1,
+								)
+							: undefined
+					}
 					pressedKeyCode={
 						feedbackKey === pressedKeyCode ? feedbackKey : undefined
 					}

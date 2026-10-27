@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
-import { Effect, Array as EffectArray, Option } from "effect";
+import { Effect, Array as EffectArray, Option, Schema } from "effect";
+import { MultiActionConfig } from "../../../../../packages/device/src/actions/action-contracts.js";
+import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
-import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	type Profile,
+	type ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileCommandFailed,
 	ProfileDeliveryFailed,
@@ -183,6 +189,81 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 				yield* publish();
 			},
 		);
+		const runKeyCommand = Effect.fn("ProfileDesktop.runKeyCommand")(function* (
+			key: ProfileKey,
+			activation: KeyActivation,
+			requireSelection = true,
+		): Effect.fn.Return<boolean, ProfileDesktopError> {
+			const command = key.config.actions.find((a) => a.type === "text")?.value;
+			if (
+				key.config.type !== "cmd" ||
+				typeof command !== "string" ||
+				!command.trim()
+			)
+				return false;
+			const owns = (env: typeof ProfileEnvelope.Type) => {
+				const p = env.profiles.find((p) => p.id === activation.profileId);
+				const saved = p?.pages
+					.find((p) => p.id === activation.pageId)
+					?.keys.find((k) => k.keyCode === key.keyCode);
+				const selection = env.activeByDevice[activation.deviceId];
+				const sameCommand =
+					saved?.config.type === "cmd" &&
+					saved.config.actions.some(
+						(a) => a.type === "text" && a.value === command,
+					);
+				const nested = Schema.decodeUnknownEither(MultiActionConfig)(
+					saved ? Schema.encodeSync(ProfileKey)(saved).config : undefined,
+				);
+				const nestedCommand =
+					nested._tag === "Right" &&
+					nested.right.subActions.some(
+						(step) =>
+							step.isPlugin !== true &&
+							step.config.type === "cmd" &&
+							step.config.actions.some(
+								(a) => a.type === "text" && a.value === command,
+							),
+					);
+				return (
+					p?.revision === activation.revision &&
+					(sameCommand || nestedCommand) &&
+					(!requireSelection ||
+						(selection?.profileId === p.id &&
+							selection.pageId === activation.pageId))
+				);
+			};
+			const envelope = yield* manager.read();
+			if (!owns(envelope)) return false;
+			const digest = createHash("sha256")
+				.update(
+					`${activation.profileId}\0${activation.pageId}\0${key.keyCode}\0${command}`,
+				)
+				.digest("hex");
+			if (!managerState(envelope).approvedCommands.includes(digest)) {
+				if (!(yield* native(() => port.confirm("Run command?", command))))
+					return false;
+				yield* repository.transact((current) => {
+					if (!owns(current))
+						return Effect.fail(ProfileWriteFailed.fromCause(undefined));
+					const state = managerState(current);
+					return Effect.succeed({
+						...current,
+						manager: Option.some({
+							...state,
+							approvedCommands: [
+								...new Set([...state.approvedCommands, digest]),
+							],
+							revision: state.revision + 1,
+						}),
+					});
+				});
+			}
+			if (!owns(yield* manager.read())) return false;
+			yield* native(() => port.execute(command));
+			return true;
+		});
+
 		const request = Effect.fn("ProfileDesktop.request")(function* (
 			input: ProfileRequest,
 			scope?: ProfileSelectionScope,
@@ -342,60 +423,34 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 					break;
 				}
 				case "run-command": {
-					const getCommand = (p: Profile | undefined): Option.Option<string> =>
-						Option.fromNullable(
-							p?.pages[0].keys
-								.find(
-									(k) => k.keyCode === input.keyCode && k.config.type === "cmd",
-								)
-								?.config.actions.find(
-									(a) => a.type === "text" && typeof a.value === "string",
-								)?.value,
-						).pipe(
-							Option.filter(
-								(value): value is string => typeof value === "string",
-							),
-						);
 					const envelope = yield* manager.read();
-					const command = getCommand(
-						envelope.profiles.find((p) => p.id === input.id),
+					const p = envelope.profiles.find((p) => p.id === input.id);
+					const page = p?.pages[0];
+					const key = page?.keys.find(
+						(k) => k.keyCode === input.keyCode && k.config.type === "cmd",
 					);
-					if (Option.isNone(command))
+					if (!p || !page || !key)
 						return { _tag: "rejected", reason: "missing" };
-					const digest = createHash("sha256")
-						.update(`${input.id}\0${input.keyCode}\0${command.value}`)
-						.digest("hex");
-					if (!managerState(envelope).approvedCommands.includes(digest)) {
-						const approved = yield* native(() =>
-							port.confirm("Run command?", command.value),
-						);
-						if (!approved) return { _tag: "rejected", reason: "cancelled" };
-						yield* repository.transact((current) => {
-							const actual = getCommand(
-								current.profiles.find((p) => p.id === input.id),
-							);
-							if (Option.isNone(actual) || actual.value !== command.value)
-								return Effect.fail(ProfileWriteFailed.fromCause(undefined));
-							const state = managerState(current);
-							return Effect.succeed({
-								...current,
-								manager: Option.some({
-									...state,
-									approvedCommands: [
-										...new Set([...state.approvedCommands, digest]),
-									],
-									revision: state.revision + 1,
-								}),
-							});
-						});
-					}
-					yield* native(() => port.execute(command.value));
+					if (
+						!(yield* runKeyCommand(
+							key,
+							{
+								deviceId: scope?.deviceId ?? "desktop-preview",
+								profileId: p.id,
+								pageId: page.id,
+								revision: p.revision,
+							},
+							false,
+						))
+					)
+						return { _tag: "rejected", reason: "cancelled" };
 					break;
 				}
 			}
 			return { _tag: "success", view: yield* publish() };
 		});
 		return {
+			runKeyCommand,
 			request,
 			view,
 			publish,

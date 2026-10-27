@@ -373,3 +373,28 @@ The registry SHALL dispatch recovered monitor types to metric renderers consumin
 - **WHEN** the manager regenerates the images
 - **THEN** it continues with the remaining profiles and publishes their new captures
 - **AND** another request with the same preference retries failed captures without regenerating successful ones
+
+### Requirement: Scoped key display events
+SCREEN-038, SCREEN-046, SCREEN-047, SCREEN-048, MAIN-081 and MGMT-404 display events SHALL carry device/profile/page/revision/key identity. Unknown cells and obsolete revisions SHALL not change layout or feedback. Targeted artwork SHALL replace only the target cell icon immutably. Countdown SHALL apply only to timer cells and display HH:MM:SS, 48 px bold blue. Natural zero SHALL remain visible; -1 while running SHALL hide, while -1 after ALARM SHALL retain zero. First activation after zero SHALL clear without dispatch and positives arriving within 120 ms of that clear SHALL be suppressed. Returning to a profile SHALL restore its remaining endAt or zero, and callback SHALL belong to the main timer owner once. Alerts SHALL use a centered 50 px symbol on yellow, suppress ALARM and expire INVALID at 2000 ms. Progress SHALL use a dark track, cyan/blue fill, percent label and reduced-motion-aware animation with 1000 ms completion and 5000 ms inactivity expiry.
+
+#### Scenario: Late artwork and feedback cannot repaint another key
+- **WHEN** a current targeted artwork/countdown/alert/progress event or an obsolete profile event arrives
+- **THEN** only the matching committed cell changes, expired feedback hides on the owning Effect clock, and old or non-timer countdown updates leave the current layout unchanged
+
+### Requirement: Page indicator follows navigation
+MGMT-172 pageNo tiles SHALL show the current one-based page number in 1..10 and update when the committed selection changes without dispatching a host action.
+
+#### Scenario: Page number updates from the selected page
+- **WHEN** saved navigation selects another page containing pageNo
+- **THEN** the mounted tile renders that page number using the existing profile selection
+
+### Requirement: Authorized management opening and multi-screen alerts
+MAIN-082 and SCREEN-108 SHALL accept only known management tabs from an owned panel or committed saved key, restore or recreate the management window once and activate the requested tab through its existing shell owner. SCREEN-109 multi-screen globalAlert SHALL be a validated no-op, including unknown serials; it SHALL never bind a display or open a window. Explicit user binding SHALL remain with the device lifecycle owner.
+
+#### Scenario: Device opens a known management tab
+- **WHEN** the registered panel or saved key requests a known tab
+- **THEN** the existing desktop shell restores or recreates management and activates it once, while unknown tabs and senders perform no window action
+
+#### Scenario: Multi-screen notification has no binding side effect
+- **WHEN** a multi-screen alert names one or several serials including an unknown serial
+- **THEN** no display binding, saved selection or window visibility changes

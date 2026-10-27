@@ -92,3 +92,8 @@ beads remain open for lead integration.
 - [x] Isolate style-regeneration capture failures and retain same-value retries for failed profiles. Failing-first two-profile regression covers Codex 4380623860.
 
 - [x] Preserve retained thumbnail capture style through pending and failed regeneration. Main snapshots carry the captured border preference; a failing-first mounted controller regression also accepts identical replacement pixels. Codex 4380698050.
+
+## 8. key-runtime burn-down
+
+- [ ] 8.1 Render scoped countdown/alert/progress/artwork and page indicator; test EN/DE mock native views. Beads open-quake-lih.10.23/.24.
+- [ ] 8.2 Connect authorized management opening and specify/test multi-screen no-op. Bead open-quake-lih.10.22/.24.

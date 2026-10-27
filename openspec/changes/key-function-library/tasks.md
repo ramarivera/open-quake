@@ -30,3 +30,9 @@ Evidence for tasks 1.1–1.4 is recorded in `verification.md`. Parent owns Beads
 ## 4. Integration close-out
 
 - [ ] 4.1 Run first-release function scenarios through management assignment, saved profile, normalized input, and host output, then repository gates; verify diagnostics omit text/URLs/private paths, validation passes, and unsupported platform/hardware results remain explicit.
+
+## 8. key-runtime burn-down
+
+- [ ] 8.1 Implement saved native dispatch and sequence/plugin seam. Beads open-quake-lih.10.22 and .25; .25 remains a plugins handoff.
+- [ ] 8.2 Implement scoped timer completion, debounce, zero-clear and feedback expiry. Bead open-quake-lih.10.23.
+- [ ] 8.3 Implement saved nested folder/profile navigation using existing allocation and selection. Bead open-quake-lih.10.24.

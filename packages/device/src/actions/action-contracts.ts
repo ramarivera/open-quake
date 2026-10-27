@@ -100,10 +100,6 @@ const KeyAction = Schema.Struct({
 	type: Schema.Literal("key"),
 	value: HotkeyChord,
 });
-const Enter = Schema.Struct({
-	type: Schema.Literal("key"),
-	value: Schema.Literal("enter"),
-});
 export const WebsiteConfig = Schema.Struct({
 	type: Schema.Literal("website"),
 	actions: Schema.Tuple(
@@ -130,7 +126,7 @@ export const TextConfig = Schema.Struct({
 		),
 		Schema.Tuple(
 			Schema.Struct({ type: Schema.Literal("text"), value: InsertedText }),
-			Enter,
+			KeyAction,
 		),
 	),
 });
@@ -316,7 +312,91 @@ export const TimerConfig = Schema.Struct({
 		),
 	),
 });
+export const CloseAppConfig = Schema.Struct({
+	type: Schema.Literal("close"),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("path"),
+			value: ApplicationReference,
+		}),
+		Schema.Struct({
+			type: Schema.Literal("force"),
+			value: Schema.Union(Schema.Literal(0, 1, ""), Schema.Boolean),
+		}),
+	),
+});
+export const CommandConfig = Schema.Struct({
+	type: Schema.Literal("cmd"),
+	actions: Schema.Tuple(
+		Schema.Struct({ type: Schema.Literal("text"), value: Nonblank }),
+	),
+});
+export const ManagementTab = Schema.Literal(
+	"profiles",
+	"keys",
+	"agents",
+	"settings",
+);
+export const ManagementConfig = Schema.Struct({
+	type: Schema.Literal("managementCenter"),
+	actions: Schema.Array(
+		Schema.Struct({ type: Schema.Literal("tabType"), value: ManagementTab }),
+	).pipe(Schema.maxItems(1)),
+});
+export const ScreenshotConfig = Schema.Struct({
+	type: Schema.Literal("screenshot"),
+	actions: Schema.Tuple(),
+});
+export const LockConfig = Schema.Struct({
+	type: Schema.Literal("lock"),
+	actions: Schema.Tuple(),
+});
+export const SwitchProfileConfig = Schema.Struct({
+	type: Schema.Literal("switchProfile"),
+	actions: Schema.Tuple(
+		Schema.Struct({ type: Schema.Literal("profile"), value: Nonblank }),
+		Schema.Struct({
+			type: Schema.Literal("page"),
+			value: Schema.Int.pipe(Schema.between(1, 10)),
+		}),
+	),
+});
+export const PageNumberConfig = Schema.Struct({
+	type: Schema.Literal("pageNo"),
+	actions: Schema.Tuple(),
+});
+export const FolderConfig = Schema.Struct({
+	type: Schema.Literal(
+		"folder",
+		"createFolder",
+		"emojiFolder",
+		"back",
+		"emojiBack",
+	),
+	actions: Schema.Array(
+		Schema.Struct({
+			type: Schema.Literal("folder", "page", "emojiFolderId", "parentFolder"),
+			value: Nonblank,
+		}),
+	).pipe(Schema.maxItems(1)),
+});
+export const SequenceAudioConfig = Schema.Struct({
+	type: Schema.Literal("playAudioLegacy", "stopAudio"),
+	actions: Schema.Array(ProfileAction),
+});
+export const PluginSequenceStep = Schema.Struct({
+	isPlugin: Schema.Literal(true),
+	pluginId: Nonblank,
+	config: Schema.Struct({
+		type: Nonblank,
+		actions: Schema.Array(ProfileAction),
+		gap: Schema.optional(Schema.Int.pipe(Schema.between(0, 60000))),
+	}),
+});
 export const SequenceLeaf = Schema.Union(
+	CloseAppConfig,
+	CommandConfig,
+	SequenceAudioConfig,
 	MuteConfig,
 	MediaConfig,
 	mediaConfig("playPause", "audio_play"),
@@ -345,16 +425,22 @@ export const MAX_SEQUENCE_OPERATIONS = 100;
 
 export const MultiActionConfig = Schema.Struct({
 	type: Schema.Literal("multiActions"),
-	actions: Schema.Array(Schema.Unknown),
+	actions: Schema.optionalWith(Schema.Array(Schema.Unknown), {
+		default: () => [],
+	}),
 	subActions: Schema.Array(
-		Schema.Struct({
-			config: Schema.extend(
-				SequenceLeaf,
-				Schema.Struct({
-					gap: Schema.optional(Schema.Int.pipe(Schema.between(0, 60000))),
-				}),
-			),
-		}),
+		Schema.Union(
+			PluginSequenceStep,
+			Schema.Struct({
+				isPlugin: Schema.optional(Schema.Literal(false)),
+				config: Schema.extend(
+					SequenceLeaf,
+					Schema.Struct({
+						gap: Schema.optional(Schema.Int.pipe(Schema.between(0, 60000))),
+					}),
+				),
+			}),
+		),
 	).pipe(Schema.minItems(1), Schema.maxItems(MAX_SEQUENCE_OPERATIONS)),
 });
 
@@ -428,3 +514,23 @@ export const AudioBotConfig = Schema.Struct({
 		),
 	),
 });
+
+/** Import and execution normalization. Templates are data, never JavaScript. */
+export function normalizeWebsiteUrl(
+	value: string,
+	title: string,
+): string | undefined {
+	const expanded = value
+		.replaceAll("$" + "{title}", title)
+		.replaceAll("{{title}}", title)
+		.replaceAll("{title}", title);
+	if (
+		expanded !== expanded.trim() ||
+		[...expanded].some((char) => char.charCodeAt(0) < 32)
+	)
+		return undefined;
+	const url = /^[a-z][a-z\d+.-]*:/i.test(expanded)
+		? expanded
+		: `http://${expanded}`;
+	return Schema.is(WebsiteUrl)(url) ? url : undefined;
+}

@@ -115,7 +115,10 @@ export function functionGroups(
 						disabled:
 							!Schema.is(Schema.encodedSchema(SequenceLeaf))(
 								Schema.encodeSync(ProfileKey)(functionLibraryKey(id)).config,
-							) && !["website", "hotkey", "open", "text"].includes(id),
+							) &&
+							!["website", "hotkey", "open", "text", "close", "cmd"].includes(
+								id,
+							),
 					}
 				: {}),
 		})),
@@ -124,7 +127,7 @@ export function functionGroups(
 		groups.push({
 			id: "functions:layout",
 			name: locale === "de" ? "Layout" : "Layout",
-			entries: ["createFolder", "pageNo", "playAudio"].map((id) => ({
+			entries: ["createFolder", "playAudio"].map((id) => ({
 				id,
 				key: functionLibraryKey(id, pageNumber),
 			})),
