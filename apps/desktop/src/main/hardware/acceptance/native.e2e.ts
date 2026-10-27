@@ -101,6 +101,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				"lock.ts",
 				"extended.ts",
 				"v3-lighting.ts",
+				"restore-lighting.ts",
 			])
 				sourceHash.update(await readFile(new URL(name, import.meta.url)));
 			const report = {
