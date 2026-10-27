@@ -246,7 +246,7 @@ it.scoped(
 			const { connect } = yield* setup();
 			const { session, fake } = yield* connect("A");
 			yield* session.setLongTone(true);
-			expect((yield* fake.writes).at(-1)?.[5]).toBe(120);
+			expect((yield* fake.writes).at(-1)?.[5]).toBe(84);
 			yield* session.setLongTone(false);
 			expect((yield* fake.writes).at(-1)?.[5]).toBe(0);
 			yield* session.setLongTone(true);

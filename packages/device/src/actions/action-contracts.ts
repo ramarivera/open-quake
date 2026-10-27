@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { BuzzerKeyConfig, MicKeyConfig } from "../hardware/hardware-actions.js";
 import { ProfileAction } from "../profiles/profile-contracts.js";
 
 export const AUDIO_OPERATIONS = [
@@ -316,7 +317,16 @@ export const TimerConfig = Schema.Struct({
 		),
 	),
 });
+export const HomeAssistantKeyConfig = Schema.Struct({
+    type: Schema.Literal("homeAssistant"),
+    actions: Schema.Tuple(Schema.Struct({type: Schema.Literal("configData", "haConfig", "homeAssistant"), value: Schema.String.pipe(Schema.minLength(2), Schema.maxLength(65536), Schema.filter((value) => {
+        try { const data: unknown = JSON.parse(value); return typeof data === "object" && data !== null && "entity_id" in data && typeof data.entity_id === "string" && "service" in data && typeof data.service === "string"; } catch {return false;}
+    }))})),
+});
 export const SequenceLeaf = Schema.Union(
+    HomeAssistantKeyConfig,
+	BuzzerKeyConfig,
+	MicKeyConfig,
 	MuteConfig,
 	MediaConfig,
 	mediaConfig("playPause", "audio_play"),

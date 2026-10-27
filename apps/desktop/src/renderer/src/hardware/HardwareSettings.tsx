@@ -8,6 +8,7 @@ import {
 	sliderToVolume,
 	volumeToSlider,
 } from "../../../shared/hardware-contracts";
+import { QmkLightingSettings } from "./QmkLightingSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import "./hardware.css";
 
@@ -54,7 +55,7 @@ export function HardwareSettings(): React.JSX.Element {
 			} else if (reply._tag === "offline") {
 				currentSnapshot.current = undefined;
 				setSnapshot(undefined);
-			} else
+			} else if (reply._tag === "failure")
 				setError(
 					`Device control failed (${reply.code}). Reconnect the device and try again.`,
 				);
@@ -147,7 +148,8 @@ export function HardwareSettings(): React.JSX.Element {
 					Refresh
 				</button>
 			</PageHeader>
-			<Group title="Device">
+			<QmkLightingSettings />
+            <Group title="Device">
 				<Row label="Firmware Version">
 					<output className="value mono" data-testid="hardware-firmware">
 						{snapshot?.firmware
@@ -236,6 +238,37 @@ export function HardwareSettings(): React.JSX.Element {
 						}}
 					/>
 				</Row>
+				<Row label="Buzzer test">
+					<button
+						type="button"
+						className="button"
+						disabled={disabled}
+						onPointerDown={() =>
+							void request({ _tag: "longTone", session, on: true })
+						}
+						onPointerUp={() =>
+							void request({ _tag: "longTone", session, on: false })
+						}
+						onPointerCancel={() =>
+							void request({ _tag: "longTone", session, on: false })
+						}
+						onPointerLeave={() =>
+							void request({ _tag: "longTone", session, on: false })
+						}
+						onKeyDown={(event) => {
+							if ((event.key === " " || event.key === "Enter") && !event.repeat)
+								void request({ _tag: "longTone", session, on: true });
+						}}
+						onKeyUp={() =>
+							void request({ _tag: "longTone", session, on: false })
+						}
+						onBlur={() =>
+							void request({ _tag: "longTone", session, on: false })
+						}
+					>
+						Hold to test buzzer
+					</button>
+				</Row>
 				<Row label="Device Alert Volume" htmlFor="alert-volume">
 					<div className="hardware-slider">
 						<input
@@ -259,7 +292,7 @@ export function HardwareSettings(): React.JSX.Element {
 				<Row
 					label="Hotkey output"
 					htmlFor="hotkey-route"
-					hint="Device keyboard sends shortcuts through QUAKE. Host keyboard is unavailable in this build."
+					hint="Device keyboard sends shortcuts through QUAKE. Host keyboard requires macOS Accessibility permission."
 				>
 					<select
 						className="text-field"
@@ -276,9 +309,7 @@ export function HardwareSettings(): React.JSX.Element {
 						}}
 					>
 						<option value="device">Device keyboard</option>
-						<option value="host" disabled>
-							Host keyboard unavailable
-						</option>
+						<option value="host">Host keyboard</option>
 					</select>
 				</Row>
 			</Group>

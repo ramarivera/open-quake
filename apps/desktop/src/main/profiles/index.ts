@@ -82,7 +82,7 @@ export function prepareProfiles(
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	managementURL = renderer,
-	hardware: () => HardwareSession | undefined = () => undefined,
+	hardware: (serial?: string) => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
 	executeOwned?: (
 		key: ProfileKey,

@@ -75,7 +75,7 @@ For MAIN-013, SETTINGS-080 and SETTINGS-081, each serial SHALL retain its last a
 
 ### Requirement: Bounded tones and meeting feedback
 
-For AI-076, MAIN-021, MAIN-022, MGMT-408 and SETTINGS-082, the hardware session SHALL accept at most 64 tone pairs, each with a valid buzzer level and duration from 0 to 60000 ms, with total duration at most 120000 ms. Nonzero levels SHALL use the saved alert volume. Firework SHALL be [[80,50]]. Success SHALL be five [80,50] pulses separated by [0,1000]. Playback SHALL retain the existing per-step trailing silence and 10 ms gaps. A long tone SHALL use level 120 and SHALL stop on explicit stop, master disable, interruption or teardown. Disabled or zero-volume preferences SHALL suppress audible writes. Meeting mark and completed processing transitions SHALL each emit their corresponding tone once, without replay on reads or reloads.
+For AI-076, MAIN-021, MAIN-022, MGMT-408 and SETTINGS-082, the hardware session SHALL accept at most 64 tone pairs, each with a valid buzzer level and duration from 0 to 60000 ms, with total duration at most 120000 ms. Nonzero levels SHALL use the saved alert volume. Firework SHALL be [[80,50]]. Success SHALL be five [80,50] pulses separated by [0,1000]. Playback SHALL retain the existing per-step trailing silence and 10 ms gaps. A long tone SHALL use the saved alert volume and SHALL stop on explicit stop, master disable, interruption or teardown. Disabled or zero-volume preferences SHALL suppress audible writes. Meeting mark and completed processing transitions SHALL each emit their corresponding tone once, without replay on reads or reloads.
 
 #### Scenario: Cancellation and master disable
 - **WHEN** arbitrary playback or a long tone is interrupted, disabled, stopped or disconnected
@@ -103,8 +103,13 @@ For MAIN-096, MGMT-300, MGMT-355, SCREEN-107 and WIDGETS-016, gaming SHALL mean 
 
 ### Requirement: QUAKE lighting and permission ownership
 
-For MAIN-107, MAIN-108 and SETTINGS-024, lighting operations SHALL use an explicit serial and session with the existing HID owner. Only the exact QUAKE VID 0x4158 PID 0x514B usagePage 0xFF60 usage 0x61 SHALL be eligible. VIA permission SHALL be restricted to its configured loopback origin and selected serial. Other origins, collections and devices SHALL be denied. QMK protocol, menu probe, bindings and lighting batches SHALL serialize with hardware transactions, reject stale targets and restore delivery after exclusive work. Settings SHALL expose refresh, target selection and only source-qualified lighting controls. HUB2 and DISK2 remain excluded under GAP-MAP decision 10. MGMT-406's ARIS-68 identity remains a separate device compatibility obligation and SHALL NOT broaden QUAKE discovery.
+For MAIN-107, MAIN-108 and SETTINGS-024, lighting operations SHALL use an explicit serial and session with the existing HID owner. Only the exact QUAKE VID 0x4158 PID 0x514B usagePage 0xFF60 usage 0x61 SHALL be eligible. VIA permission SHALL be restricted to its configured loopback origin and selected serial. Other origins, collections and devices SHALL be denied. QMK protocol, menu probe, bindings and lighting batches SHALL serialize with hardware transactions, reject stale targets and restore delivery after exclusive work. Settings SHALL expose refresh, target selection and only source-qualified lighting controls. HUB2 and DISK2 remain excluded under GAP-MAP decision 10. For MGMT-406, QUAKE identity discovery SHALL require all four identity fields and a stable serial. The ARIS-68 keyboard portion is out of scope under Ramiro's approved exclusion of ARIS-only flows on 2026-10-26, recorded in Beads memory oq-scope-exclusions-shell and task open-quake-lih.11.27. ARIS SHALL NOT broaden QUAKE discovery.
 
 #### Scenario: Denied origin and stale session
 - **WHEN** another origin or collection requests permission, or a target is replaced before a batch
 - **THEN** it acquires no handle and emits no command
+
+#### Scenario: Exact QUAKE inventory on Linux
+- **WHEN** Linux enumeration returns QUAKE hidraw collections, an ARIS-68 keyboard, another vendor, a wrong usage and an ambiguous serial
+- **THEN** only the exact 4158:514B FF60:61 collection is eligible and ambiguous serials fail closed
+- **AND** udev permissions grant the active local user access only to QUAKE, without world-writable rules

@@ -137,7 +137,7 @@ export function SequenceEditor({
 										const entry = ACTION_REGISTRY.find(
 											(entry) => entry.id === type,
 										);
-										if (entry?.binding === "media") {
+										if (entry && ["media", "delegate"].includes(entry.binding)) {
 											const draft = Schema.decodeUnknownSync(Step)({
 												config: createActionDraft(entry.id),
 											});

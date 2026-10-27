@@ -23,18 +23,27 @@ import {
 	type KeyFeedback,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import {
+	executeHardwareKey,
+	HardwareKeyConfig,
+	isHardwareKey,
+} from "../../../../../packages/device/src/hardware/hardware-actions.js";
 import { encodeDeviceChord } from "../../../../../packages/device/src/hardware/hardware-invariants.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileKey as ProfileKeySchema } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import {
+	hostKeyboardAdapter,
+	hostKeyboardAvailable,
+} from "../hardware/host-keyboard";
 import { playKeyAlarm } from "./alarm";
 
 const runFile = promisify(execFile);
 
 export const desktopKeyRuntimePort = (
-	hardware: () => HardwareSession | undefined,
+	hardware: (serial?: string) => HardwareSession | undefined,
 	publish: (state: KeyFeedback) => void,
 	mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 	executeOwned?: (
@@ -49,20 +58,26 @@ export const desktopKeyRuntimePort = (
 		KeyRuntimePort,
 		Effect.gen(function* () {
 			const profiles = yield* ProfileService;
-			const keyboard = {
+			const keyboardFor = (deviceId?: string) => ({
 				supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),
 				pressChord: Effect.fn("DesktopKeys.pressChord")(function* (
 					chord: string,
 				) {
 					if (mock) return;
-					const session = hardware();
+					const session = hardware(deviceId);
 					if (!session)
 						return yield* Effect.fail(
 							new HostActionFailed("keyboard-unavailable"),
 						);
-					yield* hardwareKeyboardAdapter(session).pressChord(chord);
+					yield* hardwareKeyboardAdapter(
+						session,
+						hostKeyboardAvailable()
+							? Option.some(hostKeyboardAdapter())
+							: Option.none(),
+					).pressChord(chord);
 				}),
-			};
+			});
+            const keyboard = keyboardFor();
 			if (!mock && mediaActions?.observe) {
 				const changes = yield* Queue.sliding<{
 					readonly level: number;
@@ -211,8 +226,32 @@ export const desktopKeyRuntimePort = (
 							Effect.fail(new ActionSnapshotFailed(c)),
 					}),
 				),
-				execute: (config) => executeActionLeaf(config, adapters),
-				holdHotkey: (key) =>
+				execute: (config, deviceId) => {
+					if (isHardwareKey(config.type)) {
+						const decoded =
+							Schema.decodeUnknownEither(HardwareKeyConfig)(config);
+						if (config.type === "gameMode" && !mock && !hostKeyboardAvailable())
+							return Effect.fail(
+								new HostActionFailed("host-keyboard-unavailable"),
+							);
+						return decoded._tag === "Left"
+							? Effect.fail(new HostActionFailed(decoded.left))
+							: executeHardwareKey(
+									decoded.right,
+									hardware(deviceId),
+									deviceId,
+								).pipe(Effect.mapError((cause) => new HostActionFailed(cause)), Effect.tap(() => {
+                                    if (decoded.right.type !== "gameMode") return Effect.void;
+                                    const path = decoded.right.actions.find((a) => a.type === "path")?.value;
+                                    return Effect.gen(function* () {
+                                        const state = yield* hardware(deviceId)?.snapshot() ?? Effect.fail(new HostActionFailed("hardware-unavailable"));
+                                        if (state.inputMode === "device" && typeof path === "string" && path) yield* adapters.application.pipe(Option.match({onNone: () => Effect.fail(new HostActionFailed("application-unavailable")), onSome: (adapter) => adapter.launchApplication(path)}));
+                                    });
+                                }));
+					}
+					return executeActionLeaf(config, {...adapters, keyboard: Option.some(keyboardFor(deviceId))});
+				},
+				holdHotkey: (key, activation) =>
 					Effect.gen(function* () {
 						const decoded = Schema.decodeUnknownEither(HotkeyConfig)(
 							Schema.encodeSync(ProfileKeySchema)(key).config,
@@ -232,7 +271,7 @@ export const desktopKeyRuntimePort = (
 							return yield* Effect.fail(new HostActionFailed(encoded.left));
 
 						if (mock) return Effect.void;
-						const session = hardware();
+						const session = hardware(activation.deviceId);
 						if (!session)
 							return yield* Effect.fail(
 								new HostActionFailed("keyboard-unavailable"),
@@ -240,10 +279,8 @@ export const desktopKeyRuntimePort = (
 						const snapshot = yield* session
 							.snapshot()
 							.pipe(Effect.mapError((cause) => new HostActionFailed(cause)));
-						if (snapshot.inputMode !== "device")
-							return yield* Effect.fail(
-								new HostActionFailed("held-host-keyboard-unavailable"),
-							);
+						if (snapshot.inputMode === "host")
+							return yield* hostKeyboardAdapter().holdChord(chord);
 						const release = yield* session
 							.holdChord(chord)
 							.pipe(Effect.mapError((cause) => new HostActionFailed(cause)));

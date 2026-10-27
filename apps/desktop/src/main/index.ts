@@ -54,8 +54,10 @@ import { findPanelDisplay, type PanelRotation, panelRotation } from "./display";
 import { prepareEmoji } from "./emoji";
 import { createEmojiGeneration } from "./emoji/generation";
 import { createEventForwarder } from "./eventForwarding";
+import { registerViaPermissions } from "./hardware/via-permissions";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import { hostKeyboardAvailable, closeHostKeyboard } from "./hardware/host-keyboard";
 import { hardwarePreferencesLive } from "./hardware/preferences";
 import { prepareIntegrations } from "./integrations";
 import { integrationKeyAction } from "./integrations/key-action";
@@ -277,9 +279,9 @@ if (!app.requestSingleInstanceLock()) {
 								([, entry]) =>
 									!entry.win.isDestroyed() && entry.win.webContents === sender,
 							)?.[0];
-						const currentHardware = () =>
+						const currentHardware = (serial = activeDeviceId()) =>
 							bus?.device
-								? bus.device(activeDeviceId())?.hardware?.()
+								? bus.device(serial)?.hardware?.()
 								: bus?.hardware?.();
 						let settingsSerial: string | undefined;
 						let settingsHardware: ReturnType<typeof currentHardware>;
@@ -1198,8 +1200,21 @@ if (!app.requestSingleInstanceLock()) {
 							rendererURL,
 							diagnostics,
 							hardwareSessions,
+							panelSerial,
 						);
-						let running:
+						let viaSerial: string | undefined;
+                        const disposeVia = registerViaPermissions(managementWin.webContents.session, {
+                            origin: process.env.OPEN_QUAKE_VIA_ORIGIN ?? "",
+                            selectedSerial: () => viaSerial ?? activeDeviceId(),
+                            release: async (serial) => {
+                                const target = bus?.device?.(serial) ?? (bus?.serial?.() === serial ? bus : undefined);
+                                if (!target?.releaseForVia || mock) return;
+                                viaSerial = serial;
+                                const resume = await runtime.runPromise(target.releaseForVia());
+                                return async () => {try {await runtime.runPromise(resume);} finally {viaSerial = undefined;}};
+                            },
+                        });
+                        let running:
 							| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
 							| undefined;
 						let stopping = Promise.resolve();
@@ -1520,6 +1535,8 @@ if (!app.requestSingleInstanceLock()) {
 										mock ? bus : bus?.device?.(serial)
 									)?.hardware?.();
 									if (!hardware) throw new Error("Disconnected");
+									if (!enabled && !mock && !hostKeyboardAvailable())
+										throw new Error("Host keyboard unavailable");
 									await runtime.runPromise(
 										hardware.setInputMode(enabled ? "device" : "host"),
 									);
@@ -1572,7 +1589,9 @@ if (!app.requestSingleInstanceLock()) {
 							removeDevicePicker();
 							removeKnobLocale();
 							removeKnobThumbnailStyle();
-							disposeHardware();
+							void disposeVia();
+                            disposeHardware();
+                            closeHostKeyboard();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 							removeDeviceReady();
 							removeStripTransport();

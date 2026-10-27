@@ -62,6 +62,8 @@ interface Termination {
 
 export interface QuakeConnection {
 	readonly info: HidDeviceInfo;
+    /** Raw QMK exchanges retain this connection's one native handle. */
+    readonly exchangeRaw?: (report: Uint8Array, matches: (report: Uint8Array) => boolean) => Effect.Effect<Uint8Array, QuakeHidWriteFailed | QuakeConnectionClosed>;
 	readonly sendHardware: (
 		command: HardwareCommand,
 	) => Effect.Effect<
@@ -151,7 +153,8 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
 				let sendHardware: QuakeConnection["sendHardware"] = () =>
 					Effect.fail(new QuakeConnectionClosed());
-				const touchReady =
+				let exchangeRaw: NonNullable<QuakeConnection["exchangeRaw"]> = () => Effect.fail(new QuakeConnectionClosed());
+                const touchReady =
 					yield* Deferred.make<
 						Effect.Effect.Success<ReturnType<typeof startTouchSource>>
 					>();
@@ -169,6 +172,8 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					Effect.gen(function* () {
 						const hardwareWriteLock = yield* Effect.makeSemaphore(1);
 						let acceptingWrites = true;
+                        let rawPending: { matches: (report: Uint8Array) => boolean; reply: Deferred.Deferred<Uint8Array, QuakeConnectionClosed> } | undefined;
+                        yield* Effect.addFinalizer(() => rawPending ? Deferred.fail(rawPending.reply, new QuakeConnectionClosed()) : Effect.void);
 						const handle = yield* Effect.acquireRelease(
 							transport.open(info),
 							(handle) =>
@@ -201,7 +206,16 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 									}).pipe(Effect.uninterruptible),
 								),
 						);
-						const write = (report: Uint8Array) =>
+						exchangeRaw = Effect.fn("QuakeConnection.exchangeRaw")((report, matches) => hardwareWriteLock.withPermits(1)(Effect.gen(function* () {
+                            if (!acceptingWrites || Option.isSome(yield* Deferred.poll(stopped))) return yield* new QuakeConnectionClosed();
+                            const reply = yield* Deferred.make<Uint8Array, QuakeConnectionClosed>();
+                            rawPending = {matches, reply};
+                            return yield* handle.write(report).pipe(Effect.uninterruptible, Effect.zipRight(Deferred.await(reply)), Effect.timeoutFail({duration: 1500, onTimeout: () => new QuakeConnectionClosed()}), Effect.onExit((exit) => {
+                                rawPending = undefined;
+                                return Exit.isFailure(exit) ? stop("error").pipe(Effect.asVoid) : Effect.void;
+                            }));
+                        })));
+                        const write = (report: Uint8Array) =>
 							hardwareWriteLock.withPermits(1)(
 								Effect.suspend(() =>
 									acceptingWrites ? handle.write(report) : Effect.void,
@@ -225,7 +239,8 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						yield* Stream.runForEach(
 							Stream.repeatEffectChunkOption(pull),
 							(report) => {
-								const decoded = decoder.push(report);
+								if (rawPending?.matches(report)) return Deferred.succeed(rawPending.reply, report).pipe(Effect.asVoid);
+                                const decoded = decoder.push(report);
 								if (Either.isLeft(decoded)) return Effect.fail(decoded.left);
 								return Option.match(decoded.right, {
 									onNone: () => Effect.void,
@@ -337,6 +352,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				const connection: QuakeConnection = {
 					touch: yield* Deferred.await(touchReady),
 					info,
+                    exchangeRaw: (report, matches) => exchangeRaw(report, matches),
 					sendHardware: (command) => sendHardware(command),
 					setScreenPower: (on) =>
 						Effect.suspend(() =>

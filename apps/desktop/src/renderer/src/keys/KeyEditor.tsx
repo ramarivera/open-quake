@@ -37,6 +37,7 @@ import {
 	MonitorKeySettings,
 } from "../strip/tiles/monitor/MonitorKeySettings";
 import { AudioBotSettings } from "../strip/tiles/voiceKey/AudioBotSettings";
+import { GameModeSettings } from "../hardware/GameModeSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
@@ -890,7 +891,8 @@ export function KeyEditor({
 							</button>
 						</Row>
 
-						{isMonitorKey(key) && (
+						{key.config.type === "gameMode" && <GameModeSettings value={key} onChange={(next) => void update(next)} />}
+                        {isMonitorKey(key) && (
 							<MonitorKeySettings
 								key={selection?.target.token}
 								keyValue={key}
@@ -937,6 +939,7 @@ export function KeyEditor({
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
 									key.config.type !== "clawbot" &&
+                                    key.config.type !== "gameMode" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)

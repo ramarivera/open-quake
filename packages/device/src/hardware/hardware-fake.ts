@@ -48,6 +48,7 @@ export const makeFakeHardwareTransport = (
 		let mic = 1;
 		let knobLed = 1;
 		let luminance = 255;
+        const lighting = new Map<number, readonly number[]>([[9, [128]], [11, [100]], [12, [0, 255]]]);
 		const transport: HidTransport["Type"] = {
 			discover: fake.transport.discover,
 			open: (info) =>
@@ -58,7 +59,16 @@ export const makeFakeHardwareTransport = (
 						write: (report) =>
 							Effect.gen(function* () {
 								yield* handle.write(report);
-								const command = yield* decodeHidReport(report).pipe(
+								if ([1, 7, 8, 9].includes(report[1] ?? -1)) {
+                                    const body = new Uint8Array(32);
+                                    body.set(report.slice(1));
+                                    if (report[1] === 1) {body[1] = 0; body[2] = 10;}
+                                    if (report[1] === 7) lighting.set(report[2] ?? 0, Array.from(report.slice(3, report[2] === 12 ? 5 : 4)));
+                                    if (report[1] === 8) body.set(lighting.get(report[2] ?? 0) ?? [0], 2);
+                                    yield* fake.emit(body);
+                                    return;
+                                }
+                                const command = yield* decodeHidReport(report).pipe(
 									Effect.orDie,
 									Effect.flatMap((bytes) =>
 										unwrapShortCommand(bytes).pipe(Effect.orDie),
