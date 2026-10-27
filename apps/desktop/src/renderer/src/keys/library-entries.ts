@@ -6,6 +6,7 @@ import {
 } from "../../../../../../packages/device/src/actions/action-registry.js";
 import {
 	allowedInSequence,
+	isSequenceSelectable,
 	SEQUENCE_LIBRARY,
 } from "../../../../../../packages/device/src/actions/sequence-library.js";
 import {
@@ -112,13 +113,7 @@ export function functionGroups(
 			key: functionLibraryKey(id, pageNumber),
 			...(sequence
 				? {
-						disabled:
-							!Schema.is(Schema.encodedSchema(SequenceLeaf))(
-								Schema.encodeSync(ProfileKey)(functionLibraryKey(id)).config,
-							) &&
-							!["website", "hotkey", "open", "text", "close", "cmd"].includes(
-								id,
-							),
+						disabled: !isSequenceSelectable(id),
 					}
 				: {}),
 		})),

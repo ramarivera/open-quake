@@ -237,3 +237,19 @@ Native actions SHALL preserve clipboard data on failed setup and interruption, c
 - **WHEN** an Open key focuses an already-running Windows application twice in the same desktop process
 - **THEN** both activations enumerate and focus its window using the same cached callback type
 - **AND** each callback registration is released, including when activation is aborted
+
+#### Scenario: Owned action failures preserve their identity
+
+- **WHEN** the desktop action owner declines a command or rejects with a canonical action error
+- **THEN** the promise boundary retains that error and its original cause, so denied permission, missing applications, unavailable capabilities and invalid actions remain distinguishable
+- **AND** unexpected failures become privacy-scrubbed host failures
+
+#### Scenario: Website title substitution is literal
+
+- **WHEN** a website template includes a supported title placeholder and the key title contains dollar replacement patterns or placeholder-shaped text
+- **THEN** a single substitution pass inserts the title verbatim without evaluating replacement patterns or expanding the inserted title again
+
+#### Scenario: Sequence pickers share selection rules
+
+- **WHEN** the function library and sequence editor list the same native sequence function
+- **THEN** both use the same registry default and selection predicate, while execution still validates the completed leaf and the editor retains its 100-operation limit

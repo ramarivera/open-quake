@@ -16,7 +16,14 @@ import {
 	HOTKEY_KEYS,
 	HOTKEY_MODIFIERS,
 } from "../../../../../packages/device/src/actions/action-contracts.js";
-import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
+import {
+	ActionApplicationMissing,
+	ActionPermissionDenied,
+	ActionSnapshotFailed,
+	HostActionFailed,
+	InvalidKeyAction,
+	KeyFunctionUnavailable,
+} from "../../../../../packages/device/src/actions/action-errors.js";
 import { normalizeActionImport } from "../../../../../packages/device/src/actions/action-import.js";
 import {
 	KeyRuntime,
@@ -188,6 +195,81 @@ function layer(
 	).pipe(Layer.provideMerge(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
 }
+it.each([
+	new ActionPermissionDenied(new Error("private declined command")),
+	new ActionApplicationMissing(new Error("private application path")),
+	new ActionSnapshotFailed(new Error("private snapshot path")),
+	new InvalidKeyAction("config.actions", new Error("private payload")),
+	new KeyFunctionUnavailable("owning-runtime"),
+	new HostActionFailed(new Error("private host failure")),
+])(
+	"review: owned actions retain $code across the production promise boundary",
+	async (cause) => {
+		const key = createEmptyProfileKey("1,1");
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const port = yield* KeyRuntimePort;
+				if (!port.executeOwned)
+					throw new Error("Missing owned action boundary");
+				return yield* Effect.either(
+					port.executeOwned(key, {
+						deviceId: "device",
+						profileId: "p",
+						pageId: "one",
+						revision: 0,
+					}),
+				);
+			}).pipe(
+				Effect.provide(
+					layer(false, undefined, undefined, undefined, async () => {
+						throw cause;
+					}),
+				),
+				Effect.scoped,
+			),
+		);
+		expect(result._tag).toBe("Left");
+		if (result._tag !== "Left")
+			throw new Error("Expected owned action failure");
+		expect(result.left).toBe(cause);
+		expect(result.left.originalCause).toBe(cause.originalCause);
+		expect(JSON.stringify(result.left)).not.toContain("private");
+	},
+);
+
+it("review: unexpected owned action failures remain scrubbed host failures", async () => {
+	const cause = Object.assign(new Error("private command payload"), {
+		code: "EIO",
+	});
+	const result = await Effect.runPromise(
+		Effect.gen(function* () {
+			const port = yield* KeyRuntimePort;
+			if (!port.executeOwned) throw new Error("Missing owned action boundary");
+			return yield* Effect.either(
+				port.executeOwned(createEmptyProfileKey("1,1"), {
+					deviceId: "device",
+					profileId: "p",
+					pageId: "one",
+					revision: 0,
+				}),
+			);
+		}).pipe(
+			Effect.provide(
+				layer(false, undefined, undefined, undefined, async () => {
+					throw cause;
+				}),
+			),
+			Effect.scoped,
+		),
+	);
+	expect(result._tag).toBe("Left");
+	if (result._tag !== "Left" || !(result.left instanceof HostActionFailed))
+		throw new Error("Expected host action failure");
+	expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+	expect(result.left.originalCause).toBe(cause);
+	expect(result.left.diagnosticCause.sourceCode).toBe("EIO");
+	expect(JSON.stringify(result.left)).not.toContain("private");
+});
 it("resolves bundle references with structured macOS argv and keeps filesystem paths", async () => {
 	await Effect.runPromise(
 		Effect.gen(function* () {

@@ -1,14 +1,14 @@
 import { Option, Schema } from "effect";
 import { useRef, useState } from "react";
-import {
-	MAX_SEQUENCE_OPERATIONS,
-	SequenceLeaf,
-} from "../../../../../../packages/device/src/actions/action-contracts";
+import { MAX_SEQUENCE_OPERATIONS } from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	ACTION_REGISTRY,
 	createActionDraft,
 } from "../../../../../../packages/device/src/actions/action-registry";
-import { SEQUENCE_LIBRARY } from "../../../../../../packages/device/src/actions/sequence-library";
+import {
+	isSequenceSelectable,
+	SEQUENCE_LIBRARY,
+} from "../../../../../../packages/device/src/actions/sequence-library";
 import {
 	ProfileJsonObject,
 	type ProfileKey,
@@ -16,16 +16,10 @@ import {
 
 // Registry defaults and sequence membership don't depend on the row or draft.
 // Reuse the immutable options so editing 100 rows doesn't rebuild Schema parsers.
-const isSequenceLeaf = Schema.is(Schema.encodedSchema(SequenceLeaf));
 const sequenceFunctionOptions = SEQUENCE_LIBRARY.flatMap((group) => [
 	...group.ids,
 ]).map((type) => {
-	const entry = ACTION_REGISTRY.find((entry) => entry.id === type);
-	const supported =
-		type === "delay" ||
-		(!!entry &&
-			(isSequenceLeaf(entry.defaultConfig) ||
-				["website", "hotkey", "text", "open", "close", "cmd"].includes(type)));
+	const supported = isSequenceSelectable(type);
 	return (
 		<option key={type} disabled={!supported}>
 			{type}

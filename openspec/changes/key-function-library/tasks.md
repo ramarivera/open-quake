@@ -66,3 +66,9 @@ Extra-batch verification: 94 device action/runtime tests and 60 desktop adapter/
 - [x] Cache the Windows enumeration callback type across activations and retain per-call callback cleanup. Bead `open-quake-lih.10.30`. The production focus regression uses the real persistent Koffi type registry with fake Windows calls, reproducing the duplicate-type failure on the second activation before the fix. It also checks callback cleanup after an aborted activation. Actual Windows focus remains unverified.
 
 Verification: all 62 native-host and desktop runtime-port tests pass, desktop typecheck and scoped Biome pass, and owner-spec validation passes with the three existing length warnings. No Windows window was enumerated or focused during these tests.
+
+## PR #127 CodeRabbit correctness follow-up
+
+- [x] Preserve canonical owned-action errors at the production promise boundary, substitute website titles literally in one pass, and share registry-based sequence selection rules. Bead `open-quake-lih.10.31`. Regressions cover all six canonical error identities, generic failure scrubbing, replacement-pattern titles and agreement between the mounted editor and function library. Native effects remain faked; hosted checks and review remain parent-owned.
+
+Verification: 101 device and 73 desktop focused tests passed, plus the unchanged mounted 100/101-capacity test. Six error-identity cases and six title cases failed on the old implementation. Device/desktop typechecks, scoped Biome, production desktop build and ordinary owner-spec validation passed. Existing template-placeholder lint warnings and three long-requirement warnings remain. No real host command, browser, input or device action ran.

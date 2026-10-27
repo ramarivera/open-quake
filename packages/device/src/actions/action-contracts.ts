@@ -520,10 +520,10 @@ export function normalizeWebsiteUrl(
 	value: string,
 	title: string,
 ): string | undefined {
-	const expanded = value
-		.replaceAll("$" + "{title}", title)
-		.replaceAll("{{title}}", title)
-		.replaceAll("{title}", title);
+	const expanded = value.replace(
+		/\$\{title\}|\{\{title\}\}|\{title\}/g,
+		() => title,
+	);
 	if (
 		expanded !== expanded.trim() ||
 		[...expanded].some((char) => char.charCodeAt(0) < 32)

@@ -424,6 +424,20 @@ it("MAIN-072: safe title templates normalize at the import boundary without eval
 	);
 });
 
+it.each(["$&", "$$", "$`", "$'", "a$&b$`c", "{title}", "{{title}}"])(
+	"review: website title %s is inserted literally in every template form",
+	(title) => {
+		for (const placeholder of ["{" + "title}", "{{title}}", "$" + "{title}"]) {
+			expect(
+				normalizeWebsiteUrl(
+					`https://example.org/before/${placeholder}/after`,
+					title,
+				),
+			).toBe(`https://example.org/before/${title}/after`);
+		}
+	},
+);
+
 it("MAIN-066: all 76 retained native types have their canonical owner; plugin dispatch stays a separate port", () => {
 	const retained =
 		"timer brightness multiActions delay folder emojiFolder back emojiBack switchProfile pageUp pageDown goToPage pageNo website hotkeySwitch hotkey open close text media mute playPause stopPlay skipBackward skipForward fastBackward fastForward repeatPlay randomPlay vol playAudio playAudioLegacy stopAudio knob assistant cmd homeAssistant obsScene obsPreviewScene obsTransition obsStudioMode obsStream obsRecord obsSource obsMute obsCut obsTransitionSet obsAudioMonitor obsReplayBuffer obsVirtualCam obsMedia obsFilter obsProfile obsRecordSplit obsSceneTransitionOverride obsVolume luminance buzzer mic meetingMinutes tempMeetingMinutes meetingRecordMark cpuInfo gpuInfo memInfo diskInfo processInfo networkInfo bluetoothInfo powerInfo emoji liveAudioTranslate aiChat aiChatView audioBot clawbot".split(

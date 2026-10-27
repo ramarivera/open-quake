@@ -13,6 +13,8 @@ import {
 	MediaCommand,
 } from "../../../../../packages/device/src/actions/action-contracts.js";
 import {
+	ActionApplicationMissing,
+	ActionPermissionDenied,
 	ActionSnapshotFailed,
 	HostActionFailed,
 	InvalidKeyAction,
@@ -44,6 +46,17 @@ import {
 	type ScreenshotPort,
 	screenshotPort,
 } from "./native-host";
+
+const isActionError = Schema.is(
+	Schema.Union(
+		ActionApplicationMissing,
+		ActionPermissionDenied,
+		ActionSnapshotFailed,
+		HostActionFailed,
+		InvalidKeyAction,
+		KeyFunctionUnavailable,
+	),
+);
 export interface DesktopKeyRuntimeActions {
 	readonly keyboard?: KeyboardActionAdapter;
 	readonly application?: NativeApplicationPort;
@@ -405,7 +418,8 @@ export const desktopKeyRuntimePort = (
 						? Effect.succeed(false)
 						: Effect.tryPromise({
 								try: (signal) => executeOwned(key, signal, activation),
-								catch: (cause) => new HostActionFailed(cause),
+								catch: (cause) =>
+									isActionError(cause) ? cause : new HostActionFailed(cause),
 							}),
 				resetOwned: (deviceId) =>
 					resetOwned ? Effect.promise(() => resetOwned(deviceId)) : Effect.void,
