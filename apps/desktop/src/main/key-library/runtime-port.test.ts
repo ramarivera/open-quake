@@ -453,6 +453,9 @@ it.each([false, true])(
 							const pending = yield* runtime
 								.activate("device", "1,1", "down")
 								.pipe(Effect.either, Effect.fork);
+							// A suspended profile read doesn't mean the HID timeout exists yet.
+							while (!Array.from(yield* TestClock.sleeps()).includes(3000))
+								yield* Effect.yieldNow();
 							yield* TestClock.adjust(3000);
 							const result = yield* Fiber.join(pending);
 							expect(result._tag).toBe("Left");
