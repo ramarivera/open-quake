@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { defaultAssistantSettings } from "../../../../../../../packages/device/src/profiles/assistant-contracts";
 import type { PublicModelRow } from "../../../../shared/agents";
 import { directChatModel } from "./model-scope";
 
@@ -43,4 +44,47 @@ describe("direct chat effective model scope", () => {
 			directChatModel({ default: [row({ role: "fallback" })] }).ready,
 		).toBe(false);
 	});
+});
+
+it.each(["default", "fallback"] as const)(
+	"uses an explicit persona %s catalog row over the keyless main default",
+	(role) => {
+		const models = {
+			main: [row({ credentialAvailable: false })],
+			default: [row({ id: "selected", role })],
+		};
+		expect(
+			directChatModel(models, {
+				...defaultAssistantSettings(),
+				modelRowId: "selected",
+				modelId: "custom-model",
+			}),
+		).toMatchObject({
+			ready: true,
+			row: { id: "selected", model: "custom-model" },
+		});
+		expect(models.main[0]?.credentialAvailable).toBe(false);
+	},
+);
+it("uses the default catalog for a session persona that follows General settings", () => {
+	const models = {
+		main: [row({ credentialAvailable: false })],
+		default: [row({ id: "general" })],
+	};
+	expect(
+		directChatModel(models, defaultAssistantSettings(), true),
+	).toMatchObject({ ready: true, row: { id: "general" } });
+	expect(directChatModel(models, defaultAssistantSettings()).ready).toBe(false);
+	expect(
+		directChatModel(models, {
+			...defaultAssistantSettings(),
+			modelRowId: "missing",
+		}).ready,
+	).toBe(false);
+	expect(
+		directChatModel(
+			{ default: [row({ role: "none" })] },
+			{ ...defaultAssistantSettings(), modelRowId: "row" },
+		).ready,
+	).toBe(false);
 });

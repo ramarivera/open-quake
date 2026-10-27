@@ -285,3 +285,91 @@ Meeting ASR, upload and live translation SHALL compose the existing AiProviderSe
 
 - **WHEN** a saved Qwen or OpenAI profile processes synthetic managed audio through the production meeting facade and loopback HTTP or WebSocket servers
 - **THEN** only its selected credential authenticates the expected direct adapter, the resulting transcript feeds the existing summary facade, and all temporary audio and sockets close without hardware or paid requests
+
+
+### Requirement: Assistant routing and per-key persona pinning
+AI-081, AI-088, AI-089 and AI-241 SHALL bind reviewed imported assistant settings to an isolated per-key session and explicit dictation target. Imported payloads SHALL remain inert until explicitly reviewed and saved.
+
+#### Scenario: Capture admission and early release
+- **WHEN** a reviewed key starts capture
+- **THEN** capture refuses offline or invalid model configuration before microphone acquisition, publishes preparing, and cancels a released preparation without submitting
+
+#### Scenario: Reviewed legacy keys retain independent sessions
+- **WHEN** two reviewed keys with different saved models, history settings and wake-window choices are held and released
+- **THEN** each uses its own session and pinned settings, stale callbacks cannot select another session, and an early release or offline refusal sends no chat
+
+#### Scenario: Wake dictation and direct submission
+- **WHEN** a final transcript arrives for a wake-window key
+- **THEN** the selected desktop session receives editable dictation and its pinned settings, with no background inference, while a direct key submits once and preserves its transcript on refusal
+
+### Requirement: Retained Copilot key execution and title migration
+AI-117, MGMT-358, MGMT-359 and SETTINGS-110 SHALL execute all six shipped Copilot keys with their per-key Chinese prompts, thinking and search controls. On import and persisted profile read, aiChat keys identified by the six role IDs 128/6/8/93/129/84 or their exact built-in title i18n keys SHALL upgrade an existing false title edit flag to true. The migration SHALL preserve user titles, actions and every other edit flag and SHALL be idempotent.
+
+#### Scenario: Six roles survive title-only editing
+- **WHEN** each saved built-in role key is activated after a title-only edit and repeated profile reads
+- **THEN** the outbound prompt and controls match the saved key, the title stays edited and unrelated keys and locks stay unchanged
+
+### Requirement: Local legacy prompt catalog
+AI-142 and AI-143 SHALL expose a local, provenance-documented prompt catalog with a Default entry. English SHALL use the English catalog; zh, de, fr, es, it, ja and ko SHALL use the historical Chinese fallback. Only decision 12 NSFW and jailbreak entries SHALL be excluded. Missing or malformed catalog input SHALL return Default alone without execution or network access.
+
+#### Scenario: Locale and corrupt catalog handling
+- **WHEN** the loader receives each supported locale or missing/malformed source
+- **THEN** it returns the selected retained catalog prefixed by Default or Default alone on failure, with excluded prompts absent
+
+### Requirement: Desktop persona updates apply to subsequent turns
+AI-228, AI-229 and AI-230 SHALL offer filterable System Role selection, Custom Role prompt editing, Personality top_p 0..1 and Reply Quality temperature 0..2 with 0.05 steps, defaults 0.7 and 1, and recovered endpoint labels. Update SHALL persist the selection and apply it to subsequent desktop turns. Existing turns and stored history SHALL retain their pinned prompts and models. Excluded roles SHALL fail validation.
+
+#### Scenario: Update during a turn
+- **WHEN** a user changes preset/custom role or sampling and presses Update during a running turn, then reloads the controls and sends again
+- **THEN** the active request remains unchanged and the next request uses the persisted new persona and sampling
+
+#### Scenario: Update a device-selected desktop session
+- **WHEN** a device key selects a desktop session and the user opens the persona controls and presses Update
+- **THEN** the controls read that session's settings and the next desktop turn in that session uses the updated prompt and sampling
+- **AND** another key's session and an already admitted request remain unchanged
+
+
+### Requirement: Selected assistant draft isolation
+The desktop SHALL bind persona drafts to their selection generation and reject stale updates. Selected-session edits SHALL stay in memory until key reselection or session eviction, without changing the durable ordinary persona. Saved key configuration SHALL remain the source on key reselection and restart.
+
+#### Scenario: Switch keys while reading or updating
+- **WHEN** selection changes from key A to key B while an editor read or Update is pending
+- **THEN** the editor discards A's late results and the host rejects A's stale Update without changing B or the global persona
+
+### Requirement: Selected assistant connection ownership
+Assistant RPC reads, selection, updates and acknowledgement SHALL respect per-connection selected-session ownership. An unowned selected session MAY be claimed by its first consumer.
+
+#### Scenario: Another window requests selected assistant data
+- **WHEN** one connection has claimed a selected session and a second connection requests its settings, transcript, Update or acknowledgement
+- **THEN** the second connection receives CHAT.INPUT.INVALID and cannot mutate or consume that selection
+
+### Requirement: Persona catalog resolution
+Explicit persona model rows SHALL resolve from the editor's default catalog. An unset persona row SHALL retain main-scope fallback.
+
+#### Scenario: Explicit persona under main model override
+- **WHEN** the persona selects a default-catalog row absent from main's override
+- **THEN** ordinary desktop inference uses that explicit row, and an unset persona row still follows main's default
+
+
+### Requirement: Desktop conversation navigation retains the intended persona destination
+The desktop MUST use the same session route for assistant key selection and dictation. Desktop New chat and history navigation MUST direct persona reads and Update to the opened conversation, retain session-local persona settings when reopening a key conversation, and reject stale navigation and foreign session ownership without changing a newer key selection.
+
+#### Scenario: Typed and dictated turns continue the selected key conversation
+- **WHEN** a wake-window key opens a conversation, the user sends a typed turn, dictates with the same key and reselects that key
+- **THEN** the same session and prior turn history remain selected, while a changed direct model profile still creates a separate session
+
+#### Scenario: Desktop navigation moves the persona destination
+- **WHEN** the user creates a new chat or opens saved history after a key selected another session
+- **THEN** persona reads and Update use the opened destination, ordinary chats use the global persona, reopening a key session retains its local persona, and stale requests cannot replace a newer key selection
+
+
+### Requirement: Effective persona composer readiness
+The desktop composer SHALL derive model readiness from the persona for its opened conversation, using the same main-scope or default-catalog selection as host admission. It SHALL keep missing credentials disabled and discard reads from obsolete navigation or catalog revisions.
+
+#### Scenario: Explicit persona overrides a keyless main model
+- **WHEN** the global or selected-session persona chooses a credentialed default-catalog row while the main default has no credential
+- **THEN** the mounted composer permits editing and submission using that persona without changing the saved main model
+
+#### Scenario: Persona destination or credentials change
+- **WHEN** the user updates the persona, opens New chat or history, or receives a catalog update
+- **THEN** readiness follows the opened destination and current catalog, and late reads cannot restore obsolete readiness

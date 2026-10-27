@@ -23,6 +23,7 @@ export interface ChatView {
 	readonly cancelling: boolean;
 	readonly clearing: boolean;
 	readonly loading: boolean;
+	readonly navigating: boolean;
 	readonly error: string;
 }
 const codeOf = (cause: unknown) =>
@@ -44,6 +45,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		cancelling: false,
 		clearing: false,
 		loading: true,
+		navigating: false,
 		error: "",
 	};
 	let off: (() => void) | undefined;
@@ -173,6 +175,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 	};
 	return {
 		getSnapshot: () => state,
+		navigationEpoch: () => epoch,
 		subscribe: (listener: () => void) => {
 			listeners.add(listener);
 			return () => {
@@ -187,6 +190,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				disposed ||
 				state.pending ||
 				state.clearing ||
+				state.navigating ||
 				!text.trim()
 			)
 				return false;
@@ -220,22 +224,49 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				return false;
 			}
 		},
-		select: async (sessionId?: SessionId) => {
-			if (state.pending || state.clearing || disposed) return;
+		select: async (
+			sessionId?: SessionId,
+			assistantGeneration?: number,
+			expectedEpoch?: number,
+		) => {
+			if (
+				(expectedEpoch !== undefined && expectedEpoch !== epoch) ||
+				state.pending ||
+				state.clearing ||
+				disposed ||
+				(assistantGeneration !== undefined && state.navigating)
+			)
+				return;
 			chosen = true;
 			off?.();
 			subscriptionEpoch++;
-			epoch++;
+			const generation = ++epoch;
+			set({ navigating: assistantGeneration === undefined });
 			const selected =
 				sessionId ?? Schema.decodeUnknownSync(SessionId)(crypto.randomUUID());
-			set({
-				sessionId: selected,
-				current: state.histories.find((item) => item.sessionId === selected),
-				turn: undefined,
-				input: "",
-				error: "",
-			});
-			await refresh();
+			try {
+				// Key-origin selection already chose its host destination. Desktop actions
+				// compare against the current generation before replacing that destination.
+				if (assistantGeneration === undefined && bridge?.navigate) {
+					const current = await bridge.selection?.();
+					if (disposed || generation !== epoch) return;
+					await bridge.navigate(selected, current?.generation ?? null);
+				}
+				if (disposed || generation !== epoch) return;
+				set({
+					sessionId: selected,
+					current: state.histories.find((item) => item.sessionId === selected),
+					turn: undefined,
+					input: "",
+					error: "",
+					navigating: false,
+				});
+				await refresh();
+			} catch (cause) {
+				if (generation === epoch) set({ error: codeOf(cause) });
+			} finally {
+				if (generation === epoch) set({ navigating: false });
+			}
 		},
 		cancel: async () => {
 			if (!bridge || !state.turn || !state.pending || state.cancelling) return;
@@ -253,6 +284,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				!state.current ||
 				state.pending ||
 				state.clearing ||
+				state.navigating ||
 				disposed
 			)
 				return;

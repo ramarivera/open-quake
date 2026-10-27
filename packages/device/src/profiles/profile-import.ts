@@ -8,6 +8,7 @@ import { normalizeActionImport } from "../actions/action-import.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
+import { upgradeAssistantTitle } from "./profile-assistant-migration.js";
 import {
 	Profile,
 	ProfileJson,
@@ -195,7 +196,7 @@ export function inspectProfileImport(
 			...(source.childrenName === "" || source.childrenName === null
 				? { childrenName: undefined }
 				: {}),
-			config: next,
+			config: upgradeAssistantTitle({ ...source, config: next }).config,
 			compatibility: { ...record(source.compatibility), unsupported, source },
 		};
 		if (candidate.childrenName === undefined) delete candidate.childrenName;

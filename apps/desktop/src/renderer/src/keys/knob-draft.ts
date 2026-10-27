@@ -29,6 +29,7 @@ export const knobAssignment = (type: string): KnobSlot =>
 				childrenName: type,
 				config: {
 					type,
+					...(type === "homeAssistant" ? { icon: "0-55" } : {}),
 					...(type === "assistant"
 						? {
 								icon: "0-50",

@@ -1,3 +1,4 @@
+import type { AssistantSettings } from "../../../../packages/device/src/profiles/assistant-contracts";
 import type {
 	FileResult,
 	ProviderListing,
@@ -9,6 +10,7 @@ import type {
 	TurnSnapshot,
 } from "../../../../packages/edge/src/chat/chat-contracts";
 import type {
+	AssistantSelection,
 	ChatDelivery,
 	ChatInput,
 	PublicChatHistory,
@@ -17,6 +19,20 @@ export const CHAT_REQUEST = "chat:rpc:request";
 export const CHAT_EVENT = "chat:rpc:event";
 export const CHAT_DISCONNECT = "chat:rpc:disconnect";
 export interface DirectChatBridge {
+	readonly persona?: {
+		readonly read: () => Promise<AssistantSettings>;
+		readonly update: (
+			settings: AssistantSettings,
+			generation?: number | null,
+		) => Promise<AssistantSettings>;
+	};
+	readonly assistantVisibility?: (visible: boolean) => Promise<void>;
+	readonly selection?: () => Promise<AssistantSelection | null>;
+	readonly navigate?: (
+		sessionId: SessionId,
+		generation: number | null,
+	) => Promise<AssistantSelection | null>;
+	readonly acknowledgeSelection?: (generation: number) => Promise<void>;
 	readonly files?: (input: PublicFileRequest) => Promise<FileResult>;
 	readonly providers?: () => Promise<ProviderListing>;
 	readonly submit: (input: ChatInput) => Promise<TurnSnapshot>;
