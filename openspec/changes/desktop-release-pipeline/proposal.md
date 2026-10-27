@@ -2,7 +2,7 @@
 
 ## Why
 
-There are no published releases or installer builds. Development commands do not provide an installable desktop app. Ramiro requested tag-triggered downloads comparable to T3 Code, with unsigned packages permitted.
+There are no published releases or installer builds. Development commands do not provide an installable desktop app. Ramiro requested tag-triggered downloads comparable to T3 Code, with ad-hoc macOS packages permitted for PR and ordinary local builds. Tagged macOS releases require Developer ID signing and notarization; Windows and Linux packages remain unsigned.
 
 ## What changes
 
