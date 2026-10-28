@@ -1692,7 +1692,7 @@ for (const occupied of [false, true])
 			).toBe("Moved key");
 		});
 
-it("Quick Luminance explains its deliberate built-in title restriction", async () => {
+it("the built-in Quick Luminance key is editable like any key despite its DK-Suite template lock", async () => {
 	const quick = builtinProfiles("darwin").find((p) =>
 		p.pages[0].keys.some((k) => k.config.type === "luminance"),
 	);
@@ -1700,13 +1700,34 @@ it("Quick Luminance explains its deliberate built-in title restriction", async (
 	if (!key) throw new Error("Missing Quick Luminance fixture");
 	const f = await gridFixture([Schema.encodeSync(ProfileKey)(key)]);
 	await click(button(f.host, key.keyCode));
+	expect(query(f.host, "#key-title", HTMLInputElement).disabled).toBe(false);
+	expect(f.host.querySelector("#key-title-locked")).toBeNull();
+});
+
+it("a key whose profile locks its title says so", async () => {
+	const locked = gridKey("1,1", "hotkey");
+	const f = await gridFixture([
+		{
+			...locked,
+			config: {
+				...locked.config,
+				basicEditableItems: {
+					title: false,
+					icon: true,
+					grid: true,
+					allowDelete: true,
+					allowDrag: true,
+				},
+			},
+		},
+	]);
+	await click(button(f.host, "1,1"));
 	const title = query(f.host, "#key-title", HTMLInputElement);
 	expect(title.disabled).toBe(true);
-	const reasonId = title.getAttribute("aria-describedby");
-	expect(reasonId).toBeTruthy();
-	expect(f.host.querySelector(`#${reasonId}`)?.textContent).toContain(
-		"This built-in profile locks this key's title",
-	);
+	expect(
+		f.host.querySelector(`#${title.getAttribute("aria-describedby")}`)
+			?.textContent,
+	).toContain("This key's profile locks its title.");
 });
 
 it("editable Luminance titles save and render like other keys", async () => {

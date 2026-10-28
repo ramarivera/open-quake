@@ -43,6 +43,8 @@ export function editKeyLayout(
 		effectiveSpan(key.config.type, key.config.size).some((n) => n > 1)
 			? (keys.find(
 					(other) =>
+						// Its own footprint is a shift, not a swap with itself.
+						other.keyCode !== key.keyCode &&
 						!isEmptyCell(other) &&
 						other.config.display &&
 						occupiedCells(other).includes(requested),

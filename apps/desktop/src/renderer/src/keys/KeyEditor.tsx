@@ -851,8 +851,8 @@ export function KeyEditor({
 							{!keyEditable(key, "title") && (
 								<small id="key-title-locked">
 									{locale === "de"
-										? "Dieses integrierte Profil sperrt den Titel dieser Taste gemäß der DK-Suite-Vorlage."
-										: "This built-in profile locks this key's title to match the DK-Suite template."}
+										? "Das Profil dieser Taste sperrt ihren Titel."
+										: "This key's profile locks its title."}
 								</small>
 							)}
 							<small
