@@ -5,11 +5,15 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { Option, Schema } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
-import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog";
+import {
+	builtinProfiles,
+	profileText,
+} from "../../../../../packages/device/src/profiles/profile-catalog";
 import {
 	encodeProfileEnvelope,
 	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { EmojiReply } from "../../shared/emoji";
 import { KeyReply } from "../../shared/key-library";
 import { managementExerciserBus } from "../mockDeviceBus";
 import {
@@ -18,7 +22,9 @@ import {
 	installObserver,
 	observation,
 } from "./exerciser-dom";
+import { resetFixtureStore } from "./exerciser-fixture";
 import { expectedInert, skipReason, skipRules } from "./exerciser-policy";
+import { failureReason } from "./exerciser-replies";
 
 assert(!app.isPackaged, "Management exerciser is forbidden in packaged apps");
 assert.equal(
@@ -37,6 +43,7 @@ assert(
 	),
 );
 const userData = join(directory, "userData");
+let initialEnvelope: ProfileEnvelope;
 
 interface Result {
 	page: string;
@@ -80,7 +87,13 @@ const mainReplies: {
 	type: string;
 	reason: string;
 	sender: number;
+	activation: number;
 }[] = [];
+let pendingRequests = 0;
+let activation = 0;
+const pendingManagement = new Map<number, number>();
+let profileRenameSample = 0;
+let obstructionCaptures = 0;
 let dialogs = 0;
 let windowsCreated = 0;
 let navigations = 0;
@@ -96,29 +109,54 @@ ipcMain.handle = (channel, listener) => {
 	registered.handle.push(channel);
 	handle(channel, async (event, ...args: unknown[]) => {
 		recordInvocation(channel, event, args);
+		const input = args[0];
+		const operation =
+			typeof input === "object" && input !== null
+				? String(
+						"type" in input ? input.type : "_tag" in input ? input._tag : "",
+					)
+				: "";
+		const management =
+			event.sender.getURL().includes("surface=management") &&
+			!["read", "query", "snapshot", "status"].includes(operation);
+		const current = activation;
+		const renderer = event.sender.getURL().includes("surface=management");
+		if (renderer) pendingRequests++;
+		if (management)
+			pendingManagement.set(current, (pendingManagement.get(current) ?? 0) + 1);
 		try {
 			const reply: unknown = await listener(event, ...args);
-			if (
-				typeof reply === "object" &&
-				reply !== null &&
-				"_tag" in reply &&
-				reply._tag === "rejected"
-			) {
+			const reason = failureReason(reply);
+			if (reason !== undefined) {
 				const input = args[0];
 				mainReplies.push({
+					activation: current,
 					channel,
 					sender: event.sender.id,
 					type:
-						typeof input === "object" && input !== null && "type" in input
-							? String(input.type)
+						typeof input === "object" && input !== null
+							? String(
+									"type" in input
+										? input.type
+										: "_tag" in input
+											? input._tag
+											: "",
+								)
 							: "",
-					reason: "reason" in reply ? String(reply.reason) : "rejected",
+					reason,
 				});
 			}
 			return reply;
 		} catch (cause) {
 			errors.push({ source: `ipc:${channel}`, message: message(cause) });
 			throw cause;
+		} finally {
+			if (renderer) pendingRequests--;
+			if (management)
+				pendingManagement.set(
+					current,
+					(pendingManagement.get(current) ?? 1) - 1,
+				);
 		}
 	});
 };
@@ -264,7 +302,7 @@ function key(
 async function click(win: BrowserWindow, selector: string): Promise<void> {
 	await evaluate(
 		win,
-		`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({block:'center',inline:'center'})`,
+		`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({behavior:'instant',block:'center',inline:'center'})`,
 	);
 	await delay(120);
 	const point = Schema.decodeUnknownSync(
@@ -272,17 +310,19 @@ async function click(win: BrowserWindow, selector: string): Promise<void> {
 			x: Schema.Number,
 			y: Schema.Number,
 			hit: Schema.Boolean,
-			obstruction: Schema.String,
+			blocker: Schema.String,
 		}),
 	)(
 		await evaluate(
 			win,
-			`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return undefined;const r=el.getBoundingClientRect();if(!r.width||!r.height)return undefined;const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);const hit=document.elementFromPoint(x,y);return {x,y,hit:hit===el||el.contains(hit),obstruction:hit?.tagName+'.'+(hit?.className??'')}})()`,
+			`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return undefined;const r=el.getBoundingClientRect();if(!r.width||!r.height)return undefined;const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);const hit=document.elementFromPoint(x,y);return {x,y,hit:hit===el||el.contains(hit),blocker:hit?hit.tagName+'.'+String(hit.className).slice(0,120):'none'}})()`,
 		),
 	);
+	if (!point.hit && obstructionCaptures < 3)
+		await capture(win, `obstructed-${++obstructionCaptures}`);
 	assert(
 		point.hit,
-		`Control centre is obstructed: ${selector} by ${point.obstruction} at ${point.x},${point.y}`,
+		`Control centre is obstructed by ${point.blocker}: ${selector}`,
 	);
 	win.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
 	win.webContents.sendInputEvent({
@@ -325,7 +365,7 @@ async function select(
 	// DOM focus stays inside the hidden renderer. Native keyboard input changes the select.
 	await evaluate(
 		win,
-		`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'});document.querySelector(${JSON.stringify(selector)}).focus()`,
+		`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'});document.querySelector(${JSON.stringify(selector)}).focus()`,
 	);
 	const changing =
 		(await evaluate(
@@ -436,9 +476,10 @@ async function exercise(
 	// Settle scrolling/hover before observing effects, so our own positioning can't pass a dead button.
 	await evaluate(
 		win,
-		`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({block:'center'})`,
+		`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({behavior:'instant',block:'center'})`,
 	);
 	await delay(120);
+	const current = ++activation;
 	const before = await snapshot(win);
 	const replyStart = mainReplies.length;
 	try {
@@ -463,9 +504,11 @@ async function exercise(
 					/^(?:force|level|gap|duration|delay)$/i.test(control.label) ||
 					/^-?\d+(?:\.\d+)?$/.test(control.value)
 					? "1"
-					: control.value === "exercise"
-						? "exercise-2"
-						: "exercise",
+					: page === "profiles" && /^Rename /.test(control.label)
+						? `Edit${++profileRenameSample}`
+						: control.value === "exercise"
+							? "exercise-2"
+							: "exercise",
 			);
 		} else if (control.type === "range") {
 			await evaluate(
@@ -475,6 +518,25 @@ async function exercise(
 			key(win, "Right");
 		} else await click(win, selector);
 		await delay(350);
+		const replyDeadline = Date.now() + (page === "profiles" ? 60000 : 10000);
+		while (
+			(pendingManagement.get(current) ?? 0) > 0 &&
+			Date.now() < replyDeadline
+		)
+			await delay(50);
+		assert.equal(
+			pendingManagement.get(current) ?? 0,
+			0,
+			"Management IPC did not settle",
+		);
+		if (page === "profiles")
+			await waitFor(
+				win,
+				"!document.querySelector('.profile-batch progress, .profile-thumbnail-cell[data-state=generating], .profile-thumbnail-cell[data-state=updating]')",
+				"profile thumbnail work",
+				90000,
+			);
+		await delay(100);
 		const after = await snapshot(win);
 		const effects: string[] = [];
 		const beforeDom = Schema.decodeUnknownSync(
@@ -528,7 +590,10 @@ async function exercise(
 		if (Object.keys(ipc).length) effects.push("IPC invocation");
 		const rejected = mainReplies
 			.slice(replyStart)
-			.filter((reply) => reply.sender === win.webContents.id);
+			.filter(
+				(reply) =>
+					reply.sender === win.webContents.id && reply.activation === current,
+			);
 		const failed =
 			!effects.length ||
 			afterDom.inputs <= beforeDom.inputs ||
@@ -561,6 +626,11 @@ async function exercise(
 			reason: message(cause),
 		});
 	}
+	const latest = results.at(-1);
+	if (latest?.status === "failed")
+		process.stdout.write(
+			`Control failure ${page}: ${control.label}: ${latest.reason}\n`,
+		);
 }
 async function capture(win: BrowserWindow, name: string) {
 	await writeFile(
@@ -571,7 +641,7 @@ async function capture(win: BrowserWindow, name: string) {
 }
 /** Dismiss modals left open by exploration so the sidebar stays reachable. */
 async function closeDialogs(win: BrowserWindow): Promise<void> {
-	const open = `document.querySelectorAll('dialog[open], [role=dialog][aria-modal=true]').length`;
+	const open = `document.querySelectorAll('dialog[open], [role=dialog][aria-modal=true], [role=alertdialog][aria-modal=true]').length`;
 	for (let attempt = 0; attempt < 3 && (await evaluate(win, open)); attempt++) {
 		key(win, "Escape");
 		await delay(200);
@@ -592,9 +662,15 @@ async function navigate(win: BrowserWindow, page: string) {
 	await delay(500);
 	await waitFor(
 		win,
-		"!Array.from(document.querySelectorAll('main')).some(el=>/^Loading profiles...$/.test(el.innerText.trim()))",
+		"!Array.from(document.querySelectorAll('main')).some(el=>/^Loading profiles(?:\\.\\.\\.|…)$/.test(el.innerText.trim()))",
 		"page data",
 	);
+	if (page === "profiles")
+		await waitFor(
+			win,
+			"!!document.querySelector('.profile-columns')",
+			"profile rows",
+		);
 }
 async function readKeys(win: BrowserWindow) {
 	const reply = Schema.decodeUnknownSync(KeyReply)(
@@ -606,13 +682,46 @@ async function readKeys(win: BrowserWindow) {
 	assert(reply._tag === "success" && reply.envelope, "Key library read failed");
 	return reply.envelope;
 }
-async function scenario(name: string, run: () => Promise<void>) {
+/** Initial async reads can change the editor device context after its first paint. */
+async function settleRenderer(win: BrowserWindow): Promise<void> {
+	const end = Date.now() + 15000;
+	let mutations: unknown;
+	let idleSince = Date.now();
+	do {
+		const next = await evaluate(win, "window.managementExercise?.mutations");
+		if (pendingRequests || next !== mutations) idleSince = Date.now();
+		mutations = next;
+		if (!pendingRequests && Date.now() - idleSince >= 300) return;
+		await delay(50);
+	} while (Date.now() < end);
+	throw new Error("Renderer initialization did not settle");
+}
+
+async function resetKeys(win: BrowserWindow) {
+	await navigate(win, "overview");
+	await resetFixtureStore(initialEnvelope);
+	await navigate(win, "keys");
+	await waitFor(
+		win,
+		"!!document.querySelector('#keys-profile')",
+		"fresh key fixture selector",
+	);
+	await settleRenderer(win);
+	await select(win, "#keys-profile", "exercise-keys");
+	await settleRenderer(win);
+	const saved = await readKeys(win);
+	assert.deepEqual(
+		saved.profiles,
+		encodeProfileEnvelope(initialEnvelope).profiles,
+	);
+}
+async function scenario(name: string, run: () => Promise<void>, page = "keys") {
 	try {
 		await run();
-		results.push({ page: "keys", control: name, status: "passed" });
+		results.push({ page, control: name, status: "passed" });
 	} catch (cause) {
 		results.push({
-			page: "keys",
+			page,
 			control: name,
 			status: "failed",
 			reason: message(cause),
@@ -623,6 +732,7 @@ async function scenario(name: string, run: () => Promise<void>) {
 	);
 }
 async function chooseKey(win: BrowserWindow, code: string) {
+	await settleRenderer(win);
 	const selector = `.keys-cells [data-drop-code="${code}"]`;
 	if (
 		await evaluate(
@@ -647,6 +757,7 @@ async function targeted(win: BrowserWindow) {
 	await scenario(
 		"Active-on-device profile persists and renders in panel",
 		async () => {
+			await resetKeys(win);
 			await select(win, "#keys-profile", "1-2");
 			await select(win, "#keys-profile", "exercise-keys");
 			const saved = await readKeys(win);
@@ -669,6 +780,7 @@ async function targeted(win: BrowserWindow) {
 	);
 	await select(win, "#keys-profile", "exercise-keys");
 	await scenario("Icon library opens from Keys [open-quake-di9]", async () => {
+		await resetKeys(win);
 		await chooseKey(win, "1,4");
 		const selector = await evaluate(
 			win,
@@ -698,12 +810,13 @@ async function targeted(win: BrowserWindow) {
 		picker.close();
 	});
 	// Preserve built-in editing flags in this sparse copied resource. They caused the reported bugs.
-	for (const [name, source, destination] of [
-		["Move key to empty cell [open-quake-fb9]", "1,4", "1,8"],
-		["Swap two keys [open-quake-fb9]", "1,8", "1,5"],
+	for (const [name, destination] of [
+		["Move key to empty cell [open-quake-fb9]", "1,8"],
+		["Swap two keys [open-quake-fb9]", "1,5"],
 	] as const) {
 		await scenario(name, async () => {
-			await chooseKey(win, source);
+			await resetKeys(win);
+			await chooseKey(win, "1,4");
 			const disabled = await evaluate(
 				win,
 				"document.querySelector('#key-destination')?.disabled",
@@ -711,7 +824,7 @@ async function targeted(win: BrowserWindow) {
 			const before = await readKeys(win);
 			const original = before.profiles
 				.find((p) => p.id === "exercise-keys")
-				?.pages[0].keys.find((k) => k.keyCode === source);
+				?.pages[0].keys.find((k) => k.keyCode === "1,4");
 			assert(original);
 			await select(win, "#key-destination", destination);
 			await click(win, ".key-editor .group:has(#key-title) .button-primary");
@@ -726,7 +839,7 @@ async function targeted(win: BrowserWindow) {
 			);
 			if (destination === "1,5")
 				assert.equal(
-					persisted?.find((k) => k.keyCode === source)?.config.title.text,
+					persisted?.find((k) => k.keyCode === "1,4")?.config.title.text,
 					"Exercise B",
 					"Swap didn't preserve the other key",
 				);
@@ -735,6 +848,7 @@ async function targeted(win: BrowserWindow) {
 	await scenario(
 		"Rename Luminance and persist title [open-quake-efm]",
 		async () => {
+			await resetKeys(win);
 			await chooseKey(win, "1,1");
 			const disabled = await evaluate(
 				win,
@@ -757,6 +871,7 @@ async function targeted(win: BrowserWindow) {
 	await scenario(
 		"Editable wide key moves to an empty cell through IPC",
 		async () => {
+			await resetKeys(win);
 			await select(win, "#keys-profile", "exercise-move");
 			await chooseKey(win, "1,4");
 			await select(win, "#key-destination", "1,1");
@@ -783,6 +898,7 @@ async function targeted(win: BrowserWindow) {
 	await scenario(
 		"Editable wide keys swap at a covered cell [open-quake-fb9]",
 		async () => {
+			await resetKeys(win);
 			await select(win, "#keys-profile", "exercise-move");
 			const before = await readKeys(win);
 			const source = before.profiles
@@ -851,6 +967,126 @@ async function targeted(win: BrowserWindow) {
 
 	await select(win, "#keys-profile", "exercise-keys");
 	await capture(win, "keys-targeted");
+	await scenario(
+		"Duplicate profile rename is rejected with localized guidance [open-quake-0z4]",
+		async () => {
+			await resetKeys(win);
+			await navigate(win, "profiles");
+			const start = mainReplies.length;
+			await textInput(
+				win,
+				'.profile-row[data-profile-row-id="exercise-move"] input',
+				"Exercise",
+			);
+			await waitFor(
+				win,
+				`Array.from(document.querySelectorAll('[role=status]')).some(el=>el.textContent===${JSON.stringify(profileText("functionWheelEditor.duplicateNameWarning", "en"))})`,
+				"localized duplicate name guidance",
+			);
+			assert(
+				mainReplies
+					.slice(start)
+					.some(
+						(reply) =>
+							reply.channel === "profiles:request" &&
+							reply.reason === "duplicate",
+					),
+			);
+			assert.equal(
+				(await readKeys(win)).profiles.find((p) => p.id === "exercise-move")
+					?.name,
+				"Move test",
+			);
+			await capture(win, "profiles-duplicate-name");
+		},
+		"profiles",
+	);
+	await scenario(
+		"Emoji package rename validation and selection [open-quake-fuu, open-quake-l86.30]",
+		async () => {
+			await navigate(win, "emoji");
+			await click(win, 'button[title="New emoji package"]');
+			const start = mainReplies.length;
+			await textInput(win, ".emoji-pack input", "中".repeat(11));
+			await waitFor(
+				win,
+				"!!document.querySelector('.emoji-pack input[aria-invalid=true]')",
+				"invalid weighted package name",
+			);
+			await waitFor(
+				win,
+				"document.querySelector('main')?.textContent.includes('Package names must be at most 20 weighted units.')",
+				"package rename guidance",
+			);
+			assert.equal(
+				mainReplies.length,
+				start,
+				"Invalid draft reached the domain",
+			);
+			await capture(win, "emoji-invalid-name");
+			await textInput(win, ".emoji-pack input", "Pack test");
+			await waitFor(
+				win,
+				"document.querySelector('.emoji-pack strong')?.textContent==='Pack test'",
+				"valid package rename",
+			);
+			await click(win, 'button[title="New emoji package"]');
+			await textInput(win, ".emoji-pack input", "Other pack");
+			await waitFor(
+				win,
+				"document.querySelectorAll('.emoji-pack strong').length===2",
+				"second package rename",
+			);
+			await click(win, ".emoji-pack[data-current=false] > button:first-child");
+			await waitFor(
+				win,
+				"document.querySelector('.emoji-pack[data-current=true] strong')?.textContent==='Pack test'",
+				"package selection",
+			);
+			const reply = Schema.decodeUnknownSync(EmojiReply)(
+				await evaluate(win, 'window.quakeEmoji.request({type:"read"})'),
+			);
+			assert(reply._tag === "ready");
+			assert.deepEqual(
+				reply.store.packages.map((p) => p.name),
+				["Pack test", "Other pack"],
+			);
+			assert.equal(
+				mainReplies.length,
+				start,
+				"Valid package operations were rejected",
+			);
+			await capture(win, "emoji-selected-package");
+		},
+		"emoji",
+	);
+	await scenario(
+		"QUAKE guide opens and closes through native input [open-quake-l86.30]",
+		async () => {
+			await navigate(win, "settings");
+			const controls = (await evaluate(
+				win,
+				`(${enumerateControls.toString()})()`,
+			)) as Control[];
+			const guide = controls.find((control) =>
+				/^(QUAKE guide|Open guide)/.test(control.label),
+			);
+			assert(guide, "Missing QUAKE guide entry");
+			await click(win, guide.selector);
+			await waitFor(
+				win,
+				"!!document.querySelector('dialog.guide-dialog[open]')",
+				"QUAKE guide dialog",
+			);
+			await capture(win, "settings-quake-guide");
+			await closeDialogs(win);
+			assert.equal(
+				await evaluate(win, "document.querySelectorAll('dialog[open]').length"),
+				0,
+			);
+		},
+		"settings",
+	);
 	await writeFile(
 		join(directory, "targeted.json"),
 		JSON.stringify(results, null, 2),
@@ -859,111 +1095,205 @@ async function targeted(win: BrowserWindow) {
 async function finish() {
 	if (finished) return;
 	finished = true;
-	const diagnosticErrors: unknown[] = [];
-	for (const file of await readdir(join(userData, "diagnostics")).catch(
-		() => [],
-	)) {
-		if (!file.endsWith(".ndjson")) continue;
-		for (const line of (
-			await readFile(join(userData, "diagnostics", file), "utf8")
-		)
-			.split("\n")
-			.slice(0, -1)) {
-			if (!line) continue;
-			const entry: unknown = JSON.parse(line);
-			if (
-				typeof entry === "object" &&
-				entry !== null &&
-				"pino_level" in entry &&
-				typeof entry.pino_level === "number" &&
-				entry.pino_level >= 50
+	let exitCode = 1;
+	try {
+		const diagnosticErrors: unknown[] = [];
+		for (const file of await readdir(join(userData, "diagnostics")).catch(
+			() => [],
+		)) {
+			if (!file.endsWith(".ndjson")) continue;
+			for (const line of (
+				await readFile(join(userData, "diagnostics", file), "utf8")
 			)
-				diagnosticErrors.push(entry);
+				.split("\n")
+				.slice(0, -1)) {
+				if (!line) continue;
+				const entry: unknown = JSON.parse(line);
+				if (
+					typeof entry === "object" &&
+					entry !== null &&
+					"pino_level" in entry &&
+					typeof entry.pino_level === "number" &&
+					entry.pino_level >= 50
+				)
+					diagnosticErrors.push(entry);
+			}
+		}
+		const diagnosticGroups = new Map<
+			string,
+			{ count: number; reason: string; expected: boolean }
+		>();
+		for (const entry of diagnosticErrors) {
+			if (
+				typeof entry !== "object" ||
+				entry === null ||
+				!("span_name" in entry)
+			)
+				continue;
+			const name = String(entry.span_name);
+			const expected = [
+				"ObsService.connect",
+				"ObsService.connectUnlocked",
+			].includes(name);
+			const reason = expected
+				? "Fresh scratch profile has no configured OBS endpoint"
+				: JSON.stringify("cause" in entry ? entry.cause : "main error");
+			const previous = diagnosticGroups.get(name);
+			diagnosticGroups.set(name, {
+				count: (previous?.count ?? 0) + 1,
+				reason,
+				expected,
+			});
+		}
+		for (const [name, diagnostic] of diagnosticGroups)
+			if (!diagnostic.expected)
+				results.push({
+					page: "main",
+					control: name,
+					status: "failed",
+					reason: `${diagnostic.count} main diagnostic errors: ${diagnostic.reason}`,
+				});
+		const summary = {
+			pages: visited.length,
+			discoveredPages: pages.length,
+			records: results.length,
+			controls: results.filter((r) => r.identity !== undefined).length,
+			exercised: results.filter(
+				(r) =>
+					r.identity !== undefined && ["passed", "failed"].includes(r.status),
+			).length,
+			passed: results.filter((r) => r.status === "passed").length,
+			failed: results.filter((r) => r.status === "failed").length,
+			skipped: results.filter((r) => r.status === "skipped").length,
+			expectedInert: results.filter((r) => r.status === "expected-inert")
+				.length,
+			errors: errors.length,
+		};
+		await writeFile(
+			join(directory, "report.json"),
+			JSON.stringify(
+				{
+					summary,
+					pages,
+					visited,
+					diagnosticErrors,
+					diagnosticGroups: Object.fromEntries(diagnosticGroups),
+					results,
+					errors,
+					registered,
+					invocations: Object.fromEntries(invocations),
+					rejected: mainReplies,
+					policy: {
+						skip: skipRules.map((r) => ({
+							pattern: r.pattern.source,
+							reason: r.reason,
+						})),
+						expectedInert,
+					},
+					userData,
+					fixtureOnly: true,
+				},
+				null,
+				2,
+			),
+			{ mode: 0o600 },
+		);
+		process.stdout.write(
+			`Management exerciser ${JSON.stringify(summary)}\nReport: ${join(directory, "report.json")}\n`,
+		);
+		for (const failure of results.filter((r) => r.status === "failed"))
+			process.stdout.write(
+				`FAIL ${failure.page}: ${failure.control}: ${failure.reason}\n`,
+			);
+		exitCode = summary.failed || summary.errors ? 1 : 0;
+	} finally {
+		app.exit(exitCode);
+	}
+}
+/** Restore selectors only after their newly revealed controls, keeping unrelated edits isolated. */
+async function exerciseRevealed(
+	win: BrowserWindow,
+	page: string,
+	control: Control,
+	seen: Set<string>,
+	depth = 0,
+): Promise<void> {
+	const before = (await evaluate(
+		win,
+		`(${enumerateControls.toString()})()`,
+	)) as Control[];
+	const positions = new Set(before.map((item) => item.position));
+	await exercise(win, page, control);
+	if (
+		control.tag === "select" &&
+		!skipReason(control) &&
+		control.options.length > 1
+	) {
+		assert(depth < 8, "Selector exploration exceeded eight nested states");
+		for (let count = 0; count < 80; count++) {
+			const controls = (await evaluate(
+				win,
+				`(${enumerateControls.toString()})()`,
+			)) as Control[];
+			const revealed = controls.find(
+				(item) => !positions.has(item.position) && !seen.has(item.identity),
+			);
+			if (!revealed) break;
+			seen.add(revealed.identity);
+			await exerciseRevealed(win, page, revealed, seen, depth + 1);
+		}
+		if (
+			await evaluate(
+				win,
+				`!!document.querySelector(${JSON.stringify(selectorFor(control))})`,
+			)
+		) {
+			await select(win, selectorFor(control), control.value);
 		}
 	}
-	const diagnosticGroups = new Map<
-		string,
-		{ count: number; reason: string; expected: boolean }
-	>();
-	for (const entry of diagnosticErrors) {
-		if (typeof entry !== "object" || entry === null || !("span_name" in entry))
-			continue;
-		const name = String(entry.span_name);
-		const expected = [
-			"ObsService.connect",
-			"ObsService.connectUnlocked",
-		].includes(name);
-		const reason = expected
-			? "Fresh scratch profile has no configured OBS endpoint"
-			: JSON.stringify("cause" in entry ? entry.cause : "main error");
-		const previous = diagnosticGroups.get(name);
-		diagnosticGroups.set(name, {
-			count: (previous?.count ?? 0) + 1,
-			reason,
-			expected,
-		});
-	}
-	for (const [name, diagnostic] of diagnosticGroups)
-		if (!diagnostic.expected)
-			results.push({
-				page: "main",
-				control: name,
-				status: "failed",
-				reason: `${diagnostic.count} main diagnostic errors: ${diagnostic.reason}`,
-			});
-	const summary = {
-		pages: visited.length,
-		discoveredPages: pages.length,
-		records: results.length,
-		controls: results.filter((r) => r.identity !== undefined).length,
-		exercised: results.filter(
-			(r) =>
-				r.identity !== undefined && ["passed", "failed"].includes(r.status),
-		).length,
-		passed: results.filter((r) => r.status === "passed").length,
-		failed: results.filter((r) => r.status === "failed").length,
-		skipped: results.filter((r) => r.status === "skipped").length,
-		expectedInert: results.filter((r) => r.status === "expected-inert").length,
-		errors: errors.length,
-	};
-	await writeFile(
-		join(directory, "report.json"),
-		JSON.stringify(
-			{
-				summary,
-				pages,
-				visited,
-				diagnosticErrors,
-				diagnosticGroups: Object.fromEntries(diagnosticGroups),
-				results,
-				errors,
-				registered,
-				invocations: Object.fromEntries(invocations),
-				rejected: mainReplies,
-				policy: {
-					skip: skipRules.map((r) => ({
-						pattern: r.pattern.source,
-						reason: r.reason,
-					})),
-					expectedInert,
-				},
-				userData,
-				fixtureOnly: true,
-			},
-			null,
-			2,
-		),
-		{ mode: 0o600 },
-	);
-	process.stdout.write(
-		`Management exerciser ${JSON.stringify(summary)}\nReport: ${join(directory, "report.json")}\n`,
-	);
-	for (const failure of results.filter((r) => r.status === "failed"))
-		process.stdout.write(
-			`FAIL ${failure.page}: ${failure.control}: ${failure.reason}\n`,
+	if (control.restoreRadio && !control.selected && !skipReason(control))
+		await click(win, control.restoreRadio);
+	// Toggle filters (aria-pressed) would otherwise hide later controls.
+	if (
+		control.pressed !== null &&
+		!skipReason(control) &&
+		(await evaluate(
+			win,
+			`document.querySelector(${JSON.stringify(selectorFor(control))})?.getAttribute('aria-pressed') ?? null`,
+		)) !== control.pressed
+	)
+		await click(win, selectorFor(control));
+
+	if (
+		["input", "textarea"].includes(control.tag) &&
+		![
+			"checkbox",
+			"radio",
+			"range",
+			"button",
+			"submit",
+			"file",
+			"color",
+			"password",
+		].includes(control.type) &&
+		!skipReason(control) &&
+		(await evaluate(
+			win,
+			`!!document.querySelector(${JSON.stringify(selectorFor(control))})`,
+		))
+	) {
+		await textInput(win, selectorFor(control), control.value).catch(
+			(cause: unknown) =>
+				results.push({
+					page,
+					control: `Restore ${control.label}`,
+					status: "failed",
+					reason: message(cause),
+				}),
 		);
-	app.exit(summary.failed || summary.errors ? 1 : 0);
+	}
 }
+
 async function run() {
 	await app.whenReady();
 	let win: BrowserWindow | undefined;
@@ -999,6 +1329,7 @@ async function run() {
 		}),
 	);
 
+	await resetKeys(win);
 	for (const page of pages) {
 		try {
 			if (page === "connection") {
@@ -1016,7 +1347,7 @@ async function run() {
 			await capture(win, `page-${page}`);
 			await evaluate(
 				win,
-				`window.managementExerciseInitialRows=Array.from(document.querySelectorAll('.profile-columns ul')).map(list=>list.children.length)`,
+				`window.managementExerciseInitialProfiles=Array.from(document.querySelectorAll('.profile-row[data-profile-row-id]')).map(row=>row.dataset.profileRowId);window.managementExerciseGeneratedProfiles={}`,
 			);
 			const seen = new Set<string>();
 			// Large generated dialogs (e.g. emoji grids) get a bounded sample.
@@ -1035,66 +1366,7 @@ async function run() {
 					dialogControls = 0;
 					continue;
 				}
-				await exercise(win, page, control);
-				if (control.restoreRadio && !control.selected && !skipReason(control))
-					await click(win, control.restoreRadio);
-				// Toggle filters (aria-pressed) would otherwise hide later controls.
-				if (
-					control.pressed !== null &&
-					!skipReason(control) &&
-					(await evaluate(
-						win,
-						`document.querySelector(${JSON.stringify(selectorFor(control))})?.getAttribute('aria-pressed') ?? null`,
-					)) !== control.pressed
-				)
-					await click(win, selectorFor(control));
-				if (
-					control.tag === "select" &&
-					!control.disabled &&
-					control.value &&
-					(await evaluate(
-						win,
-						`!!document.querySelector(${JSON.stringify(selectorFor(control))})`,
-					))
-				) {
-					await select(win, selectorFor(control), control.value, false).catch(
-						(cause: unknown) =>
-							results.push({
-								page,
-								control: `Restore ${control.label}`,
-								status: "failed",
-								reason: message(cause),
-							}),
-					);
-				}
-				if (
-					["input", "textarea"].includes(control.tag) &&
-					![
-						"checkbox",
-						"radio",
-						"range",
-						"button",
-						"submit",
-						"file",
-						"color",
-						"password",
-					].includes(control.type) &&
-					!skipReason(control) &&
-					(await evaluate(
-						win,
-						`!!document.querySelector(${JSON.stringify(selectorFor(control))})`,
-					))
-				) {
-					await textInput(win, selectorFor(control), control.value).catch(
-						(cause: unknown) =>
-							results.push({
-								page,
-								control: `Restore ${control.label}`,
-								status: "failed",
-								reason: message(cause),
-							}),
-					);
-				}
+				await exerciseRevealed(win, page, control, seen);
 
 				if (count % 25 === 24)
 					process.stdout.write(
@@ -1234,6 +1506,7 @@ async function prepare() {
 			},
 		},
 	};
+	initialEnvelope = envelope;
 	await writeFile(
 		join(userData, "profiles-v1.json"),
 		JSON.stringify(encodeProfileEnvelope(envelope)),
@@ -1257,10 +1530,10 @@ const deadline = setTimeout(() => {
 		page: "fixture",
 		control: "deadline",
 		status: "failed",
-		reason: "Exceeded 10 minute deadline",
+		reason: "Exceeded 15 minute deadline",
 	});
 	void finish();
-}, 600000);
+}, 900000);
 app.once("will-quit", () => clearTimeout(deadline));
 process.once("SIGTERM", () => {
 	results.push({

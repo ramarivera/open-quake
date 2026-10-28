@@ -213,8 +213,9 @@ export function ProfilesManager(): React.JSX.Element {
 	};
 	const row = (p: Profile): React.JSX.Element => (
 		<li
-			key={`${p.id}:${p.name}`}
+			key={p.id}
 			className="profile-row"
+			data-profile-row-id={p.id}
 			data-selected={selected?.id === p.id}
 		>
 			<ProfileThumbnailCell
@@ -268,6 +269,7 @@ export function ProfilesManager(): React.JSX.Element {
 			) : (
 				<>
 					<ProfileNameInput
+						key={p.name}
 						name={p.name}
 						commit={(name) =>
 							request({
@@ -383,6 +385,7 @@ export function ProfilesManager(): React.JSX.Element {
 					</span>
 				)}
 			</div>
+			{status && <p role="status">{status}</p>}
 			<div className="profile-columns">
 				<div>
 					<h3>{text("functionWheelEditor.defaultCategory")}</h3>
@@ -566,7 +569,6 @@ export function ProfilesManager(): React.JSX.Element {
 			{foregroundGuidance === "accessibility-denied" && (
 				<p role="alert">{localeText("foregroundAccessibility")}</p>
 			)}
-			{status && <p role="status">{status}</p>}
 		</section>
 	);
 }

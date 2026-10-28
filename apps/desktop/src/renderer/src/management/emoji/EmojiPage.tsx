@@ -178,6 +178,10 @@ export function EmojiPage(): React.JSX.Element {
 	const saveName = (): void => {
 		if (renameCancelled.current) return;
 		if (rename) {
+			if (weightedLength(rename.name.trim()) > 20) {
+				setMessage("Package names must be at most 20 weighted units.");
+				return;
+			}
 			renameCancelled.current = true;
 			void run({
 				type: "command",
@@ -528,24 +532,33 @@ export function EmojiPage(): React.JSX.Element {
 									key={entry.id}
 								>
 									{rename?.id === entry.id ? (
-										<input
-											ref={(input) => {
-												input?.focus();
-											}}
-											aria-label={`Rename ${entry.name}`}
-											value={rename.name}
-											onChange={(e) =>
-												setRename({ id: entry.id, name: e.target.value })
-											}
-											onBlur={saveName}
-											onKeyDown={(e) => {
-												if (e.key === "Enter") saveName();
-												if (e.key === "Escape") {
-													renameCancelled.current = true;
-													setRename(null);
+										<div>
+											<input
+												ref={(input) => {
+													input?.focus();
+												}}
+												aria-label={`Rename ${entry.name}`}
+												value={rename.name}
+												maxLength={20}
+												aria-invalid={weightedLength(rename.name.trim()) > 20}
+												onChange={(e) =>
+													setRename({ id: entry.id, name: e.target.value })
 												}
-											}}
-										/>
+												onBlur={saveName}
+												onKeyDown={(e) => {
+													if (e.key === "Enter") saveName();
+													if (e.key === "Escape") {
+														renameCancelled.current = true;
+														setRename(null);
+													}
+												}}
+											/>
+											{weightedLength(rename.name.trim()) > 20 && (
+												<small role="alert">
+													Package names must be at most 20 weighted units.
+												</small>
+											)}
+										</div>
 									) : (
 										<button
 											type="button"

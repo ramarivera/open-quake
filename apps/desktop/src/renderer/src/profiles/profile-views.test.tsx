@@ -383,6 +383,12 @@ it("MGMT-319 commits weighted inline names on Enter and blur, and reverts invali
 		await input(field, value);
 		await act(async () => field.blur());
 		expect(field.value).toBe("中文abcdex");
+		if (value === "Quick") {
+			expect(f.host.querySelector('[role="status"]')?.textContent).toBe(
+				profileText("functionWheelEditor.duplicateNameWarning", "en"),
+			);
+			expect(f.host.textContent).toContain("Choose another name.");
+		}
 		expect(f.saved().profiles.find((p) => p.id === "custom")?.name).toBe(
 			"中文abcdex",
 		);

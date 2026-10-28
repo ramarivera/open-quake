@@ -6,6 +6,7 @@ import { buildNativeMedia } from "./native-media-build";
 
 export default defineConfig({
 	main: {
+		define: { __OPEN_QUAKE_MANAGEMENT_EXERCISER__: "false" },
 		plugins: [
 			{
 				name: "open-quake-native-media",

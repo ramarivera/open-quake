@@ -1,9 +1,18 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, statSync, symlinkSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	statSync,
+	symlinkSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const root = "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-ui-exerciser";
-if (!statSync("/Volumes/ExtSSD").isDirectory())
+if (
+	!existsSync("/Volumes/ExtSSD") ||
+	!statSync("/Volumes/ExtSSD").isDirectory()
+)
 	throw new Error("Scratch volume /Volumes/ExtSSD is unavailable");
 mkdirSync(root, { recursive: true });
 const run = mkdtempSync(join(root, "run-"));
