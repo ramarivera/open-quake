@@ -22,3 +22,7 @@ Deliver the vendor reader through the existing QuakeDevice connection and its ev
 ## Risks / Trade-offs
 
 Physical report ID/length, raw action meaning and coordinate ranges need recorded hardware evidence. Synthetic fixtures explicitly identify their provenance. A five-contact bound follows SCREEN-053 and prevents malformed packets from creating arbitrary contacts. Cross-lane consumers must attach the resolver/key sink and capture controls; the README specifies those contracts.
+
+## macOS pointer correction
+
+Read-only native enumeration on the connected controller shows five usage entries sharing exactly one device path. Pinned node-hid3.4.0 HIDAPI/mac/hid.c derives those paths from IOHIDDeviceGetService and opens that shared IOHIDDevice; exclusive mode selects kIOHIDOptionsTypeSeizeDevice. Earlier source notes assumed these were independent devices, but the path evidence disproves that assumption on this controller. Use `nonExclusive:false` only for `isTouchDevice(info)` on Darwin. No sibling handles, event taps, global input or firmware commands are needed. Existing scope/recovery owns close/reopen. A native open/close proves ownership can be acquired and released; physical touch still must confirm cursor suppression and correct app routing.

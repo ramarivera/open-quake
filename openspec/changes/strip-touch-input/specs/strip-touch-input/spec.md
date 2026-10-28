@@ -162,3 +162,16 @@ Unmount, pagehide and beforeunload SHALL dispose the mounted touch owner, observ
 #### Scenario: Swipe, double-click and locked mirror
 - **WHEN** a directional swipe, a double-click or a drag on a locked mirror cell occurs
 - **THEN** no navigation, duplicate action, locked animation or movement occurs, while inspection remains available
+
+### Requirement: Scoped macOS touch-controller ownership
+On macOS the exact vendor touch identity SHALL open exclusively so the shared controller does not also drive OS pointer input while the app owns raw touch. Control interfaces and other device identities SHALL retain non-exclusive opens, and Windows/Linux behavior SHALL remain unchanged. The existing scoped touch owner SHALL close the handle on disconnect, lock, stream failure and disposal.
+
+#### Scenario: Shared controller collections
+- **WHEN** the macOS device exposes vendor touch and digitizer/mouse usages at one native path
+- **THEN** the app acquires the path once through its exact vendor-touch match in exclusive mode
+- **AND** no separate mouse or digitizer handle is opened
+
+#### Scenario: Release ownership
+- **WHEN** the touch owner is disposed or locked
+- **THEN** its acquired handle closes through the existing scope
+- **AND** no global pointer hook or firmware setting changes

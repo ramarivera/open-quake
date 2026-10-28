@@ -8,6 +8,7 @@ import {
 	QuakeHidWriteFailed,
 } from "./device-errors.js";
 import { type HidConnection, HidTransport } from "./hid-transport.js";
+import { isTouchDevice } from "./touch/touch-contracts.js";
 
 // Native code loads only when a real transport operation is requested.
 const loadHid = () => import("node-hid");
@@ -77,7 +78,11 @@ export function makeNodeHidLayer(options: NodeHidOptions = {}) {
 					try: async () => {
 						const hid = await loadHid();
 						return platform === "darwin"
-							? hid.HIDAsync.open(info.path, { nonExclusive: true })
+							? hid.HIDAsync.open(info.path, {
+									// macOS reports vendor touch and its pointer usages at one path.
+									// Seize only that controller, within the existing touch scope.
+									nonExclusive: !isTouchDevice(info),
+								})
 							: hid.HIDAsync.open(info.path);
 					},
 					catch: (cause) => new QuakeHidOpenFailed(cause),
