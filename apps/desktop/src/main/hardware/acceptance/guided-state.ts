@@ -32,7 +32,7 @@ export const GUIDED_STEPS = [
 	{ id: "right", prompt: "Turn the knob right by five clicks.", goal: "right" },
 	{
 		id: "press",
-		prompt: "Press and release the knob three times.",
+		prompt: "Briefly press and release the knob three times.",
 		goal: "press",
 	},
 	{

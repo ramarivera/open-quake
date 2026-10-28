@@ -1,7 +1,8 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { expect, it } from "vitest";
 import { KnobResource } from "../../../../../../packages/device/src/knob/knob-contracts";
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { pinKnobProfile } from "../../knob/voice-route";
 import { guidedProfileEnvelope } from "./guided-profile";
 import { createGuidedCapture, GUIDED_STEPS } from "./guided-state";
 
@@ -78,4 +79,18 @@ it("seeds one fresh inert touch profile with no provider or host actions", async
 	expect(JSON.stringify(encoded)).not.toMatch(
 		/voiceRoute|https:|hotkey|keychain|agentId/,
 	);
+});
+
+it("cannot pin microphone capture from the fixture even after device selection", async () => {
+	const fixture = guidedProfileEnvelope();
+	const selected = Schema.decodeUnknownSync(ProfileEnvelope)({
+		...Schema.encodeSync(ProfileEnvelope)(fixture),
+		activeByDevice: { fixture: { profileId: "guided-capture", pageId: "1" } },
+	});
+	for (const envelope of [fixture, selected]) {
+		const result = await Effect.runPromise(
+			pinKnobProfile(envelope, "fixture").pipe(Effect.either),
+		);
+		expect(result._tag).toBe("Left");
+	}
 });

@@ -162,7 +162,9 @@ effect, and the LEDs were seen flashing during these runs.
 The development-only `guided-input` entry launches the production app with fresh
 scratch data and one device owner. It subscribes to the existing panel preload
 bridge. It does not create another HID reader. Sixteen inert page tiles and empty
-knob assignments prevent provider calls and host actions during the guide. The
+knob assignments contain no configured provider or host actions. Brief knob
+presses can interrupt the idle voice lane; a hold has no valid capture route and
+can show unavailable feedback. There are no player tiles to enable volume mode. The
 fixture doesn't read or replace the user's saved profiles.
 
 From the repository root, this hidden rehearsal uses synthetic input and blocks
@@ -182,7 +184,7 @@ The on-panel prompt advances through these actions:
 
 1. Tap and release the center tile.
 2. Turn the knob left five clicks, then right five clicks.
-3. Press and release the knob three times.
+3. Briefly press and release the knob three times.
 4. Tap and release the top-left, top-right, bottom-right and bottom-left tiles.
 5. Swipe across the screen and lift your finger.
 6. Unplug the QUAKE USB cable, reconnect it, then tap and release a tile.

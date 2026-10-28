@@ -373,3 +373,20 @@ The desktop composer SHALL derive model readiness from the persona for its opene
 #### Scenario: Persona destination or credentials change
 - **WHEN** the user updates the persona, opens New chat or history, or receives a catalog update
 - **THEN** readiness follows the opened destination and current catalog, and late reads cannot restore obsolete readiness
+
+### Requirement: Speech draft readiness before saving
+Speech settings SHALL prevent incomplete active-provider configurations or credentials from reaching Save. The form SHALL explain missing settings or credentials and SHALL reuse stored credentials only when the provider, workspace and region still match. Main-process validation SHALL remain authoritative.
+
+#### Scenario: Incomplete provider selected
+- **WHEN** the user selects DashScope with an empty workspace or a provider without usable credentials
+- **THEN** Save is disabled and the form explains the missing input
+- **AND** no Save IPC request occurs until the draft is valid
+
+#### Scenario: Existing credentials and changed scope
+- **WHEN** credentials are already stored and the user edits only speech language or voice
+- **THEN** the form permits saving without a new credential
+- **AND** changing provider, workspace or region requires new credentials
+
+#### Scenario: Partial XFY credentials
+- **WHEN** the user enters only part of the XFY app ID, API key and secret
+- **THEN** Save remains disabled until the complete bundle is valid

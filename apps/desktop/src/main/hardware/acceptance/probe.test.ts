@@ -63,6 +63,23 @@ it("never keeps the device-name bytes, which carry the serial", () => {
 	expect(() => assertNoSerial({ raw: [1, 2] }, "PRIVATE01")).not.toThrow();
 });
 
+it("rejects serials in typed evidence without scanning outside a byte view", () => {
+	const serial = "PRIVATE01";
+	const bytes = Uint8Array.from(serial, (char) => char.charCodeAt(0));
+	for (const raw of [
+		bytes,
+		Buffer.from(bytes),
+		Uint8Array.from([0, ...bytes, 0]).subarray(1, 10),
+	])
+		expect(() => assertNoSerial({ nested: [{ raw }] }, serial)).toThrow(
+			"must not contain",
+		);
+	const storage = Uint8Array.from([...bytes, 1, 2]);
+	expect(() =>
+		assertNoSerial({ raw: storage.subarray(bytes.length) }, serial),
+	).not.toThrow();
+});
+
 const runFake = async (
 	mutate?: (cmdId: number, body: Uint8Array) => Uint8Array | undefined,
 ) => {

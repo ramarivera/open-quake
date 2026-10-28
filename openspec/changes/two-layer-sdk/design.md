@@ -157,3 +157,19 @@ identifies a press. Physical placement and release-event semantics are unknown.
 QMK protocol-version responses use big-endian bytes; backlight responses echo
 their selector, and set/save responses echo the request prefix. These rules come
 from the recovered QMK service, not the A3-only template.
+
+## Agent testability proposal, open-quake-l86.20
+
+The existing seams already support most software checks. `HidTransport` injects discovery/open/report streams into `startTouchSource`, `makeTouchSession` parses and tracks contacts before emitting decoded points, and the knob service injects dispatch ports. The hidden management exerciser drives the actual renderer through production IPC. Reuse these owners rather than adding another input observer or test runner.
+
+The missing information is input identity in persisted diagnostics. `TouchInput.report` and key-runtime spans have timing, but the closed `safeTouchLog` projection in `apps/desktop/src/main/diagnostics/privacy.ts` currently admits only health/state counters. That cannot establish which tile a physical contact reached.
+
+Recommended next implementation:
+
+1. Add an explicitly enabled, bounded decoded-input diagnostic event at the existing touch-session emission, knob dispatch and selected-tile dispatch boundaries. Include monotonic sequence/time, event kind, rounded logical coordinates, down/move/up state, knob delta and selected row/column. Never include device serials, native paths, key titles, text, prompts, credentials or audio. Keep it off in ordinary use. Extend the existing closed privacy projection so arbitrary attributes remain scrubbed. This is the smallest useful improvement for diagnosing a reported wrong target.
+2. Replay those decoded synthetic events through the existing injected transport and knob dispatch ports. Reuse fake-HID streams and mounted strip tests to test ordering, coordinate conversion, releases and reconnect generations. An event replay proves software routing; it cannot prove physical illumination, USB behavior or OS pointer suppression. Raw HID recording is unnecessary for ordinary UI diagnosis.
+3. Reuse current hidden Electron captures on failure and the profile-thumbnail capture owner for a selected-profile snapshot. A future targeted exerciser option should choose one page/scenario without changing strict assertions, avoiding a full thirteen-page crawl for a settings fix. No new server, global event tap, background watcher or parallel native owner is needed.
+
+If an actual physical session is required, use the already tracked guided capture in `open-quake-l86.19`, with the app visible on QUAKE and instructions for touch tiles and the knob. The controller has no physical key matrix. Keep the session short, restore settings and close all capture handles. The macOS mirrored-pointer problem in `open-quake-l86.23` remains separate: raw vendor touch and OS digitizer/mouse collections have different owners, and a mock replay does not prove that seizing one suppresses the others.
+
+This section is a source-grounded proposal. None of the additional event logging, replay or targeted-exerciser options is implemented by the typed-byte privacy correction.

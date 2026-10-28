@@ -414,3 +414,11 @@ An explicitly enabled capture SHALL observe the production app event bridge usin
 - **WHEN** a step times out, the event limit is reached or the session ends early
 - **THEN** the report remains incomplete and preserves captured observations
 - **AND** no event sequence alone claims physical target accuracy or cursor suppression
+
+### Requirement: Probe serial-byte rejection
+The hardware query probe SHALL reject evidence containing the selected device serial as text, numeric arrays or Uint8Array views including Buffer. It SHALL inspect only the bytes belonging to a view.
+
+#### Scenario: Typed evidence bytes
+- **WHEN** serial bytes occur in a nested typed byte view
+- **THEN** the probe rejects the evidence before writing it
+- **AND** bytes outside the view do not become evidence
