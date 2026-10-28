@@ -6,6 +6,7 @@ import {
 	Effect,
 	Layer,
 	ManagedRuntime,
+	Option,
 	Schema,
 	TestClock,
 	TestContext,
@@ -34,7 +35,9 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
 import {
+	KEY_PREVIEW,
 	KEY_REQUEST,
+	KeyPreview,
 	type KeyReply,
 	type LibraryPack,
 } from "../../shared/key-library";
@@ -208,6 +211,75 @@ it("routes geometry and page edits through the authorized typed Keys consumer", 
 		await f.runtime.dispose();
 	}
 });
+
+for (const occupied of [false, true])
+	it(`Keys IPC persists a ${occupied ? "covered-cell swap" : "move to an empty placeholder"} and publishes the panel preview`, async () => {
+		const empty = createEmptyProfileKey("2,8");
+		const other = occupied
+			? {
+					...empty,
+					childrenName: Option.some("hotkey"),
+					config: {
+						...empty.config,
+						type: "hotkey",
+						size: [2, 1] as const,
+						actions: [{ type: "key", value: "b" }],
+					},
+				}
+			: empty;
+		const f = fixture(
+			{ type: "hotkey", size: [2, 1], actions: [{ type: "key", value: "a" }] },
+			undefined,
+			undefined,
+			[other],
+		);
+		const target = {
+			token: "selector-move",
+			profileId: "p",
+			pageId: "one",
+			keyCode: "1,1",
+			revision: 0,
+		};
+		try {
+			const preview = await f.request(f.manager, {
+				type: "preview",
+				target,
+				key: f.key,
+				geometry: { destination: occupied ? "2,7" : "2,8" },
+			});
+			expect(preview._tag).toBe("success");
+			const saved = await f.request(f.manager, {
+				type: "save",
+				token: target.token,
+			});
+			expect(saved._tag).toBe("success");
+			const expected = [
+				{ ...f.key, keyCode: "2,8" },
+				{ ...Schema.encodeSync(ProfileKey)(other), keyCode: "1,1" },
+			];
+			const persisted = await f.runtime.runPromise(
+				ProfileService.getProfile("p"),
+			);
+			expect(persisted.revision).toBe(1);
+			expect(
+				persisted.pages[0].keys.map((key) =>
+					Schema.encodeSync(ProfileKey)(key),
+				),
+			).toEqual(expect.arrayContaining(expected));
+			const published = vi
+				.mocked(f.panel.webContents.send)
+				.mock.calls.filter(([channel]) => channel === KEY_PREVIEW)
+				.at(-1)?.[1];
+			const panel = Schema.decodeUnknownSync(KeyPreview)(published);
+			expect(panel.envelope.profiles[0].revision).toBe(1);
+			expect(panel.envelope.profiles[0].pages[0].keys).toEqual(
+				expect.arrayContaining(expected),
+			);
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	});
 
 it("returns import diagnostics without writing, then imports quarantined JSON without runtime calls", async () => {
 	let calls = 0;

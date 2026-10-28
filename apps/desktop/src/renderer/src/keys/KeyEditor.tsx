@@ -452,10 +452,19 @@ export function KeyEditor({
 			}
 			if (reply.envelope) {
 				accept(reply.envelope);
-				const p = reply.envelope.profiles.find(
-					(p) => p.id === old.target.profileId,
-				);
-				const destination = old.geometry.destination ?? old.target.keyCode;
+				const p = Schema.decodeUnknownSync(ProfileEnvelope)(
+					reply.envelope,
+				).profiles.find((p) => p.id === old.target.profileId);
+				const requested = old.geometry.destination ?? old.target.keyCode;
+				const destination =
+					p?.pages
+						.find((page) => page.id === old.target.pageId)
+						?.keys.find(
+							(key) =>
+								key.config.type &&
+								key.config.display &&
+								occupiedCells(key).includes(requested),
+						)?.keyCode ?? requested;
 				const savedKey = { ...old.key, keyCode: destination };
 				const next = {
 					...old,
@@ -831,11 +840,21 @@ export function KeyEditor({
 							<input
 								id="key-title"
 								disabled={!keyEditable(key, "title")}
+								aria-describedby={
+									!keyEditable(key, "title") ? "key-title-locked" : undefined
+								}
 								value={keyTitle(key, locale, alternate)}
 								onChange={(e) =>
 									void update(editKeyTitle(key, e.target.value, alternate))
 								}
 							/>
+							{!keyEditable(key, "title") && (
+								<small id="key-title-locked">
+									{locale === "de"
+										? "Dieses integrierte Profil sperrt den Titel dieser Taste gemäß der DK-Suite-Vorlage."
+										: "This built-in profile locks this key's title to match the DK-Suite template."}
+								</small>
+							)}
 							<small
 								data-warning={
 									titleWeight(keyTitle(key, locale, alternate)) > 16
