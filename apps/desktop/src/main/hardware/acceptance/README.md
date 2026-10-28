@@ -88,3 +88,27 @@ Legacy lighting round trips require the existing qualified firmware identity. In
 `audio-smoke.ts`, built with `audio-smoke.config.ts`, additionally requires `OPEN_QUAKE_HW_E2E_AUDIO=1` and existing native microphone permission. It records two brief sessions from the default USB PnP input, validates PCM sequencing, pause/resume, stop/tail drainage and worker cleanup, then plays a low-level 250 ms tone through the production audio output. Results retain counts and RMS only, not audio samples. Native playback completion does not prove acoustic audibility or a provider loop. Raw hardware gestures, USB cable hot-plug and physical illumination remain separate acceptance items.
 
 Baseline control coverage and supplemental checks use separate runs and fresh artifact directories. Extended mode leaves baseline `scenarios` empty and does not recompute its percentage. The audio fixture proves transport/framing and records RMS; silence is valid input and is not proof of acoustic sensitivity. The fingerprint `fixtureBundleSha256` identifies the executed bundle, with checkout revision and dirty status recorded separately. The deadline cancels work, attempts bounded worker cleanup and releases the owner lock before forced exit. Partial-tail coverage requires at least one actual short final frame. Frame-aligned stops remain valid capture results and report partial-tail coverage as unexercised; they do not prevent independent playback checks.
+
+## Panel display fixture
+
+`panel-display.ts` builds with `panel-display.config.ts` after `pnpm build`, so
+the composition root finds the production renderer and preload. It requires the
+same native opt-in, artifact directory and ownership lock. It starts the actual
+production app against the real device with memory-free scratch `userData`,
+keeps management and settings windows hidden and unfocused, and lets only the
+panel appear, inactive, on the QUAKE display.
+
+Before startup it captures the QUAKE display with `screencapture -R`. Once the
+panel fills that display it captures the display again and the panel's own
+rendered page. It passes only when the display matches the rendered panel,
+differs from the desktop it replaced and isn't a flat frame. `panel-result.json`
+records the pixel evidence and tile counts; `desktop.png`, `display.png` and
+`panel.png` stay in scratch.
+
+Launch Electron from a script file rather than an inline shell command: the
+owner check treats any process whose command line names both Electron and an
+`oq-` checkout as a competing owner, including the launching shell.
+
+This is supplemental evidence for the `display` scenario, which stays
+supervised. It shows what macOS sends to the QUAKE, not the backlight or the
+light the panel physically emits.
