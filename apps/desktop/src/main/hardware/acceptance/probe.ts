@@ -90,12 +90,24 @@ export function redactName(reply: QueryReply, serial: string) {
 	};
 }
 
-/** Fails closed if the serial reaches evidence as text or as byte values. */
+/** Fails closed if the serial reaches evidence as text or inside any byte array. */
 export function assertNoSerial(evidence: unknown, serial: string) {
-	const text = JSON.stringify(evidence).replaceAll(" ", "");
-	const codes = Array.from(serial, (char) => char.charCodeAt(0)).join(",");
+	const texts: string[] = [];
+	const visit = (value: unknown): void => {
+		if (typeof value === "string") texts.push(value);
+		else if (Array.isArray(value)) {
+			if (value.every((item) => typeof item === "number"))
+				texts.push(String.fromCharCode(...value.map((item) => item & 255)));
+			else value.forEach(visit);
+		} else if (value && typeof value === "object")
+			for (const [key, item] of Object.entries(value)) {
+				texts.push(key);
+				visit(item);
+			}
+	};
+	visit(evidence);
 	assert(
-		!text.includes(serial) && !text.includes(codes),
+		texts.every((text) => !text.includes(serial)),
 		"Probe evidence must not contain the device serial",
 	);
 }
@@ -152,18 +164,21 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 					}
 				}).pipe(Effect.timeoutOption(1_000));
 			});
-		const step = (
-			id: string,
-			effect: Effect.Effect<string | undefined, unknown>,
-		) =>
+		// Every probe reply is required: silence or a bad checksum fails its check.
+		const valid = (reply: Option.Option<QueryReply>, what: string) => {
+			assert(Option.isSome(reply), `No ${what} reply within 1 s`);
+			assert(reply.value.checksumValid, `Invalid ${what} reply checksum`);
+			return reply.value;
+		};
+		const ask = (cmdId: number, what: string) =>
+			query(cmdId).pipe(Effect.map((reply) => valid(reply, what)));
+		const step = (id: string, effect: Effect.Effect<unknown, unknown>) =>
 			Effect.exit(effect).pipe(
 				Effect.map((exit) =>
 					checks.push(
 						exit._tag === "Failure"
 							? { id, status: "failed", cause: safeCause(exit.cause) }
-							: exit.value === undefined
-								? { id, status: "passed" }
-								: { id, status: "skipped", reason: exit.value },
+							: { id, status: "passed" },
 					),
 				),
 			);
@@ -174,12 +189,13 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 				`query-${name}`,
 				query(cmdId).pipe(
 					Effect.map((reply) => {
+						// Corrupt replies stay in evidence for diagnosis, then fail.
 						catalog[name] = Option.match(reply, {
 							onNone: () => null,
 							onSome: (value) =>
 								cmdId === 0x1f ? redactName(value, options.serial) : value,
 						});
-						return Option.isSome(reply) ? undefined : "no reply within 1 s";
+						valid(reply, name);
 					}),
 				),
 			);
@@ -190,9 +206,8 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 			Effect.gen(function* () {
 				const counts: number[] = [];
 				for (let index = 0; index < 3; index++) {
-					const reply = yield* query(KEEP_ALIVE);
-					if (Option.isNone(reply)) return "no keep-alive reply";
-					counts.push(reply.value.subData[0] ?? -1);
+					const reply = yield* ask(KEEP_ALIVE, "keep-alive");
+					counts.push(reply.subData[0] ?? -1);
 					yield* Effect.sleep(300);
 				}
 				evidence.keepAliveCounts = counts;
@@ -201,7 +216,6 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 					counts.map((_, index) => ((counts[0] ?? 0) + index) % 256),
 					"Keep-alive counts are not consecutive",
 				);
-				return undefined;
 			}),
 		);
 
@@ -210,16 +224,13 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 			Effect.gen(function* () {
 				const rows: Array<{ hostMs: number; deviceTicks: number }> = [];
 				for (const interval of options.intervalsMs) {
-					if (Option.isNone(yield* query(KEEP_ALIVE)))
-						return "no keep-alive reply";
+					yield* ask(KEEP_ALIVE, "keep-alive");
 					const start = performance.now();
 					yield* Effect.sleep(interval);
-					const reply = yield* query(0x2d);
+					const reply = yield* ask(0x2d, "tick");
 					const hostMs = performance.now() - start;
-					const tick = Option.isSome(reply)
-						? decodeTick(reply.value.subData)
-						: undefined;
-					if (!tick) return "no tick reply";
+					const tick = decodeTick(reply.subData);
+					assert(tick, "Tick reply is too short");
 					rows.push({ hostMs: Math.round(hostMs), deviceTicks: tick.elapsed });
 				}
 				evidence.intervals = rows;
@@ -231,7 +242,10 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 					"Device tick rate disagrees across intervals",
 				);
 				evidence.ticksPerMs = Number(((low + high) / 2).toFixed(3));
-				return undefined;
+				assert(
+					low > 0.95 && high < 1.05,
+					"Device tick is not one per millisecond",
+				);
 			}),
 		);
 
@@ -239,26 +253,22 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 			"keepalive-starvation-observation",
 			Effect.gen(function* () {
 				const state = Effect.gen(function* () {
-					const screen = yield* query(0x04);
-					const idle = yield* query(0x07);
-					return {
-						screen: Option.getOrUndefined(screen)?.subData[0],
-						idle: Option.getOrUndefined(idle)?.subData[0],
-					};
+					const screen = yield* ask(0x04, "screen-power");
+					const idle = yield* ask(0x07, "idle-flags");
+					return { screen: screen.subData[0], idle: idle.subData[0] };
 				});
 				const before = yield* state;
-				const primed = yield* query(KEEP_ALIVE);
+				const primed = yield* ask(KEEP_ALIVE, "keep-alive");
 				yield* Effect.sleep(options.starvationMs);
 				const after = yield* state;
-				const resumed = yield* query(KEEP_ALIVE);
+				const resumed = yield* ask(KEEP_ALIVE, "keep-alive");
 				evidence.starvation = {
 					starvedMs: options.starvationMs,
 					before,
 					after,
-					countBefore: Option.getOrUndefined(primed)?.subData[0],
-					countAfter: Option.getOrUndefined(resumed)?.subData[0],
+					countBefore: primed.subData[0],
+					countAfter: resumed.subData[0],
 				};
-				return Option.isSome(resumed) ? undefined : "no keep-alive reply";
 			}),
 		);
 		assertNoSerial(evidence, options.serial);

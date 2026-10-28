@@ -63,7 +63,9 @@ it("never keeps the device-name bytes, which carry the serial", () => {
 	expect(() => assertNoSerial({ raw: [1, 2] }, "PRIVATE01")).not.toThrow();
 });
 
-it("records the catalog, keep-alive counts, tick rate and starvation state", async () => {
+const runFake = async (
+	mutate?: (cmdId: number, body: Uint8Array) => Uint8Array | undefined,
+) => {
 	let count = 0;
 	let reference = 0;
 	const writes: Uint8Array[] = [];
@@ -71,8 +73,11 @@ it("records the catalog, keep-alive counts, tick rate and starvation state", asy
 		HidTransport,
 		Effect.gen(function* () {
 			const inbox = yield* Queue.unbounded<Uint8Array>();
-			const reply = (cmdId: number, sub: number[]) =>
-				Queue.offer(inbox, report(0x55, cmdId, sub).slice(1));
+			const reply = (cmdId: number, sub: number[]) => {
+				const body = report(0x55, cmdId, sub).slice(1);
+				const sent = mutate ? mutate(cmdId, body) : body;
+				return sent ? Queue.offer(inbox, sent) : Effect.void;
+			};
 			return {
 				discover: () =>
 					Effect.succeed([
@@ -126,6 +131,11 @@ it("records the catalog, keep-alive counts, tick rate and starvation state", asy
 			}),
 		).pipe(Effect.provide(transport)),
 	);
+	return { result, writes };
+};
+
+it("records the catalog, keep-alive counts, tick rate and starvation state", async () => {
+	const { result, writes } = await runFake();
 	expect(result.checks.filter((check) => check.status === "failed")).toEqual(
 		[],
 	);
@@ -137,4 +147,22 @@ it("records the catalog, keep-alive counts, tick rate and starvation state", asy
 	expect(writes.every(allowedProbeWrite)).toBe(true);
 	expect(result.writes).toBe(writes.length);
 	expect(Either.isRight(queryReport(0x2d))).toBe(true);
+});
+
+it("fails checks whose replies are missing or corrupt", async () => {
+	const { result } = await runFake((cmdId, body) => {
+		if (cmdId === 0x04) return undefined;
+		if (cmdId === 0x07) {
+			const corrupt = Uint8Array.from(body);
+			corrupt[5] = (corrupt[5] ?? 0) ^ 0xff;
+			return corrupt;
+		}
+		return body;
+	});
+	const status = (id: string) =>
+		result.checks.find((check) => check.id === id)?.status;
+	expect(status("query-screen-power")).toBe("failed");
+	expect(status("query-idle-flags")).toBe("failed");
+	expect(status("keepalive-starvation-observation")).toBe("failed");
+	expect(status("query-tick")).toBe("passed");
 });
