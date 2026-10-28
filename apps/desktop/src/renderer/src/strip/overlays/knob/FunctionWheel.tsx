@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MenuProfile } from "../../../../../shared/knob-contracts";
 
-const ROW_OFFSETS = [-108, -57, 0, 57, 108] as const;
+// Rows spread over the full 480 px panel height, centred on the selection.
+const ROW_OFFSETS = [-168, -88, 0, 88, 168] as const;
+const CENTER = 240;
 
 /** Recovered geometry and deadlines, using the independent flat list drawing. */
 export function FunctionWheel({
@@ -17,7 +19,7 @@ export function FunctionWheel({
 }): React.JSX.Element | null {
 	const [nudge, setNudge] = useState(0);
 	const [indicator, setIndicator] = useState(false);
-	const [width, setWidth] = useState(320);
+	const [width, setWidth] = useState(440);
 	const labels = useRef<HTMLDivElement>(null);
 	const entryId = entries[index]?.id;
 	useLayoutEffect(() => {
@@ -40,7 +42,7 @@ export function FunctionWheel({
 				Math.min(600, measured) * (slot === 2 ? 1 : 0.7),
 			);
 		}
-		setWidth(widest > 240 ? Math.min(360, widest + 96) : 320);
+		setWidth(widest > 320 ? Math.min(560, widest + 120) : 440);
 	}, [entries, index]);
 	useEffect(() => {
 		setNudge(0);
@@ -97,7 +99,7 @@ export function FunctionWheel({
 								className="knob-wheel-label"
 								data-slot={delta + 2}
 								style={{
-									top: 160 + (ROW_OFFSETS[delta + 2] ?? 0),
+									top: CENTER + (ROW_OFFSETS[delta + 2] ?? 0),
 									width: Math.min(
 										600,
 										(width - 160) / (delta === 0 ? 1.404 : 1),
