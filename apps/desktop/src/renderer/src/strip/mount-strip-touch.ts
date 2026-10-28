@@ -248,12 +248,19 @@ export function mountStripTouch(
 	// Panel contacts dropped while connected with no vendor report in between.
 	// Repeated drops mean the touch controller is down, so DOM input takes over.
 	let blockedWithoutVendor = 0;
-	let lastDom: { x: number; y: number } | undefined;
 	const vendorOwnsInput = (): boolean =>
 		vendorConnected && blockedWithoutVendor < 3;
-	// Vendor input supersedes a DOM contact that started before it, releasing it.
+	// Vendor takeover ends a DOM contact without confirming a tap.
 	const releaseDom = (): void => {
-		if (domActive && lastDom) domPoint(lastDom.x, lastDom.y, 0);
+		if (domActive) {
+			controller.event({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "scope-closed",
+			});
+			onCancel?.();
+		}
 		domActive = false;
 		pointerId = undefined;
 		touchIdentifier = undefined;
@@ -298,7 +305,6 @@ export function mountStripTouch(
 		controller.event(event);
 	});
 	const domPoint = (x: number, y: number, action: 0 | 1): void => {
-		lastDom = { x, y };
 		const box = root.getBoundingClientRect();
 		const point = clientToLogical(
 			{ x, y },

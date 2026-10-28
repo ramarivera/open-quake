@@ -3,6 +3,7 @@ import {
 	type SpawnOptions,
 	spawn,
 } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { Effect, Ref, Schema } from "effect";
 import type { RuntimeState } from "../../../../../packages/edge/src/agents/agents-contracts";
@@ -242,8 +243,22 @@ export function createOwnedAgentRuntime(options: {
 	readonly driver?: OwnedRuntimeDriver;
 	readonly storage?: LocalAgentState;
 }): AgentRuntimeAdapter | undefined {
-	if (!options.driver && (!options.command || !isAbsolute(options.command)))
-		return;
+	if (!options.driver) {
+		if (!options.command || !isAbsolute(options.command)) return;
+		// Windows X_OK only checks existence; the process driver supports these files.
+		if (
+			process.platform === "win32" &&
+			!/\.(exe|com|cmd|bat)$/i.test(options.command)
+		)
+			return;
+		try {
+			if (!statSync(options.command).isFile()) return;
+			accessSync(options.command, constants.X_OK);
+		} catch {
+			// Invalid configuration uses the existing unavailable-runtime guidance.
+			return;
+		}
+	}
 	const storage = options.storage ?? createLocalAgentState(options.root);
 	const driver =
 		options.driver ?? ownedRuntimeProcessDriver(options.command ?? "", storage);

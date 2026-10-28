@@ -11,6 +11,7 @@ export interface ClockWeatherCardProps {
 	readonly unit: "celsius" | "fahrenheit";
 	readonly state:
 		| { readonly kind: "loading" }
+		| { readonly kind: "unconfigured" }
 		| {
 				readonly kind: "ready";
 				readonly temperature: number;

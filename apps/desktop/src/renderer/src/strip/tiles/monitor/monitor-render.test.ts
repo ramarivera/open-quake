@@ -306,3 +306,39 @@ it("monitor motion preferences disable gauge transitions and no decorative loops
 	// independent-device-design supersedes vendor scanline/twinkle/wobble loops.
 	expect(css).not.toMatch(/@keyframes\s+monitor-(twinkle|scanline)/);
 });
+
+it("open-quake-7dj: anime labels a CPU fallback as hardware and a GPU as graphics", async () => {
+	const snapshot = previewSnapshot();
+	const withoutGpu = {
+		...snapshot,
+		samples: snapshot.samples.map((sample) =>
+			sample.id === "gpu"
+				? { ...sample, values: {} }
+				: sample.id === "cpu"
+					? { ...sample, values: { ...sample.values, model: "Intel Core i7" } }
+					: sample,
+		),
+	};
+	const view = await mount(
+		createElement(MonitorPanel, {
+			settings: { ...defaults(), styleId: "anime" },
+			snapshot: withoutGpu,
+		}),
+	);
+	try {
+		const model = required(view.container, ".monitor-model", HTMLDivElement);
+		expect(model.textContent).toContain("Hardware Identifier");
+		expect(model.textContent).not.toContain("Active Graphics Unit");
+		expect(model.textContent).toContain("Intel Core i7");
+		await view.render(
+			createElement(MonitorPanel, {
+				settings: { ...defaults(), styleId: "anime" },
+				snapshot,
+			}),
+		);
+		expect(model.textContent).toContain("Active Graphics Unit");
+		expect(model.textContent).toContain("NVIDIA");
+	} finally {
+		await view.unmount();
+	}
+});

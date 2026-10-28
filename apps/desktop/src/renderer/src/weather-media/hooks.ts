@@ -36,7 +36,7 @@ export function useWeather(
 	const [state, setState] = useState<{
 		result: WeatherResult;
 		loading: boolean;
-	}>({ result: { _tag: "empty" }, loading: false });
+	}>({ result: { _tag: "empty" }, loading: true });
 	const locale = useAppLocale().locale;
 	const settings = override ?? snapshot?.settings;
 	const refreshRevision = snapshot?.refreshRevision;

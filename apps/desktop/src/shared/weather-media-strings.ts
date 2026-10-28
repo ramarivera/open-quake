@@ -4,7 +4,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	en: {
 		clock: {
 			weatherLoading: "Loading...",
-			weatherSetCity: "Click to set city",
+			weatherSetCity: "Set a location in Settings",
 			weatherUnavailable: "Weather unavailable",
 			weatherCityNotFound: "City not found",
 			weatherFailedHint: "Try entering city + country",
@@ -48,7 +48,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	zh: {
 		clock: {
 			weatherLoading: "加载中...",
-			weatherSetCity: "点击设置城市",
+			weatherSetCity: "请在设置中设置位置",
 			weatherUnavailable: "天气不可用",
 			weatherCityNotFound: "城市未找到",
 			weatherFailedHint: "请尝试输入城市 + 国家/地区",
@@ -90,7 +90,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	fr: {
 		clock: {
 			weatherLoading: "Chargement...",
-			weatherSetCity: "Cliquez pour définir la ville",
+			weatherSetCity: "Définissez un lieu dans les paramètres",
 			weatherUnavailable: "Météo indisponible",
 			weatherCityNotFound: "Ville introuvable",
 			weatherFailedHint: "Essayez ville + pays",
@@ -136,7 +136,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	de: {
 		clock: {
 			weatherLoading: "Laden...",
-			weatherSetCity: "Klicken Sie, um Stadt festzulegen",
+			weatherSetCity: "Ort in den Einstellungen festlegen",
 			weatherUnavailable: "Wetter nicht verfügbar",
 			weatherCityNotFound: "Stadt nicht gefunden",
 			weatherFailedHint: "Geben Sie Stadt + Land ein",
@@ -182,7 +182,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	ja: {
 		clock: {
 			weatherLoading: "読み込み中...",
-			weatherSetCity: "クリックして都市を設定",
+			weatherSetCity: "設定で場所を指定してください",
 			weatherUnavailable: "天気情報が利用できません",
 			weatherCityNotFound: "都市が見つかりません",
 			weatherFailedHint: "都市名 + 国名を入力してください",
@@ -228,7 +228,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	es: {
 		clock: {
 			weatherLoading: "Cargando...",
-			weatherSetCity: "Haga clic para establecer ciudad",
+			weatherSetCity: "Configura una ubicación en Ajustes",
 			weatherUnavailable: "Clima no disponible",
 			weatherCityNotFound: "Ciudad no encontrada",
 			weatherFailedHint: "Intente ciudad + país",
@@ -273,7 +273,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	it: {
 		clock: {
 			weatherLoading: "Caricamento...",
-			weatherSetCity: "Clicca per impostare città",
+			weatherSetCity: "Imposta una posizione nelle impostazioni",
 			weatherUnavailable: "Meteo non disponibile",
 			weatherCityNotFound: "Città non trovata",
 			weatherFailedHint: "Prova città + paese",
@@ -319,7 +319,7 @@ export const WEATHER_MEDIA_STRINGS = {
 	ko: {
 		clock: {
 			weatherLoading: "로딩 중...",
-			weatherSetCity: "도시를 설정하려면 클릭",
+			weatherSetCity: "설정에서 위치를 지정하세요",
 			weatherUnavailable: "날씨를 사용할 수 없음",
 			weatherCityNotFound: "도시를 찾을 수 없음",
 			weatherFailedHint: "도시 + 국가를 입력하세요",

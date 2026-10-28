@@ -476,7 +476,7 @@ function Canvas({
 	const model = (
 		<div className="monitor-model">
 			<Heading>
-				{settings.styleId === "anime"
+				{settings.styleId === "anime" && gpu.values.model
 					? l.activeGraphicsUnit
 					: l.hardwareIdentifier}
 			</Heading>

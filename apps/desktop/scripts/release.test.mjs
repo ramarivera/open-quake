@@ -195,3 +195,132 @@ test("packaged Electron never inherits Node mode, including Windows key casing",
 		}
 	}
 });
+
+test("open-quake-eeu: silent install waits before retrying and before packaged smoke", async () => {
+	const { installWindowsPackage } = await import(
+		"./windows-package-install.mjs"
+	);
+	const calls = [];
+	const installer = "C:\\downloads\\open-quake-1.0.0-win-arm64.exe";
+	const installed = "C:\\scratch\\installed";
+	const failure = Object.assign(new Error("installer busy"), {
+		code: 1,
+		stderr: "file locked",
+	});
+	let attempts = 0;
+	await installWindowsPackage({
+		installer,
+		installed,
+		command: async (file, args, options) => {
+			calls.push({ file, args, options });
+			if (file === installer && ++attempts === 1) throw failure;
+			return { stdout: "", stderr: "" };
+		},
+		pause: async () => {
+			calls.push({ file: "pause" });
+		},
+		log: { info() {}, error() {} },
+	});
+	assert.deepEqual(
+		calls.map((call) => call.file),
+		[
+			"pwsh.exe",
+			installer,
+			"tasklist.exe",
+			"pwsh.exe",
+			"pause",
+			"pwsh.exe",
+			installer,
+			"pwsh.exe",
+		],
+	);
+	const install = calls.find((call) => call.file === installer);
+	assert.deepEqual(install.args, ["/S", "/currentuser", `/D=${installed}`]);
+	assert.equal(install.options.timeout, 300_000);
+	assert.ok(calls[0].args.at(-1).includes("old-uninstaller"));
+	assert.ok(calls[0].args.at(-1).includes("AddSeconds(120)"));
+});
+
+test("open-quake-eeu: exhausted retries fail with the original installer error and diagnostics", async () => {
+	const { installWindowsPackage } = await import(
+		"./windows-package-install.mjs"
+	);
+	const failure = Object.assign(new Error("persistent failure"), {
+		code: 2,
+		stdout: "install output",
+		stderr: "install error",
+	});
+	let attempts = 0,
+		diagnostics = 0;
+	const errors = [];
+	await assert.rejects(
+		installWindowsPackage({
+			installer: "installer.exe",
+			installed: "installed",
+			command: async (file) => {
+				if (file === "installer.exe") {
+					attempts++;
+					throw failure;
+				}
+				if (file === "tasklist.exe") diagnostics++;
+				return { stdout: "", stderr: "" };
+			},
+			pause: async () => {},
+			log: { info() {}, error: (...args) => errors.push(args) },
+		}),
+		(error) => error === failure,
+	);
+	assert.equal(attempts, 3);
+	assert.equal(diagnostics, 3);
+	assert.equal(errors[0][1].stderr, "install error");
+});
+
+test("open-quake-eeu: a prior installer that never exits prevents a new install", async () => {
+	const { installWindowsPackage } = await import(
+		"./windows-package-install.mjs"
+	);
+	const calls = [];
+	const failure = new Error("prior uninstaller timeout");
+	await assert.rejects(
+		installWindowsPackage({
+			installer: "installer.exe",
+			installed: "installed",
+			command: async (file) => {
+				calls.push(file);
+				throw failure;
+			},
+		}),
+		(error) => error === failure,
+	);
+	assert.deepEqual(calls, ["pwsh.exe"]);
+});
+
+test("open-quake-eeu: install cannot start until the prior process wait completes", async () => {
+	const { installWindowsPackage } = await import(
+		"./windows-package-install.mjs"
+	);
+	let release;
+	const priorExited = new Promise((resolve) => {
+		release = resolve;
+	});
+	let waiting = true;
+	let installs = 0;
+	const operation = installWindowsPackage({
+		installer: "installer.exe",
+		installed: "installed",
+		command: async (file) => {
+			if (file === "pwsh.exe" && waiting) {
+				waiting = false;
+				await priorExited;
+			}
+			if (file === "installer.exe") installs++;
+			return { stdout: "", stderr: "" };
+		},
+		log: { info() {}, error() {} },
+	});
+	await Promise.resolve();
+	assert.equal(installs, 0);
+	release();
+	await operation;
+	assert.equal(installs, 1);
+});
