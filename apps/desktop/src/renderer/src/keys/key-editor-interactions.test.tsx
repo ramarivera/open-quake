@@ -287,7 +287,10 @@ async function fixture({
 					if (result._tag !== "ready")
 						return {
 							_tag: "rejected",
-							reason: "layout-locked-or-invalid",
+							reason:
+								result.reason === "locked"
+									? "structural-key-locked"
+									: "layout-locked-or-invalid",
 						} as const;
 					break;
 				}
@@ -569,18 +572,14 @@ for (const tag of [
 	});
 
 for (const locked of [false, true])
-	it(`MGMT-249 outside-field Delete respects edit lock=${locked}`, async () => {
+	it(`MGMT-249 outside-field Delete ignores ordinary saved lock=${locked}`, async () => {
 		const f = await fixture({ locked });
 		await f.select();
 		await act(async () =>
 			window.dispatchEvent(new KeyboardEvent("keyup", { key: "Delete" })),
 		);
-		expect(f.calls.filter((c) => c.type === "delete")).toHaveLength(
-			locked ? 0 : 1,
-		);
-		expect(f.stored().profiles[0].pages[0].keys[0]?.config.type).toBe(
-			locked ? "multiActions" : "",
-		);
+		expect(f.calls.filter((c) => c.type === "delete")).toHaveLength(1);
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.type).toBe("");
 	});
 
 it("MGMT-049 / MGMT-097 refreshes active profile names on external publications without saving translated labels", async () => {
@@ -1579,13 +1578,20 @@ it("MGMT-069/071 gives brightness, page numbers and alternate hotkeys detached d
 	expect(alternate?.compatibility?.defaultAlterIcon).toBe(alternate?.alterIcon);
 });
 
-for (const type of ["back", "emojiBack", "colorfulScreen", "locked"])
+for (const type of [
+	"back",
+	"emojiBack",
+	"functionwheel",
+	"colorfulScreenSettings",
+	"colorfulScreen",
+	"locked",
+])
 	it(`MGMT-070/074 SCREEN-136 refuses ${type} replacement without changing the profile`, async () => {
 		const f = await gridFixture([
 			gridKey(
 				"1,1",
-				type === "locked" ? "hotkey" : type,
-				type === "locked" ? { basicEditableItems: { allowDrag: false } } : {},
+				type === "locked" ? "meetingRecordMark" : type,
+				type === "locked" ? { basicEditableItems: { allowDelete: false } } : {},
 			),
 		]);
 		const before = f.stored();
@@ -1704,7 +1710,7 @@ it("the built-in Quick Luminance key is editable like any key despite its DK-Sui
 	expect(f.host.querySelector("#key-title-locked")).toBeNull();
 });
 
-it("a key whose profile locks its title says so", async () => {
+it("a saved title lock no longer disables rename or shows a lock note", async () => {
 	const locked = gridKey("1,1", "hotkey");
 	const f = await gridFixture([
 		{
@@ -1723,11 +1729,14 @@ it("a key whose profile locks its title says so", async () => {
 	]);
 	await click(button(f.host, "1,1"));
 	const title = query(f.host, "#key-title", HTMLInputElement);
-	expect(title.disabled).toBe(true);
-	expect(
-		f.host.querySelector(`#${title.getAttribute("aria-describedby")}`)
-			?.textContent,
-	).toContain("This key's profile locks its title.");
+	expect(title.disabled).toBe(false);
+	expect(f.host.querySelector("#key-title-locked")).toBeNull();
+	await input(title, "Saved key renamed");
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
+		"Saved key renamed",
+	);
 });
 
 it("editable Luminance titles save and render like other keys", async () => {
@@ -2270,7 +2279,7 @@ it("MGMT-081 coalesces library search at 500ms and cancels pending work on unmou
 
 it("SCREEN-135 exposes vivid configuration for the selected serial/profile without key execution", async () => {
 	const f = await gridFixture([gridKey("1,1", "colorfulScreen")]);
-	expect(button(f.host, "1,1").closest("fieldset")?.disabled).toBe(true);
+	expect(button(f.host, "1,1").closest("fieldset")?.disabled).toBe(false);
 	await click(query(f.host, ".keys-vivid-configure", HTMLButtonElement));
 	await settle(() =>
 		expect(
@@ -2509,7 +2518,9 @@ it("MGMT-109/124 generated placement confirms replacements and refuses locked re
 	const f = await gridFixture([
 		gridKey("1,1"),
 		gridKey("1,2", "back"),
-		gridKey("1,3", "hotkey", { basicEditableItems: { allowDrag: false } }),
+		gridKey("1,3", "meetingRecordMark", {
+			basicEditableItems: { allowDelete: false },
+		}),
 	]);
 	await pointerMove(
 		f.host,
@@ -2935,3 +2946,76 @@ for (const state of ["hidden", "deleted"] as const) {
 		]);
 	});
 }
+
+for (const occupied of [false, true]) {
+	it(`saved Quick key move/swap controls ignore all legacy locks, occupied=${occupied}`, async () => {
+		const quick = builtinProfiles("darwin").find((p) => p.id === "1-2");
+		const source = quick?.pages[0].keys.find((k) => k.keyCode === "1,4");
+		const other = quick?.pages[0].keys.find((k) => k.keyCode === "1,5");
+		if (!source || !other) throw new Error("Missing Quick keys");
+		const one = Schema.encodeSync(ProfileKey)(source);
+		const two = { ...Schema.encodeSync(ProfileKey)(other), keyCode: "2,8" };
+		const f = await gridFixture([one, ...(occupied ? [two] : [])]);
+		await click(button(f.host, "1,4"));
+		expect(query(f.host, "#key-destination", HTMLSelectElement).disabled).toBe(
+			false,
+		);
+		expect(query(f.host, "#key-title", HTMLInputElement).disabled).toBe(false);
+		expect(query(f.host, "#key-span", HTMLSelectElement).disabled).toBe(false);
+		expect(button(f.host, "Delete").disabled).toBe(false);
+		await input(query(f.host, "#key-title", HTMLInputElement), "My Quick key");
+		await input(query(f.host, "#key-destination", HTMLSelectElement), "2,8");
+		await click(button(f.host, "Save"));
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((k) => k.keyCode === "2,8")
+				?.config,
+		).toMatchObject({
+			title: { text: "My Quick key" },
+			basicEditableItems: one.config.basicEditableItems,
+		});
+		if (occupied)
+			expect(
+				f.stored().profiles[0].pages[0].keys.find((k) => k.keyCode === "1,4")
+					?.config,
+			).toEqual(two.config);
+	});
+}
+it("MGMT-249 retains structural outside-field Delete protection", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "meetingRecordMark", {
+			basicEditableItems: { allowDelete: false },
+		}),
+	]);
+	await click(button(f.host, "1,1"));
+	await act(async () =>
+		window.dispatchEvent(new KeyboardEvent("keyup", { key: "Delete" })),
+	);
+	expect(f.calls.filter((c) => c.type === "delete")).toHaveLength(0);
+	expect(f.stored().profiles[0].revision).toBe(0);
+});
+it("a structural swap destination explains rejection and preserves the committed profile", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "hotkey"),
+		gridKey("1,2", "meetingRecordMark", {
+			basicEditableItems: { allowDelete: false },
+		}),
+	]);
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-destination", HTMLSelectElement), "1,2");
+	expect(f.host.textContent).toContain(
+		"This tile has structural protection and cannot be replaced or swapped.",
+	);
+	await click(button(f.host, "Save"));
+	expect(f.stored().profiles[0].revision).toBe(0);
+});
+it("Vivid retains configuration access and exposes editable title/icon/move with protected resize/delete", async () => {
+	const f = await gridFixture([gridKey("1,1", "colorfulScreen")]);
+	await click(button(f.host, "1,1"));
+	expect(query(f.host, "#key-title", HTMLInputElement).disabled).toBe(false);
+	expect(query(f.host, "#key-destination", HTMLSelectElement).disabled).toBe(
+		false,
+	);
+	expect(query(f.host, "#key-span", HTMLSelectElement).disabled).toBe(true);
+	expect(button(f.host, "Delete").disabled).toBe(true);
+});

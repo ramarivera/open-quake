@@ -408,7 +408,13 @@ export function registerKeyLibrary<R>(
 									keyCodes: result.keyCodes,
 								};
 							if (result._tag === "rejected")
-								return { _tag: "rejected", reason: "layout-locked-or-invalid" };
+								return {
+									_tag: "rejected",
+									reason:
+										result.reason === "locked"
+											? "structural-key-locked"
+											: "layout-locked-or-invalid",
+								};
 							break;
 						}
 						case "save-knob": {

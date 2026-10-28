@@ -197,11 +197,12 @@ describe("logical layout invariants", () => {
 			...target,
 			config: {
 				...target.config,
+				type: "meetingRecordMark",
 				basicEditableItems: Option.some({
 					title: true,
 					grid: true,
 					icon: true,
-					allowDelete: true,
+					allowDelete: false,
 					allowDrag: false,
 				}),
 			},

@@ -289,11 +289,15 @@ export function KeyEditor({
 			setStatus(
 				reply.keyCodes
 					? ""
-					: locale === "de" && reply.reason === "layout-locked-or-invalid"
-						? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
-						: reply.reason === "layout-locked-or-invalid"
-							? "This edit is locked or overlaps other keys."
-							: reply.reason,
+					: reply.reason === "structural-key-locked"
+						? locale === "de"
+							? "Diese Taste ist strukturell geschützt und kann nicht ersetzt oder getauscht werden."
+							: "This tile has structural protection and cannot be replaced or swapped."
+						: locale === "de" && reply.reason === "layout-locked-or-invalid"
+							? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
+							: reply.reason === "layout-locked-or-invalid"
+								? "This edit is locked or overlaps other keys."
+								: reply.reason,
 			);
 	};
 	const selectPage = async (
@@ -407,7 +411,7 @@ export function KeyEditor({
 		};
 		current.current = next;
 		setSelection(next);
-		if (pickerOpen && keyEditable(key, "icon")) setIcons(true);
+		if (pickerOpen) setIcons(true);
 	};
 	const choose = (keyCode: string): Promise<void> =>
 		selectKey(keyCode, "click");
@@ -839,22 +843,11 @@ export function KeyEditor({
 						<Row label={keyText("title", locale)} htmlFor="key-title">
 							<input
 								id="key-title"
-								disabled={!keyEditable(key, "title")}
-								aria-describedby={
-									!keyEditable(key, "title") ? "key-title-locked" : undefined
-								}
 								value={keyTitle(key, locale, alternate)}
 								onChange={(e) =>
 									void update(editKeyTitle(key, e.target.value, alternate))
 								}
 							/>
-							{!keyEditable(key, "title") && (
-								<small id="key-title-locked">
-									{locale === "de"
-										? "Das Profil dieser Taste sperrt ihren Titel."
-										: "This key's profile locks its title."}
-								</small>
-							)}
 							<small
 								data-warning={
 									titleWeight(keyTitle(key, locale, alternate)) > 16
@@ -937,16 +930,11 @@ export function KeyEditor({
 							</Row>
 						)}
 						<Row label={keyText("selectDecoKeeIcon", locale)}>
-							<button
-								type="button"
-								disabled={!keyEditable(key, "icon")}
-								onClick={() => setIcons((value) => !value)}
-							>
+							<button type="button" onClick={() => setIcons((value) => !value)}>
 								{keyText("iconLib.title", locale)}
 							</button>
 							<button
 								type="button"
-								disabled={!keyEditable(key, "icon")}
 								aria-label="Reset icon to default"
 								onClick={resetIcon}
 							>

@@ -1,5 +1,8 @@
 import { Option } from "effect";
-import { keyEditable } from "./key-editing-invariants.js";
+import {
+	keyEditable,
+	keyStructurallyLocked,
+} from "./key-editing-invariants.js";
 import type { ProfileKey } from "./profile-contracts.js";
 import { effectiveSpan, FORCED_TILE_SPANS } from "./profile-footprint.js";
 import {
@@ -54,12 +57,7 @@ export function editKeyLayout(
 	if (Option.isNone(parseProfileCoordinate(destination)))
 		return { _tag: "rejected", reason: "outOfBounds" };
 	if (geometry.placement) {
-		if (
-			original &&
-			(!keyEditable(original, "allowDelete") ||
-				!keyEditable(original, "allowDrag") ||
-				original.config.type === "colorfulScreen")
-		)
+		if (original && keyStructurallyLocked(original))
 			return { _tag: "rejected", reason: "locked" };
 		const cells = new Set(occupiedCells(key));
 		const overlaps = keys.filter(
@@ -68,14 +66,7 @@ export function editKeyLayout(
 				other.config.display &&
 				occupiedCells(other).some((cell) => cells.has(cell)),
 		);
-		if (
-			overlaps.some(
-				(other) =>
-					!keyEditable(other, "allowDelete") ||
-					!keyEditable(other, "allowDrag") ||
-					["back", "emojiBack", "colorfulScreen"].includes(other.config.type),
-			)
-		)
+		if (overlaps.some((other) => keyStructurallyLocked(other)))
 			return { _tag: "rejected", reason: "locked" };
 		if (overlaps.length && !geometry.replaceOverlaps)
 			return {
@@ -103,8 +94,7 @@ export function editKeyLayout(
 		if (
 			((sizeChanged || footprintChanged) && !keyEditable(original, "grid")) ||
 			(sizeChanged && FORCED_TILE_SPANS.has(original.config.type)) ||
-			(requested !== key.keyCode &&
-				(!keyEditable(original, "allowDrag") || isEmptyCell(key))) ||
+			(requested !== key.keyCode && isEmptyCell(key)) ||
 			JSON.stringify(original.config.basicEditableItems) !==
 				JSON.stringify(key.config.basicEditableItems)
 		)
@@ -113,6 +103,20 @@ export function editKeyLayout(
 	let next = [...keys.filter((k) => k.keyCode !== key.keyCode), key];
 	if (moving) {
 		const target = keys.find((k) => k.keyCode === destination);
+		const movedCells = new Set(occupiedCells({ ...key, keyCode: destination }));
+		if (
+			keys.some(
+				(other) =>
+					other.keyCode !== key.keyCode &&
+					!isEmptyCell(other) &&
+					keyStructurallyLocked(other) &&
+					(other === target ||
+						(other.config.display &&
+							occupiedCells(other).some((cell) => movedCells.has(cell)))),
+			)
+		)
+			return { _tag: "rejected", reason: "locked" };
+
 		if (
 			target &&
 			!isEmptyCell(target) &&
@@ -121,8 +125,6 @@ export function editKeyLayout(
 			)
 		)
 			return { _tag: "rejected", reason: "sizeMismatch" };
-		if (target && !keyEditable(target, "allowDrag"))
-			return { _tag: "rejected", reason: "locked" };
 		next = next.map((k) =>
 			k === key
 				? { ...k, keyCode: destination }
@@ -145,12 +147,8 @@ export function editKeyLayout(
 			key.config.display &&
 			occupiedCells(k).some((cell) => cells.has(cell)),
 	);
-	if (
-		overlaps.some(
-			(k) => !keyEditable(k, "allowDelete") || !keyEditable(k, "allowDrag"),
-		)
-	)
-		return { _tag: "rejected" };
+	if (overlaps.some((k) => keyStructurallyLocked(k)))
+		return { _tag: "rejected", reason: "locked" };
 	if (overlaps.length && !geometry.replaceOverlaps)
 		return { _tag: "confirmation", keyCodes: overlaps.map((k) => k.keyCode) };
 	const remaining = next.filter((k) => !overlaps.includes(k));

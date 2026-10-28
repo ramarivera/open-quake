@@ -281,6 +281,54 @@ for (const occupied of [false, true])
 		}
 	});
 
+it("Keys IPC reports structural target protection and cannot save the rejected swap", async () => {
+	const empty = createEmptyProfileKey("1,2");
+	const structural: ProfileKey = {
+		...empty,
+		childrenName: Option.some("meetingRecordMark"),
+		config: {
+			...empty.config,
+			type: "meetingRecordMark",
+			basicEditableItems: Option.some({
+				title: false,
+				icon: false,
+				allowDrag: false,
+				grid: false,
+				allowDelete: false,
+			}),
+		},
+	};
+	const f = fixture({}, undefined, undefined, [structural]);
+	const target = {
+		token: "structural-swap",
+		profileId: "p",
+		pageId: "one",
+		keyCode: "1,1",
+		revision: 0,
+	};
+	try {
+		expect(
+			await f.request(f.manager, {
+				type: "preview",
+				target,
+				key: f.key,
+				geometry: { destination: "1,2" },
+			}),
+		).toEqual({ _tag: "rejected", reason: "structural-key-locked" });
+		expect(
+			(await f.request(f.manager, { type: "save", token: target.token }))._tag,
+		).toBe("rejected");
+		const profile = await f.runtime.runPromise(ProfileService.getProfile("p"));
+		expect(profile.revision).toBe(0);
+		expect(profile.pages[0].keys.find((key) => key.keyCode === "1,2")).toEqual(
+			structural,
+		);
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
 it("returns import diagnostics without writing, then imports quarantined JSON without runtime calls", async () => {
 	let calls = 0;
 	const f = fixture({}, () =>

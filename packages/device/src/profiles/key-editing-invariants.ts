@@ -230,21 +230,7 @@ export const resetKeyIcons = (
 		},
 	};
 };
-// DK-Suite templates lock these built-in keys; open-quake edits them like any key.
-const OWNER_EDITABLE_TYPES = new Set(["luminance", "brightness"]);
-export const keyEditable = (
-	key: ProfileKey,
-	field: "title" | "icon" | "allowDelete" | "grid" | "allowDrag",
-): boolean =>
-	Option.match(key.config.basicEditableItems, {
-		onNone: () => true,
-		onSome: (policy) =>
-			OWNER_EDITABLE_TYPES.has(key.config.type) || policy[field],
-	}) &&
-	(field !== "allowDelete" ||
-		!["back", "emojiBack", "functionwheel", "colorfulScreenSettings"].includes(
-			key.config.type,
-		));
+export { keyEditable, keyStructurallyLocked } from "./key-edit-policy.js";
 
 export interface KeyTarget {
 	readonly token: string;

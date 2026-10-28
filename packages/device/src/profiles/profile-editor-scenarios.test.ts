@@ -36,7 +36,12 @@ const encodedKey = (code: string, extra: Record<string, unknown> = {}) => ({
 		...extra,
 	},
 });
-const fixture = (keys = [encodedKey("1,1"), encodedKey("1,2")]) => {
+const fixture = (
+	keys: readonly (typeof ProfileKey.Encoded)[] = [
+		encodedKey("1,1"),
+		encodedKey("1,2"),
+	],
+) => {
 	let stored = Schema.decodeUnknownSync(ProfileEnvelope)({
 		schemaVersion: 1,
 		profiles: [
@@ -123,6 +128,78 @@ describe("editor geometry scenarios", () => {
 				}).pipe(Effect.provide(f.layer));
 			},
 		);
+	for (const destination of ["2,8", "1,5"])
+		it.effect(
+			`saved Quick key moves/swaps to ${destination} and retains rename/icon across reload`,
+			() => {
+				const quick = builtinProfiles("darwin").find((p) => p.id === "1-2");
+				const source = quick?.pages[0].keys.find((k) => k.keyCode === "1,4");
+				const other = quick?.pages[0].keys.find((k) => k.keyCode === "1,5");
+				if (!source || !other)
+					throw new Error("Quick website fixtures missing");
+				const original = { ...source, keyCode: "1,1" };
+				const f = fixture([
+					Schema.encodeSync(ProfileKey)(original),
+					Schema.encodeSync(ProfileKey)(other),
+				]);
+				return Effect.gen(function* () {
+					const editor = yield* KeyEditing;
+					const edited = editKeyTitle(
+						{
+							...original,
+							config: { ...original.config, icon: "custom-icon" },
+						},
+						"My website",
+					);
+					expect(
+						yield* editor.preview(
+							target,
+							Schema.encodeSync(ProfileKey)(edited),
+							{ destination },
+						),
+					).toMatchObject({ _tag: "ready" });
+					yield* editor.save(target.token);
+					expect(f.writes()).toBe(1);
+					const saved = f.stored().profiles[0].pages[0].keys;
+					expect(saved.find((k) => k.keyCode === destination)?.config).toEqual(
+						edited.config,
+					);
+					expect(
+						saved.find(
+							(k) =>
+								k.config.icon === other.config.icon &&
+								k.keyCode === (destination === "1,5" ? "1,1" : "1,5"),
+						)?.config,
+					).toEqual(other.config);
+					// A fresh repository decodes the persisted flags again; no data migration is needed.
+					expect((yield* editor.read()).profiles[0].revision).toBe(1);
+				}).pipe(
+					Effect.provide(f.layer),
+					Effect.andThen(
+						Effect.gen(function* () {
+							const editor = yield* KeyEditing;
+							const key = (yield* editor.read()).profiles[0].pages[0].keys.find(
+								(k) => k.keyCode === destination,
+							);
+							if (!key) throw new Error("Saved key missing after reload");
+							expect(key.config.basicEditableItems).toEqual(
+								original.config.basicEditableItems,
+							);
+							expect(
+								yield* editor.preview(
+									{ ...target, keyCode: destination, revision: 1 },
+									Schema.encodeSync(ProfileKey)(
+										editKeyTitle(key, "Renamed again"),
+									),
+									{ destination: "2,7" },
+								),
+							).toMatchObject({ _tag: "ready" });
+						}).pipe(Effect.provide(f.layer)),
+					),
+				);
+			},
+		);
+
 	for (const field of [
 		"title",
 		"icon",
@@ -130,55 +207,64 @@ describe("editor geometry scenarios", () => {
 		"grid",
 		"allowDrag",
 	] as const)
-		it.effect(`enforces ${field} in the real editing service`, () => {
-			const f = fixture([
-				encodedKey("1,1", { basicEditableItems: { [field]: false } }),
-			]);
-			return Effect.gen(function* () {
-				const editor = yield* KeyEditing;
-				const raw = encodedKey("1,1", {
-					basicEditableItems: { [field]: false },
-				});
-				yield* editor.preview(target, raw);
-				expect(Option.isSome(yield* editor.pending)).toBe(true);
-				const input = {
-					...raw,
-					config: {
-						...raw.config,
-						...(field === "title"
-							? { title: { ...raw.config.title, text: "Changed" } }
-							: {}),
-						...(field === "icon" ? { icon: "changed" } : {}),
-						...(field === "allowDelete"
-							? { type: "text", actions: [{ type: "text", value: "Changed" }] }
-							: {}),
-						...(field === "grid" ? { size: [2, 1] } : {}),
-					},
-				};
-				const result = yield* editor
-					.preview(
-						target,
-						input,
-						field === "allowDrag" ? { destination: "2,8" } : {},
-					)
-					.pipe(Effect.either);
-				expect(result._tag === "Left" || result.right._tag === "rejected").toBe(
-					true,
-				);
-				expect(f.writes()).toBe(0);
-				expect(Option.isNone(yield* editor.pending)).toBe(true);
-				expect(
-					(yield* editor.save(target.token).pipe(Effect.either))._tag,
-				).toBe("Left");
-			}).pipe(Effect.provide(f.layer));
-		});
-	for (const field of ["allowDrag", "allowDelete"] as const)
+		it.effect(
+			`ignores saved ordinary ${field} locks in the real editing service`,
+			() => {
+				const f = fixture([
+					encodedKey("1,1", { basicEditableItems: { [field]: false } }),
+				]);
+				return Effect.gen(function* () {
+					const editor = yield* KeyEditing;
+					const raw = encodedKey("1,1", {
+						basicEditableItems: { [field]: false },
+					});
+					yield* editor.preview(target, raw);
+					expect(Option.isSome(yield* editor.pending)).toBe(true);
+					const input = {
+						...raw,
+						config: {
+							...raw.config,
+							...(field === "title"
+								? { title: { ...raw.config.title, text: "Changed" } }
+								: {}),
+							...(field === "icon" ? { icon: "changed" } : {}),
+							...(field === "allowDelete"
+								? {
+										type: "text",
+										actions: [{ type: "text", value: "Changed" }],
+									}
+								: {}),
+							...(field === "grid" ? { size: [2, 1] } : {}),
+						},
+					};
+					const result = yield* editor
+						.preview(
+							target,
+							input,
+							field === "allowDrag" ? { destination: "2,8" } : {},
+						)
+						.pipe(Effect.either);
+					expect(result).toMatchObject({
+						_tag: "Right",
+						right: { _tag: "ready" },
+					});
+					yield* editor.save(target.token);
+					expect(f.writes()).toBe(1);
+					expect(Option.isNone(yield* editor.pending)).toBe(true);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	for (const field of ["grid", "allowDelete"] as const)
 		it.effect(
 			`refuses replacing a covered key with ${field} false even after confirmation`,
 			() => {
 				const f = fixture([
 					encodedKey("1,1"),
-					encodedKey("1,2", { basicEditableItems: { [field]: false } }),
+					encodedKey("1,2", {
+						type: "meetingRecordMark",
+						actions: [],
+						basicEditableItems: { [field]: false },
+					}),
 				]);
 				return Effect.gen(function* () {
 					const editor = yield* KeyEditing;
@@ -196,7 +282,11 @@ describe("editor geometry scenarios", () => {
 		() => {
 			const f = fixture([
 				encodedKey("1,1"),
-				encodedKey("1,2", { basicEditableItems: { allowDrag: false } }),
+				encodedKey("1,2", {
+					type: "meetingRecordMark",
+					actions: [],
+					basicEditableItems: { allowDelete: false },
+				}),
 			]);
 			return Effect.gen(function* () {
 				const editor = yield* KeyEditing;

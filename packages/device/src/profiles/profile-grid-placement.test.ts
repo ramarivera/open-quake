@@ -16,7 +16,7 @@ const tile = (
 		childrenName: Option.some("hotkey"),
 		config: {
 			...empty.config,
-			type: "hotkey",
+			type: locked ? "meetingRecordMark" : "hotkey",
 			size,
 			actions: [{ type: "key", value: "a" }],
 			...(locked
@@ -25,7 +25,7 @@ const tile = (
 							title: true,
 							icon: true,
 							grid: true,
-							allowDelete: true,
+							allowDelete: false,
 							allowDrag: false,
 						}),
 					}
@@ -108,4 +108,39 @@ it("moves a wide tile within its own footprint instead of resolving back to its 
 	expect(result._tag).toBe("ready");
 	if (result._tag === "ready")
 		expect(result.keys.map((key) => key.keyCode)).toContain("1,2");
+});
+
+for (const destination of ["1,4", "1,5"]) {
+	it(`rejects moving onto structural anchor/covered cell ${destination} with locked feedback`, () => {
+		const source = tile("1,1");
+		const target = { ...tile("1,4", [2, 1], true) };
+		const protectedTile = target;
+		const keys = [source, protectedTile];
+		expect(
+			editKeyLayout(keys, source, { destination, replaceOverlaps: true }),
+		).toEqual({ _tag: "rejected", reason: "locked" });
+		expect(keys[1]).toBe(protectedTile);
+	});
+}
+
+it("Vivid protects every full-screen covered cell from replacement", () => {
+	const original = {
+		...tile("1,1"),
+		config: { ...tile("1,1").config, type: "colorfulScreen" },
+	};
+	expect(
+		editKeyLayout([original], tile("2,8"), {
+			placement: true,
+			replaceOverlaps: true,
+		}),
+	).toEqual({ _tag: "rejected", reason: "locked" });
+});
+
+it("a hidden structural swap target cannot be displaced", () => {
+	const source = tile("1,1");
+	const target = tile("1,2", [1, 1], true);
+	const hidden = { ...target, config: { ...target.config, display: false } };
+	expect(
+		editKeyLayout([source, hidden], source, { destination: "1,2" }),
+	).toEqual({ _tag: "rejected", reason: "locked" });
 });
