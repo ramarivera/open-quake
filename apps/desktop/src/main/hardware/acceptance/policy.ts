@@ -94,7 +94,7 @@ export function competingOwners(output: string, ownPid: number): number[] {
 		return /DK[- ]?Suite(?:\.app|\b)/i.test(command) ||
 			// Only the product executable or bundle, not tools given the repo path.
 			/^(?:\S*\/)?open-quake(?:\s|$)/i.test(command) ||
-			/open-quake\.app\//i.test(command) ||
+			/^(?:\S*\/)?open-quake\.app\//i.test(command) ||
 			(/electron(?:-vite)?/i.test(command) &&
 				/(?:open-quake|\boq-[\w-]+)/i.test(command))
 			? [pid]

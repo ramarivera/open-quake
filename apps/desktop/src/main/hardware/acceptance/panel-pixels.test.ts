@@ -28,6 +28,9 @@ it("rejects the unchanged desktop, a blank frame and a transparent panel", () =>
 	expect(comparePanelPixels(desktop, panel, desktop).passed).toBe(false);
 	const black = bitmap(() => [0, 0, 0, 255]);
 	expect(comparePanelPixels(black, black, desktop).passed).toBe(false);
+	// Alternating colors of equal mean brightness are still a picture.
+	const stripes = bitmap((i) => (i % 2 ? [200, 0, 0, 255] : [0, 200, 0, 255]));
+	expect(comparePanelPixels(stripes, stripes, desktop).passed).toBe(true);
 	const transparent = bitmap((i) => [i * 3, 40, 200 - i, 0]);
 	expect(comparePanelPixels(panel, transparent, desktop).passed).toBe(false);
 });

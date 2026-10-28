@@ -40,7 +40,8 @@ async function fail(cause: unknown) {
 		JSON.stringify({ stage, cause: safeCause(Cause.die(cause)) }),
 	);
 	try {
-		await owner?.close();
+		// Bounded so a hung native close cannot keep Electron alive.
+		await Promise.race([owner?.close(), delay(5_000)]);
 	} finally {
 		app.exit(1);
 	}
@@ -93,10 +94,11 @@ async function prepare() {
 		window.show = () => {};
 		window.focus = () => {};
 	});
-	deadline = setTimeout(() => {
-		process.stderr.write(`QUAKE panel E2E timed out at ${stage}\n`);
-		app.exit(1);
-	}, 90_000);
+	// The deadline releases the owner lock like any other failure.
+	deadline = setTimeout(
+		() => void fail(new Error(`Timed out at ${stage}`)),
+		90_000,
+	);
 	stage = "production startup";
 	await import("../../index");
 }
