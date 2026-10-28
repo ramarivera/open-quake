@@ -189,7 +189,7 @@ export function KnobEditor({
 	return (
 		<Group
 			title="Knob voice & chat"
-			description="Configure this profile's knob. Idle rotation selects profiles."
+			description="Idle rotation selects profiles."
 			footer={notice ? <span role="status">{notice}</span> : undefined}
 		>
 			<fieldset

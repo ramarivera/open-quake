@@ -1193,6 +1193,12 @@ it("MGMT-302 absent voiceInput stays typed-only through mounted editing and save
 
 it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob consumer and canonical profile storage", async () => {
 	const f = await fixture({ knobKey: true });
+	expect(
+		f.host
+			.querySelector(".knob-editor")
+			?.closest(".group")
+			?.querySelector(".group-description")?.textContent,
+	).toBe("Idle rotation selects profiles.");
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
 	await input(query(f.host, "#knob-route", HTMLSelectElement), "dkclaw");
 	await input(query(f.host, "#knob-local-agent", HTMLSelectElement), "writer");

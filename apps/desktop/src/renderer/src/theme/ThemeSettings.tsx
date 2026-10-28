@@ -102,10 +102,7 @@ export function ThemeSettings({
 
 	return (
 		<div className="page">
-			<PageHeader
-				title="Appearance"
-				description="Theme, text size and motion for open-quake. Changes apply right away."
-			/>
+			<PageHeader title="Appearance" description="Changes apply right away." />
 
 			<Group
 				title="Theme"

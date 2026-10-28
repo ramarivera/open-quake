@@ -267,10 +267,7 @@ export function MeetingHistory({
 	}, [record, selected]);
 	return (
 		<section className="meetings-page" data-revision={snapshot?.revision}>
-			<PageHeader
-				title="Meeting"
-				description="View and manage your meeting minutes records"
-			>
+			<PageHeader title="Meeting">
 				<button
 					type="button"
 					className="button button-primary"

@@ -67,6 +67,8 @@ export function GeneralSettings({
 				{generalFailureText(t, state.failure.failure)}
 			</span>
 		) : null;
+	const loginNotice = loginStatus(t, state);
+	const loginFailure = failure("launchAtLogin");
 	const disabled = state.status !== "ready" || state.pending !== null;
 	return (
 		<Group title={t("general.heading")}>
@@ -109,11 +111,12 @@ export function GeneralSettings({
 						label={t("general.login")}
 						htmlFor={`${id}-login`}
 						hint={
-							<span className="general-hint">
-								<span>{t("general.loginHint")}</span>
-								<LoginStatus t={t} state={state} />
-								{failure("launchAtLogin")}
-							</span>
+							loginNotice || loginFailure ? (
+								<span className="general-hint">
+									{loginNotice}
+									{loginFailure}
+								</span>
+							) : undefined
 						}
 					>
 						<input
@@ -218,13 +221,7 @@ function loginChecked(state: GeneralState): boolean {
 	return state.snapshot?.launchAtLogin ?? false;
 }
 
-function LoginStatus({
-	t,
-	state,
-}: {
-	t: T;
-	state: GeneralState;
-}): React.JSX.Element | null {
+function loginStatus(t: T, state: GeneralState): React.JSX.Element | null {
 	if (state.pending === "launchAtLogin")
 		return <span role="status">{t("general.applying")}</span>;
 	if (state.login.status === "checking")
