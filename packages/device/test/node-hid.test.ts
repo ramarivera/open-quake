@@ -197,27 +197,25 @@ describe("node-hid boundary, native API mocked", () => {
 	);
 });
 
-it.scoped(
-	"uses non-exclusive macOS opening for vendor touch without writes",
-	() =>
-		Effect.gen(function* () {
-			const transport = yield* HidTransport;
-			const connection = yield* transport.open({
-				path: "fake:touch",
-				vendorId: 0x0712,
-				productId: 0x0010,
-				usagePage: 0xff73,
-				usage: 0x71,
+it.scoped("uses exclusive macOS opening for vendor touch without writes", () =>
+	Effect.gen(function* () {
+		const transport = yield* HidTransport;
+		const connection = yield* transport.open({
+			path: "fake:touch",
+			vendorId: 0x0712,
+			productId: 0x0010,
+			usagePage: 0xff73,
+			usage: 0x71,
+		});
+		if (process.platform === "darwin")
+			expect(mocks.open).toHaveBeenCalledWith("fake:touch", {
+				nonExclusive: false,
 			});
-			if (process.platform === "darwin")
-				expect(mocks.open).toHaveBeenCalledWith("fake:touch", {
-					nonExclusive: true,
-				});
-			else expect(mocks.open).toHaveBeenCalledWith("fake:touch");
-			expect(handle.write).not.toHaveBeenCalled();
-			yield* connection.close();
-			expect(handle.close).toHaveBeenCalledTimes(1);
-		}).pipe(Effect.provide(NodeHidLive)),
+		else expect(mocks.open).toHaveBeenCalledWith("fake:touch");
+		expect(handle.write).not.toHaveBeenCalled();
+		yield* connection.close();
+		expect(handle.close).toHaveBeenCalledTimes(1);
+	}).pipe(Effect.provide(NodeHidLive)),
 );
 
 describe("explicit platform and framing contracts", () => {
@@ -290,3 +288,65 @@ describe("explicit platform and framing contracts", () => {
 			}),
 	);
 });
+
+it.effect(
+	"limits exclusive touch ownership to the exact identity on macOS",
+	() =>
+		Effect.gen(function* () {
+			const touch = {
+				path: "fake:touch-owner",
+				vendorId: 0x0712,
+				productId: 0x0010,
+				usagePage: 0xff73,
+				usage: 0x71,
+			};
+			for (const platform of ["darwin", "linux", "win32"] as const) {
+				for (const info of [
+					touch,
+					{ ...touch, vendorId: touch.vendorId + 1 },
+					{ ...touch, productId: touch.productId + 1 },
+					{ ...touch, usagePage: 0x0d, usage: 4 },
+					{ ...touch, usagePage: 1, usage: 2 },
+				]) {
+					yield* Effect.gen(function* () {
+						const transport = yield* HidTransport;
+						const connection = yield* transport.open(info);
+						if (platform === "darwin")
+							expect(mocks.open).toHaveBeenLastCalledWith(info.path, {
+								nonExclusive: info !== touch,
+							});
+						else expect(mocks.open).toHaveBeenLastCalledWith(info.path);
+						yield* connection.close();
+					}).pipe(Effect.provide(makeNodeHidLayer({ platform })));
+				}
+			}
+			expect(handle.write).not.toHaveBeenCalled();
+		}),
+);
+
+it.effect(
+	"reports a failed exclusive touch open without silently falling back to OS pointer mode",
+	() =>
+		Effect.gen(function* () {
+			const cause = new Error("exclusive denied token=secret");
+			mocks.open.mockRejectedValueOnce(cause);
+			const transport = yield* HidTransport;
+			const result = yield* Effect.either(
+				transport.open({
+					path: "fake:touch",
+					vendorId: 0x0712,
+					productId: 0x0010,
+					usagePage: 0xff73,
+					usage: 0x71,
+				}),
+			);
+			expect(Either.isLeft(result) && result.left._tag).toBe(
+				"QuakeHidOpenFailed",
+			);
+			expect(Either.isLeft(result) && result.left.originalCause).toBe(cause);
+			expect(JSON.stringify(result)).not.toContain("token=secret");
+			expect(mocks.open).toHaveBeenCalledExactlyOnceWith("fake:touch", {
+				nonExclusive: false,
+			});
+		}).pipe(Effect.provide(makeNodeHidLayer({ platform: "darwin" }))),
+);

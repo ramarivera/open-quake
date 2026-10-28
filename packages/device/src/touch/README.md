@@ -53,7 +53,12 @@ with a 60 s minimum for empty VID/PID enumeration. The reader closes on stream
 end/error, releases held contacts and retries after 2000 ms. This does not stop
 control-channel keep-alives. Closing the parent connection cancels every pending
 attempt and deadline and closes each acquired touch handle once. Native opening
-uses nonExclusive on macOS. Native failure translation uses the existing device
+uses exclusive mode only for the exact vendor-touch identity on macOS. The connected
+controller exposes digitizer/mouse and vendor-touch usages at one native path, so
+seizing that path prevents duplicate OS pointer input while the scoped raw-touch
+reader owns it. Control and other native opens stay non-exclusive. Closing the
+existing connection releases ownership; physical cursor suppression still requires
+a touch acceptance check. Native failure translation uses the existing device
 catalog and retains private scrubbed diagnostic causes.
 
 ## Lead-only capture

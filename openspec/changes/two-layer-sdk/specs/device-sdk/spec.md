@@ -305,7 +305,7 @@ all four USB identity fields. HID serials SHALL remove colons. Imported `ws_`
 aliases SHALL resolve to the same physical serial without creating another
 handle. Ambiguous normalized serials SHALL fail discovery. A newer connection
 for a serial SHALL close the prior session before opening its replacement.
-All macOS opens SHALL request nonexclusive access.
+MacOS control and unrelated-device opens SHALL request nonexclusive access. The exact vendor-touch identity defined by strip-touch-input SHALL open exclusively within the existing touch connection scope to suppress duplicate OS pointer input from its shared controller; Windows and Linux opening behavior SHALL remain unchanged.
 
 #### Scenario: Native enumeration fails
 - **WHEN** the first Windows enumeration throws
