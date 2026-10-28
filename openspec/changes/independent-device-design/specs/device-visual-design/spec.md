@@ -65,7 +65,12 @@ The full-screen voice overlay SHALL be a near-opaque sheet showing a state chip 
 
 ### Requirement: Knob overlays and panel feedback
 
-The tile focus SHALL be a 2 px accent ring around the focused tile with a compact angle indicator that moves by the existing detent angle. No metal disc or tick crown SHALL be drawn. The function wheel SHALL present the same five neighbouring profile names as a right-edge list sheet: the centre entry large in the text colour with an accent marker, the neighbours muted. The profile picker SHALL use flat cards with thumbnails, a single accent focus ring, a "Current" badge, page arrows and the settle bar. The volume capsule SHALL be a flat pill in its existing bounds, with its existing phases, accent fill when active and a numeric value. The panel's mock knob readout SHALL be a flat gauge (hairline track, accent arc, tabular value). Touch marks SHALL be thin accent rings. The controls-offline notice SHALL be an opaque sheet with a danger rule.
+The tile focus SHALL be a 2 px accent ring around the focused tile with a compact angle indicator that moves by the existing detent angle. No metal disc or tick crown SHALL be drawn. The function wheel SHALL present the same five neighbouring profile names as a right-edge list sheet: the centre entry large in the text colour with an accent marker, the neighbours muted. The profile picker SHALL use flat cards with thumbnails, a single accent focus ring, a "Current" badge, page arrows and the settle bar. The volume capsule SHALL be a flat pill in its existing bounds, with its existing phases, accent fill when active and a numeric value. The panel's mock knob readout SHALL be a compact flat gauge (hairline track, accent arc, tabular value) centered in the row gap so it does not obscure tile labels. Touch marks SHALL be thin accent rings. The controls-offline notice SHALL be an opaque sheet with a danger rule.
+
+#### Scenario: Knob detent feedback leaves tile labels visible
+
+- **WHEN** live knob input displays its detent count on a two-row panel
+- **THEN** the compact gauge sits in the row gap and does not cover either row's labels
 
 #### Scenario: Wheel rotation
 
@@ -81,7 +86,7 @@ The tile focus SHALL be a 2 px accent ring around the focused tile with a compac
 
 ### Requirement: Burn-down strip visual reconciliation
 
-For SCREEN-023, SCREEN-029, SCREEN-030, SCREEN-033, SCREEN-034, SCREEN-126, SCREEN-134, MGMT-055, MGMT-058, MGMT-059 and SETTINGS-013, the flat palette and code-native plate SHALL replace recovered alpha slots, extracted-icon accent fallback, glow SVG variants, scanlines, sparkles and lamp loops. Theme geometry remains common 220/20/10, meeting 236/4/2, system 221/20/10 and monitor 220/20/10. Visible radii SHALL be rounded recovered radius times 7/12, so common/system 28, meeting 14 and panel 0. Default generic metrics SHALL use 9 percent inner padding, icon min(42 percent of short edge,168), font clamp(22,11 percent of short edge,34), weight 550 and bottom label. Explicit user title style SHALL override defaults. Enlarged slots SHALL retain local layer 10 and opaque surface under knob focus. Empty borders SHALL be two logical pixels at full opacity with no hover animation. Press transitions SHALL be 120 ms, panel scale 0.96 and management scale 0.98, with no scale/transition in either reduced-motion mode. Clock hover SHALL remain inert and geometrically stable.
+For SCREEN-023, SCREEN-029, SCREEN-030, SCREEN-033, SCREEN-034, SCREEN-126, SCREEN-134, MGMT-055, MGMT-058, MGMT-059 and SETTINGS-013, the flat palette and code-native plate SHALL replace recovered alpha slots, extracted-icon accent fallback, glow SVG variants, scanlines, sparkles and lamp loops. Theme geometry is common 216/24/12, meeting 236/4/2, system 221/20/10 and monitor 220/20/10. Visible radii SHALL be rounded recovered radius times 7/12, so common/system 28, meeting 14 and panel 0. Default generic metrics SHALL use 9 percent inner padding, icon min(42 percent of short edge,168), font clamp(22,11 percent of short edge,34), weight 550 and bottom label. Explicit user title style SHALL override defaults. Enlarged slots SHALL retain local layer 10 and opaque surface under knob focus. Empty borders SHALL be two logical pixels at full opacity with no hover animation. Press transitions SHALL be 120 ms, panel scale 0.96 and management scale 0.98, with no scale/transition in either reduced-motion mode. Clock hover SHALL remain inert and geometrically stable.
 
 #### Scenario: Accepted flat result across hosts
 

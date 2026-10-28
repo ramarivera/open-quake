@@ -183,22 +183,23 @@ describe("strip layout", () => {
 });
 
 describe("DK-Suite geometry", () => {
-	it("places a common-base grid on the 1920×480 canvas", () => {
+	it("places balanced square common-base cells on the 1920×480 canvas", () => {
 		const layout = layoutOf([key("2,1", "hotkey")]);
 		expect(layout.theme.name).toBe("commonBaseTheme");
 		expect(layout.tiles[0]?.slot).toEqual({
-			x: 10,
-			y: 250,
-			width: 220,
-			height: 220,
+			x: 12,
+			y: 252,
+			width: 216,
+			height: 216,
 		});
 		expect(layout.tiles[0]?.slotRadius).toBe(48);
 		expect(layout.cells.find((cell) => cell.keyCode === "1,8")?.rect).toEqual({
-			x: 1690,
-			y: 10,
-			width: 220,
-			height: 220,
+			x: 1692,
+			y: 12,
+			width: 216,
+			height: 216,
 		});
+		expect(layout.tiles[0]?.slot.width).toBe(layout.tiles[0]?.slot.height);
 	});
 
 	it("uses MeetAI's 236/4/2 grid and radius 24", () => {
@@ -231,7 +232,7 @@ describe("DK-Suite geometry", () => {
 
 	it("grows right-edge and bottom-row spans inward", () => {
 		const wide = layoutOf([key("1,8", "hotkey", [2, 1])]).tiles[0];
-		expect(wide?.slot).toEqual({ x: 1450, y: 10, width: 460, height: 220 });
+		expect(wide?.slot).toEqual({ x: 1452, y: 12, width: 456, height: 216 });
 		const tall = layoutOf([key("2,3", "hotkey", [1, 2])]).tiles[0];
 		expect(tall?.footprint).toMatchObject({ row: 1, column: 3, height: 2 });
 		const bot = layoutOf([key("2,7", "quakeBot")]);
@@ -258,7 +259,7 @@ describe("DK-Suite geometry", () => {
 		];
 		const layout = layoutOf(keys);
 		expect(layout.tiles.map((tile) => tile.keyCode)).toEqual(["1,1", "1,6"]);
-		expect(layout.tiles[0]?.slot.width).toBe(1180);
+		expect(layout.tiles[0]?.slot.width).toBe(1176);
 		expect(layout.covered).toHaveLength(10);
 		expect(layout.cells.map((cell) => cell.keyCode)).toEqual([
 			"1,7",
@@ -292,7 +293,7 @@ describe("DK-Suite geometry", () => {
 
 	it("keeps the monitor panel inside the padding with radius 0", () => {
 		const tile = layoutOf([key("1,1", "systemMonitorPanel")]).tiles[0];
-		expect(tile?.box).toEqual({ x: 10, y: 10, width: 1900, height: 460 });
+		expect(tile?.box).toEqual({ x: 12, y: 12, width: 1896, height: 456 });
 		expect(tile?.cellTheme).toBe("systemMonitorPanelTheme");
 		expect(tile?.tileRadius).toBe(0);
 		expect(tile?.slotRadius).toBe(0);
@@ -389,7 +390,7 @@ describe("theme resolution", () => {
 		expect(cellTheme("mic", "commonBaseTheme", false)).toBe("commonBaseTheme");
 		const page = layoutOf([key("1,1", "meetingMinutes"), key("1,2", "mic")]);
 		expect(page.tiles[1]?.cellTheme).toBe("meetingAssistantTheme");
-		expect(page.tiles[1]?.slot.width).toBe(220);
+		expect(page.tiles[1]?.slot.width).toBe(216);
 		expect(page.tiles[1]?.tileRadius).toBe(24);
 	});
 });

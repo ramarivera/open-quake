@@ -117,8 +117,8 @@
 	color: var(--strip-text);
 	line-height: 1.2;
 	letter-spacing: -0.005em;
-	white-space: nowrap;
-	text-overflow: ellipsis;
+	white-space: normal;
+	overflow-wrap: anywhere;
 	text-align: center;
 }
 

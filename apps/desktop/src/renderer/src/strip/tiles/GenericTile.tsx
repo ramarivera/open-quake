@@ -1,12 +1,7 @@
 import "../css-properties";
-import { STRIP_PALETTE } from "../palette";
 import { genericTileMetrics } from "../tileMetrics";
 import type { StripTileProps } from "../tileRegistry";
-import {
-	useForegroundArtwork,
-	useTileArtwork,
-	useTruncatedTitle,
-} from "../useTileArt";
+import { useForegroundArtwork, useTileArtwork } from "../useTileArt";
 
 /**
  * The flat icon-and-label key tile: the key's own artwork centred above a
@@ -28,11 +23,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	const fontSize = explicit
 		? Math.round(metrics.fontSize * (config.title.size / 8))
 		: metrics.fontSize;
-	const title = useTruncatedTitle(
-		config.title.text,
-		metrics.titleWidth,
-		`${fontStyle} ${metrics.fontWeight} ${fontSize}px ${STRIP_PALETTE.font}`,
-	);
+	const title = config.title.text;
 	const placement =
 		metrics.titleAnchor === "top"
 			? { top: metrics.padding }
@@ -71,6 +62,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 			{config.title.display ? (
 				<p
 					className="strip-tile-title"
+					data-full-title={title}
 					style={{
 						fontSize,
 						fontWeight: metrics.fontWeight,
