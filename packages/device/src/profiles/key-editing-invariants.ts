@@ -51,6 +51,15 @@ const legacyAi: Readonly<Record<string, string>> = {
 	Search: "search",
 	Compliance: "compliance",
 };
+const legacyAgentKeyNames = new Set([
+	"ClawBot Agent",
+	"龙虾代理",
+	"ClawBot-Agent",
+	"Agente ClawBot",
+	"Agent ClawBot",
+	"ClawBotエージェント",
+	"ClawBot 에이전트",
+]);
 export function keyTitle(
 	key: ProfileKey,
 	locale: ProfileLocale,
@@ -79,7 +88,10 @@ export function keyTitle(
 		isLegacyLabel("hotkey")
 	)
 		return keyText("hotkey", locale);
-	if (key.config.type === "clawbot" && (!text || isLegacyLabel("clawbot"))) {
+	if (
+		key.config.type === "clawbot" &&
+		(!text || isLegacyLabel("clawbot") || legacyAgentKeyNames.has(text))
+	) {
 		const agent = key.config.actions.find(
 			(action) => action.type === "agentId",
 		);

@@ -705,8 +705,8 @@ async function main() {
 		await management.webContents.executeJavaScript(
 			"document.getElementById('agents-tab-settings').click()",
 		);
-		await wait(`document.querySelector('[aria-label="DK-Claw 1,5"]') !== null`);
-		await choose('[aria-label="DK-Claw 1,5"]', "constructor");
+		await wait(`document.querySelector('[aria-label="Agent 1,5"]') !== null`);
+		await choose('[aria-label="Agent 1,5"]', "constructor");
 		await management.webContents.executeJavaScript(
 			"document.getElementById('agents-tab-ai').click()",
 		);
@@ -815,7 +815,7 @@ async function main() {
 		await capture("base-agent-model-drafts-retained");
 		await ui("document.getElementById('agents-tab-settings').click()");
 		await wait(
-			`document.querySelector('[aria-label="DK-Claw 1,5"]').value === 'constructor'`,
+			`document.querySelector('[aria-label="Agent 1,5"]').value === 'constructor'`,
 		);
 		await capture("base-slot-drafts-retained");
 		await ui(

@@ -651,3 +651,35 @@ it("MGMT-259 preserves unmarked English-default text and explicit edits after re
 		}
 	}
 });
+
+it("localizes old generic agent key names while preserving user titles and bindings", () => {
+	for (const text of [
+		"ClawBot Agent",
+		"龙虾代理",
+		"ClawBot-Agent",
+		"Agente ClawBot",
+		"Agent ClawBot",
+		"ClawBotエージェント",
+		"ClawBot 에이전트",
+	]) {
+		const saved = {
+			...key,
+			config: {
+				...key.config,
+				type: "clawbot",
+				title: { ...key.config.title, text },
+				actions: [{ type: "agentId", value: "my-local-agent" }],
+			},
+		};
+		expect(keyTitle(saved, "ja")).toBe("エージェント");
+		expect(
+			keyTitle(
+				{ ...saved, config: { ...saved.config, userModifiedTitle: true } },
+				"ja",
+			),
+		).toBe(text);
+		expect(saved.config.actions).toEqual([
+			{ type: "agentId", value: "my-local-agent" },
+		]);
+	}
+});

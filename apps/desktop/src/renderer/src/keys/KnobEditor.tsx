@@ -6,6 +6,7 @@ import {
 } from "../../../../../../packages/device/src/knob/knob-contracts.js";
 import { validateKnobResource } from "../../../../../../packages/device/src/knob/knob-invariants.js";
 import { migrateKnobVoiceActions } from "../../../../../../packages/device/src/knob/knob-voice-migration.js";
+import { profileText } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import {
 	Profile,
 	type ProfileEnvelope,
@@ -13,6 +14,7 @@ import {
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
+import { useAppLocale } from "../i18n";
 import { Group, Row } from "../ui/Form";
 import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import {
@@ -33,6 +35,7 @@ export function KnobEditor({
 	readonly keyEditOpen?: boolean;
 	readonly accept: (envelope: typeof ProfileEnvelope.Encoded) => void;
 }): React.JSX.Element {
+	const { locale } = useAppLocale();
 	const [draft, setDraft] = useState(() => profileKnobDraft(profile));
 	const [baseline, setBaseline] = useState(profile);
 	const revision = knobDraftRevision(baseline, profile);
@@ -317,7 +320,7 @@ export function KnobEditor({
 								}}
 							>
 								<option value="legacyAssistant">Legacy assistant</option>
-								<option value="dkclaw">DK Claw (OpenClaw)</option>
+								<option value="dkclaw">{profileText("DKClaw", locale)}</option>
 								<option value="direct">Direct chat</option>
 							</select>
 						</Row>

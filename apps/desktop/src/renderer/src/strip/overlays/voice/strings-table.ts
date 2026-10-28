@@ -1,5 +1,5 @@
 // Generated from DK-Suite 0.4.95 locales (dark-encyclopedia v0.4.95/locales),
-// verbatim, except `voiceOverlay.placeholder`, which DK hard-codes in Chinese.
+// with runtime-neutral agent copy and a localized `voiceOverlay.placeholder`.
 // Additional voice admission keys are copied additively from those same catalogs.
 
 export const STRIP_LOCALES = [
@@ -36,10 +36,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.busyOnGrid": "{name} is busy, please try again later",
 		"aiAudio.prevTurnBusy": "Previous turn still running — try again shortly",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw is not reachable — check the connection in Assistant › Agents",
+			"The agent runtime is not reachable — check the connection in Assistant › Agents",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw is starting — try again shortly",
-		"aiAudio.openClawNotReady": "OpenClaw is not connected",
+			"The agent runtime is starting — try again shortly",
+		"aiAudio.openClawNotReady": "The agent runtime is not connected",
 		"aiIconViewTxt.label": "AI Copilot Chat",
 		"aiIconViewTxt.pushToTalkHint": "Push-To-Talk with AI via a button",
 		"aiIconViewTxt.busyToast": "System busy, please try later",
@@ -65,11 +65,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Command",
 		"quakeBotIconView.systemSender": "System",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw is not reachable. Cannot establish a connection.**\n\nIn open-quake, open Assistant › Agents and check the OpenClaw connection.",
+			"**The agent runtime is not reachable. Cannot establish a connection.**\n\nIn open-quake, open Assistant › Agents and check the agent runtime connection.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connecting to the gateway and establishing a session…",
 		"quakeBotIconView.statusHintConnected":
-			"Gateway is up and Claw is connected. You can start chatting.",
+			"The agent runtime is connected. You can start chatting.",
 		"quakeBotIconView.statusHintDisconnected":
 			"Not connected to the gateway, or the connection was lost.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -82,7 +82,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "Failed to start voice.",
 		"quakeBotIconView.communicationCancelled": "Cancel communications",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw is not connected.",
+		"quakeBotIconView.openClawNotConnected":
+			"The agent runtime is not connected.",
 		"quakeBotIconView.sendChatFailed": "Failed to send message.",
 		"quakeBotIconView.chatFailed": "Chat failed.",
 		"quakeBotIconView.chatResponseError": "An error occurred during the chat.",
@@ -126,9 +127,9 @@ export const STRIP_STRINGS = {
 		"aiAudio.busyOnGrid": "{name} 处理中，请稍后再试",
 		"aiAudio.prevTurnBusy": "上一条还在处理，稍后再说",
 		"aiAudio.openClawGatewayNotRunning":
-			"无法连接 OpenClaw — 请在「Assistant › Agents」中检查连接",
-		"aiAudio.openClawGatewayStarting": "OpenClaw 正在启动，请稍后再试",
-		"aiAudio.openClawNotReady": "OpenClaw 未连接",
+			"无法连接 智能体运行环境 — 请在「Assistant › Agents」中检查连接",
+		"aiAudio.openClawGatewayStarting": "智能体运行环境正在启动，请稍后再试",
+		"aiAudio.openClawNotReady": "智能体运行环境未连接",
 		"aiIconViewTxt.label": "AI 聊天助手",
 		"aiIconViewTxt.pushToTalkHint": "长按快捷键与 AI 语音对话",
 		"aiIconViewTxt.busyToast": "系统繁忙，请稍后再试",
@@ -154,10 +155,10 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "指令输入",
 		"quakeBotIconView.systemSender": "系统",
 		"quakeBotIconView.statusHintNoService":
-			"**无法连接 OpenClaw，无法建立连接。**\n\n请在 open-quake 中打开「Assistant › Agents」，检查 OpenClaw 连接。",
+			"**无法连接 智能体运行环境，无法建立连接。**\n\n请在 open-quake 中打开「Assistant › Agents」，检查 智能体运行环境 连接。",
 		"quakeBotIconView.statusHintConnecting": "正在连接网关并建立会话……",
 		"quakeBotIconView.statusHintConnected":
-			"网关已就绪，Claw 已连接，可以开始对话。",
+			"智能体运行环境已连接，可以开始对话。",
 		"quakeBotIconView.statusHintDisconnected": "与网关的连接未建立或已断开。",
 		"quakeBotIconView.sttErrorUnauthorized":
 			"语音识别密钥无效（401），请确认已登录且 API Key 有效。",
@@ -168,7 +169,7 @@ export const STRIP_STRINGS = {
 			"麦克风尚未准备好或未录到声音，请按住说话稍久一些再试。",
 		"quakeBotIconView.voiceStartFailed": "语音发起失败",
 		"quakeBotIconView.communicationCancelled": "取消沟通",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw 未连接。",
+		"quakeBotIconView.openClawNotConnected": "智能体运行环境未连接。",
 		"quakeBotIconView.sendChatFailed": "发送消息失败。",
 		"quakeBotIconView.chatFailed": "对话失败。",
 		"quakeBotIconView.chatResponseError": "对话过程中出现错误。",
@@ -213,10 +214,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"Die vorherige Anfrage läuft noch — bitte kurz warten",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw ist nicht erreichbar — prüfen Sie die Verbindung unter „Assistant › Agents“",
+			"Die Agenten-Laufzeit ist nicht erreichbar — prüfen Sie die Verbindung unter „Assistant › Agents“",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw wird gestartet — bitte kurz warten",
-		"aiAudio.openClawNotReady": "OpenClaw ist nicht verbunden",
+			"Die Agenten-Laufzeit wird gestartet — bitte kurz warten",
+		"aiAudio.openClawNotReady": "Die Agenten-Laufzeit ist nicht verbunden",
 		"aiIconViewTxt.label": "KI-Copilot-Chat",
 		"aiIconViewTxt.pushToTalkHint":
 			"Halten Sie eine Taste gedrückt, um mit der KI zu sprechen",
@@ -245,11 +246,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Befehl",
 		"quakeBotIconView.systemSender": "System",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw ist nicht erreichbar. Verbindung kann nicht hergestellt werden.**\n\nÖffnen Sie in open-quake „Assistant › Agents“ und prüfen Sie die OpenClaw-Verbindung.",
+			"**Die Agenten-Laufzeit ist nicht erreichbar. Verbindung kann nicht hergestellt werden.**\n\nÖffnen Sie in open-quake „Assistant › Agents“ und prüfen Sie die Verbindung zur Agenten-Laufzeit.",
 		"quakeBotIconView.statusHintConnecting":
 			"Verbindung zum Gateway wird hergestellt, Sitzung wird aufgebaut…",
 		"quakeBotIconView.statusHintConnected":
-			"Gateway läuft und Claw ist verbunden. Sie können chatten.",
+			"Die Agenten-Laufzeit ist verbunden. Sie können chatten.",
 		"quakeBotIconView.statusHintDisconnected":
 			"Keine Verbindung zum Gateway oder Verbindung verloren.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -263,7 +264,8 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.voiceStartFailed":
 			"Sprachaufnahme konnte nicht gestartet werden.",
 		"quakeBotIconView.communicationCancelled": "Kommunikation abbrechen",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw ist nicht verbunden.",
+		"quakeBotIconView.openClawNotConnected":
+			"Die Agenten-Laufzeit ist nicht verbunden.",
 		"quakeBotIconView.sendChatFailed":
 			"Nachricht konnte nicht gesendet werden.",
 		"quakeBotIconView.chatFailed": "Chat fehlgeschlagen.",
@@ -312,10 +314,11 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La solicitud anterior sigue en curso — inténtelo de nuevo en breve",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw no está disponible — revise la conexión en «Assistant › Agents»",
+			"El entorno de ejecución del agente no está disponible — revise la conexión en «Assistant › Agents»",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw se está iniciando — inténtelo de nuevo en breve",
-		"aiAudio.openClawNotReady": "OpenClaw no está conectado",
+			"El entorno de ejecución del agente se está iniciando — inténtelo de nuevo en breve",
+		"aiAudio.openClawNotReady":
+			"El entorno de ejecución del agente no está conectado",
 		"aiIconViewTxt.label": "Chat de Copiloto de IA",
 		"aiIconViewTxt.pushToTalkHint":
 			"Mantenga pulsado un botón para hablar por voz con la IA",
@@ -342,11 +345,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Comando",
 		"quakeBotIconView.systemSender": "Sistema",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw no está disponible. No se puede establecer la conexión.**\n\nEn open-quake, abra «Assistant › Agents» y revise la conexión de OpenClaw.",
+			"**El entorno de ejecución del agente no está disponible. No se puede establecer la conexión.**\n\nEn open-quake, abra «Assistant › Agents» y revise la conexión del entorno de ejecución del agente.",
 		"quakeBotIconView.statusHintConnecting":
 			"Conectando a la puerta de enlace y estableciendo la sesión…",
 		"quakeBotIconView.statusHintConnected":
-			"La puerta de enlace está activa y Claw está conectado. Puede empezar a chatear.",
+			"El entorno de ejecución del agente está conectado. Puede empezar a chatear.",
 		"quakeBotIconView.statusHintDisconnected":
 			"Sin conexión a la puerta de enlace o conexión perdida.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -359,7 +362,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "No se pudo iniciar la voz.",
 		"quakeBotIconView.communicationCancelled": "Cancelar comunicación",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw no está conectado.",
+		"quakeBotIconView.openClawNotConnected":
+			"El entorno de ejecución del agente no está conectado.",
 		"quakeBotIconView.sendChatFailed": "No se pudo enviar el mensaje.",
 		"quakeBotIconView.chatFailed": "Error en el chat.",
 		"quakeBotIconView.chatResponseError":
@@ -406,10 +410,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La demande précédente est encore en cours — réessayez dans un instant",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw est injoignable — vérifiez la connexion dans « Assistant › Agents »",
+			"Le runtime de l'agent est injoignable — vérifiez la connexion dans « Assistant › Agents »",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw démarre — réessayez dans un instant",
-		"aiAudio.openClawNotReady": "OpenClaw n'est pas connecté",
+			"Le runtime de l'agent démarre — réessayez dans un instant",
+		"aiAudio.openClawNotReady": "Le runtime de l'agent n'est pas connecté",
 		"aiIconViewTxt.label": "Chat Copilote IA",
 		"aiIconViewTxt.pushToTalkHint":
 			"Maintenez un bouton enfoncé pour parler à l’IA à voix haute",
@@ -436,11 +440,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Commande",
 		"quakeBotIconView.systemSender": "Système",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw est injoignable. Connexion impossible.**\n\nDans open-quake, ouvrez « Assistant › Agents » et vérifiez la connexion OpenClaw.",
+			"**Le runtime de l'agent est injoignable. Connexion impossible.**\n\nDans open-quake, ouvrez « Assistant › Agents » et vérifiez la connexion au runtime de l'agent.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connexion à la passerelle et établissement de la session…",
 		"quakeBotIconView.statusHintConnected":
-			"La passerelle est active et Claw est connecté. Vous pouvez discuter.",
+			"Le runtime de l'agent est connecté. Vous pouvez discuter.",
 		"quakeBotIconView.statusHintDisconnected":
 			"Pas de connexion à la passerelle, ou connexion perdue.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -453,7 +457,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "Échec du démarrage de la voix.",
 		"quakeBotIconView.communicationCancelled": "Annuler la communication",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw n'est pas connecté.",
+		"quakeBotIconView.openClawNotConnected":
+			"Le runtime de l'agent n'est pas connecté.",
 		"quakeBotIconView.sendChatFailed": "Échec de l'envoi du message.",
 		"quakeBotIconView.chatFailed": "Échec du chat.",
 		"quakeBotIconView.chatResponseError":
@@ -499,10 +504,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La richiesta precedente è ancora in elaborazione — riprova tra poco",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw non è raggiungibile — controlla la connessione in «Assistant › Agents»",
+			"Il runtime dell'agente non è raggiungibile — controlla la connessione in «Assistant › Agents»",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw si sta avviando — riprova tra poco",
-		"aiAudio.openClawNotReady": "OpenClaw non è connesso",
+			"Il runtime dell'agente si sta avviando — riprova tra poco",
+		"aiAudio.openClawNotReady": "Il runtime dell'agente non è connesso",
 		"aiIconViewTxt.label": "Chat Copilota IA",
 		"aiIconViewTxt.pushToTalkHint":
 			"Tieni premuto un pulsante per parlare con l’IA",
@@ -529,11 +534,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Comando",
 		"quakeBotIconView.systemSender": "Sistema",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw non è raggiungibile. Impossibile stabilire la connessione.**\n\nIn open-quake, apri «Assistant › Agents» e controlla la connessione OpenClaw.",
+			"**Il runtime dell'agente non è raggiungibile. Impossibile stabilire la connessione.**\n\nIn open-quake, apri «Assistant › Agents» e controlla la connessione al runtime dell'agente.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connessione al gateway e apertura sessione…",
 		"quakeBotIconView.statusHintConnected":
-			"Gateway attivo e Claw connesso. Puoi iniziare a chattare.",
+			"Il runtime dell'agente è connesso. Puoi iniziare a chattare.",
 		"quakeBotIconView.statusHintDisconnected":
 			"Nessuna connessione al gateway o connessione persa.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -546,7 +551,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "Impossibile avviare la voce.",
 		"quakeBotIconView.communicationCancelled": "Annulla comunicazione",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw non è connesso.",
+		"quakeBotIconView.openClawNotConnected":
+			"Il runtime dell'agente non è connesso.",
 		"quakeBotIconView.sendChatFailed": "Invio del messaggio non riuscito.",
 		"quakeBotIconView.chatFailed": "Chat non riuscita.",
 		"quakeBotIconView.chatResponseError":
@@ -592,10 +598,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"前のリクエストはまだ処理中です。しばらくしてからお試しください",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw に接続できません — 「Assistant › Agents」で接続を確認してください",
+			"エージェント実行環境に接続できません — 「Assistant › Agents」で接続を確認してください",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw を起動中です。しばらくしてからお試しください",
-		"aiAudio.openClawNotReady": "OpenClaw が接続されていません",
+			"エージェント実行環境を起動中です。しばらくしてからお試しください",
+		"aiAudio.openClawNotReady": "エージェント実行環境が接続されていません",
 		"aiIconViewTxt.label": "AIコパイロットチャット",
 		"aiIconViewTxt.pushToTalkHint": "ボタンを長押ししてAIと音声で会話",
 		"aiIconViewTxt.busyToast":
@@ -622,11 +628,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "コマンド入力",
 		"quakeBotIconView.systemSender": "システム",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw に接続できないため、接続を確立できません。**\n\nopen-quake で「Assistant › Agents」を開き、OpenClaw の接続を確認してください。",
+			"**エージェント実行環境に接続できないため、接続を確立できません。**\n\nopen-quake で「Assistant › Agents」を開き、エージェント実行環境 の接続を確認してください。",
 		"quakeBotIconView.statusHintConnecting":
 			"ゲートウェイに接続し、セッションを確立しています…",
 		"quakeBotIconView.statusHintConnected":
-			"ゲートウェイは稼働中で Claw は接続済みです。会話を開始できます。",
+			"エージェント実行環境に接続しました。会話を開始できます。",
 		"quakeBotIconView.statusHintDisconnected":
 			"ゲートウェイに接続されていないか、接続が切断されました。",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -639,7 +645,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "音声の開始に失敗しました。",
 		"quakeBotIconView.communicationCancelled": "通信をキャンセル",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw が接続されていません。",
+		"quakeBotIconView.openClawNotConnected":
+			"エージェント実行環境が接続されていません。",
 		"quakeBotIconView.sendChatFailed": "メッセージの送信に失敗しました。",
 		"quakeBotIconView.chatFailed": "チャットに失敗しました。",
 		"quakeBotIconView.chatResponseError": "チャット中にエラーが発生しました。",
@@ -684,10 +691,10 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"이전 요청이 아직 처리 중입니다. 잠시 후 다시 시도하세요",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw에 연결할 수 없습니다. 「Assistant › Agents」에서 연결을 확인하세요",
+			"에이전트 실행 환경에 연결할 수 없습니다. 「Assistant › Agents」에서 연결을 확인하세요",
 		"aiAudio.openClawGatewayStarting":
-			"OpenClaw가 시작 중입니다. 잠시 후 다시 시도하세요",
-		"aiAudio.openClawNotReady": "OpenClaw가 연결되지 않았습니다",
+			"에이전트 실행 환경이 시작 중입니다. 잠시 후 다시 시도하세요",
+		"aiAudio.openClawNotReady": "에이전트 실행 환경이 연결되지 않았습니다",
 		"aiIconViewTxt.label": "AI 코파일럿 채팅",
 		"aiIconViewTxt.pushToTalkHint": "버튼을 길게 눌러 AI와 음성 대화",
 		"aiIconViewTxt.busyToast":
@@ -714,11 +721,11 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "명령 입력",
 		"quakeBotIconView.systemSender": "시스템",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw에 연결할 수 없어 연결을 설정할 수 없습니다.**\n\nopen-quake에서 「Assistant › Agents」를 열고 OpenClaw 연결을 확인하세요.",
+			"**에이전트 실행 환경에 연결할 수 없어 연결을 설정할 수 없습니다.**\n\nopen-quake에서 「Assistant › Agents」를 열고 에이전트 실행 환경 연결을 확인하세요.",
 		"quakeBotIconView.statusHintConnecting":
 			"게이트웨이에 연결하고 세션을 설정하는 중…",
 		"quakeBotIconView.statusHintConnected":
-			"게이트웨이가 실행 중이며 Claw가 연결되었습니다. 대화를 시작할 수 있습니다.",
+			"에이전트 실행 환경이 연결되었습니다. 대화를 시작할 수 있습니다.",
 		"quakeBotIconView.statusHintDisconnected":
 			"게이트웨이에 연결되지 않았거나 연결이 끊어졌습니다.",
 		"quakeBotIconView.sttErrorUnauthorized":
@@ -731,7 +738,8 @@ export const STRIP_STRINGS = {
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "음성을 시작하지 못했습니다.",
 		"quakeBotIconView.communicationCancelled": "통신 취소",
-		"quakeBotIconView.openClawNotConnected": "OpenClaw가 연결되지 않았습니다.",
+		"quakeBotIconView.openClawNotConnected":
+			"에이전트 실행 환경이 연결되지 않았습니다.",
 		"quakeBotIconView.sendChatFailed": "메시지를 보내지 못했습니다.",
 		"quakeBotIconView.chatFailed": "채팅에 실패했습니다.",
 		"quakeBotIconView.chatResponseError": "채팅 중 오류가 발생했습니다.",
