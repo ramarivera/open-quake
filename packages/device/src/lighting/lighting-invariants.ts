@@ -31,7 +31,22 @@ export function validateCapabilities(
 	const caps = decoded.right;
 	if (
 		!sameTarget(target, caps.target) ||
-		(caps.transport === "legacy" && caps.identity.protocolVersion >= 11) ||
+		(caps.transport === "legacy" &&
+			(caps.identity.protocolVersion >= 11 ||
+				caps.fields.some((f) => f.valueId === 3))) ||
+		(caps.transport === "v3" &&
+			(caps.identity.protocolVersion !== 12 ||
+				caps.identity.firmware !== "QUAKE:3:1.0.19" ||
+				Option.isSome(caps.save) ||
+				caps.fields.length !== 1 ||
+				caps.fields.some(
+					(f) =>
+						f.field !== "effectSpeed" ||
+						f.valueId !== 3 ||
+						!f.readable ||
+						!f.writable ||
+						f.evidence.basis !== "hardware-qualified",
+				))) ||
 		(caps.transport === "unavailable" &&
 			(caps.fields.length > 0 || Option.isSome(caps.save))) ||
 		new Set(caps.fields.map((f) => f.field)).size !== caps.fields.length ||

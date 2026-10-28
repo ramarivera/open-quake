@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Either, FastCheck, Option, Schema } from "effect";
+import { Effect, Either, FastCheck, Option, Schema } from "effect";
 import {
 	InvalidLightingValue,
 	LightingApplyFailed,
@@ -8,6 +8,7 @@ import {
 	LightingIoFailed,
 	LightingReadFailed,
 	LightingSaveFailed,
+	LightingService,
 	type LightingState,
 	LightingTargetUnavailable,
 	LightingValueUnsupported,
@@ -15,7 +16,7 @@ import {
 	validateCapabilities,
 	validateChange,
 } from "../../src/lighting/index.js";
-import { capabilities, evidence, targetA } from "./fixture.js";
+import { capabilities, evidence, makeFixture, targetA } from "./fixture.js";
 
 describe("lighting contracts and invariants", () => {
 	it.prop(
@@ -161,3 +162,70 @@ describe("lighting contracts and invariants", () => {
 		});
 	}
 });
+
+const v3Identity = { firmware: "QUAKE:3:1.0.19", protocolVersion: 12 };
+const v3 = {
+	...capabilities,
+	identity: v3Identity,
+	transport: "v3" as const,
+	fields: [
+		{
+			field: "effectSpeed" as const,
+			valueId: 3 as const,
+			readable: true,
+			writable: true,
+			range: { min: 0, max: 255 },
+			evidence: { identity: v3Identity, basis: "hardware-qualified" as const },
+		},
+	],
+	save: Option.none(),
+};
+it("round-trips narrow V3 capabilities and rejects expanded or mislabeled profiles", () => {
+	expect(
+		Schema.decodeUnknownSync(LightingCapabilities)(
+			Schema.encodeSync(LightingCapabilities)(v3),
+		),
+	).toEqual(v3);
+	expect(Either.isRight(validateCapabilities(targetA, v3))).toBe(true);
+	const speed = v3.fields[0];
+	if (!speed) throw new Error("Missing speed fixture");
+	for (const invalid of [
+		{ ...v3, save: capabilities.save },
+		{ ...v3, fields: [] },
+		{ ...v3, fields: [{ ...speed, valueId: 11 }] },
+		{ ...v3, fields: [{ ...speed, writable: false }] },
+		{
+			...v3,
+			fields: [
+				{
+					...speed,
+					evidence: { ...speed.evidence, basis: "source-qualified" },
+				},
+			],
+		},
+		{ ...v3, fields: [...v3.fields, capabilities.fields[0]] },
+		{ ...v3, identity: { ...v3Identity, protocolVersion: 11 } },
+		{ ...v3, identity: { ...v3Identity, firmware: "QUAKE:3:1.0.20" } },
+		{ ...capabilities, fields: [{ ...speed, evidence }] },
+	])
+		expect(Either.isLeft(validateCapabilities(targetA, invalid))).toBe(true);
+});
+
+it.scoped(
+	"standalone legacy adapter rejects V3 before opening a second native handle",
+	() =>
+		Effect.gen(function* () {
+			const fixture = yield* makeFixture(v3);
+			yield* Effect.gen(function* () {
+				const lighting = yield* LightingService;
+				expect(
+					yield* lighting.select(targetA).pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "LightingTargetUnavailable" },
+				});
+			}).pipe(Effect.provide(fixture.layer));
+			expect(yield* fixture.fakeA.opens).toBe(0);
+			expect(yield* fixture.fakeA.writes).toEqual([]);
+		}),
+);

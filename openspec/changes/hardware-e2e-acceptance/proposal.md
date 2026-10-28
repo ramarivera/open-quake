@@ -21,8 +21,8 @@ Ramiro explicitly requested more autonomous automated testing and granted local 
 
 ### Modified Capabilities
 
-None.
+- Existing lighting capabilities gain an explicitly approved `v3` transport and speed descriptor 3 for exact QUAKE:3:1.0.19/protocol 12 only. Shared-owner speed IO is hardware-qualified; brightness, color, effect selection and flash save stay unavailable.
 
 ## Impact
 
-Desktop test helpers, dedicated opt-in Vitest config, existing diagnostic names and documentation. No dependencies, CI, firmware flashing or automatic OS input/audio. Epic `open-quake-fdc`.
+Desktop test helpers, dedicated opt-in Vitest config, existing diagnostic names and documentation. No new dependencies, CI changes, firmware flashing or automatic OS input/audio. The approved narrow production capability update also changes device lighting contracts, the shared-owner adapter and save availability in the existing UI. Epic `open-quake-fdc`.

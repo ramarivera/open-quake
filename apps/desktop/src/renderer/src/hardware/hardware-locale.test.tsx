@@ -45,6 +45,7 @@ const lighting: Extract<HardwareResponse, { _tag: "lighting" }> = {
 	session: "session",
 	status: "ready",
 	saveStatus: "saved",
+	canSave: true,
 	fields: [
 		{
 			field: "brightness",
@@ -104,7 +105,7 @@ function localeBridge(): AppLocaleBridge {
 		dispose: async () => {},
 	};
 }
-function fixture() {
+function fixture(lightingProfile = lighting) {
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	let failure = false;
 	let saveStatus = lighting.saveStatus;
@@ -117,7 +118,7 @@ function fixture() {
 		if (command._tag === "qmk") return { _tag: "qmk", values: [[0, 10]] };
 		if (command._tag === "lighting") {
 			if (failure) throw new Error("private raw failure");
-			return { ...lighting, saveStatus };
+			return { ...lightingProfile, saveStatus };
 		}
 		if (command._tag === "chooseGameTarget")
 			return { _tag: "failure", code: "QUAKE.HARDWARE.UNAVAILABLE" };
@@ -314,4 +315,38 @@ it("loading and offline copy follows language while the same hardware read remai
 		await f.bridge.set("ko");
 	});
 	expect(host.textContent).toContain(strings.ko.offline);
+});
+
+it("V3 capabilities expose only speed and disable flash save in the mounted consumer", async () => {
+	const speed = lighting.fields.find((field) => field.field === "effectSpeed");
+	if (!speed) throw new Error("Missing speed fixture");
+	const f = fixture({
+		...lighting,
+		canSave: false,
+		fields: [
+			{
+				...speed,
+				valueId: 3,
+				evidence: {
+					identity: { firmware: "QUAKE:3:1.0.19", protocolVersion: 12 },
+					basis: "hardware-qualified",
+				},
+			},
+		],
+		values: [{ field: "effectSpeed", value: 156 }],
+	});
+	await act(async () => f.render());
+	expect(
+		host.querySelector<HTMLInputElement>('[aria-label="Effect speed"]')
+			?.disabled,
+	).toBe(false);
+	expect(host.querySelector('[aria-label="Brightness"]')).toBeNull();
+	expect(host.querySelector('[aria-label="Color 1 Hue"]')).toBeNull();
+	const save = Array.from(host.querySelectorAll("button")).find(
+		(b) => b.textContent === "Save",
+	);
+	expect(save?.disabled).toBe(true);
+	const before = f.request.mock.calls.length;
+	await act(async () => save?.click());
+	expect(f.request.mock.calls.length).toBe(before);
 });

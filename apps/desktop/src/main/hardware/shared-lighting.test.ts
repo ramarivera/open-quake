@@ -16,9 +16,13 @@ import { sharedLighting } from "./qmk-lighting";
 
 // Hold the first brightness reply in the actual fake HID report stream, after its
 // write has completed. Hardware refresh, QMK resolution and later reads stay real.
-const setup = (serial = "A", holdReply = true) =>
+const setup = (
+	serial = "A",
+	holdReply = true,
+	options: Parameters<typeof makeFakeHardwareTransport>[0] = {},
+) =>
 	Effect.gen(function* () {
-		const fake = yield* makeFakeHardwareTransport({ serial });
+		const fake = yield* makeFakeHardwareTransport({ serial, ...options });
 		const waiting = yield* Deferred.make<Uint8Array>();
 		let held = false;
 		const transport = {
@@ -211,3 +215,112 @@ it.scoped(
 			expect((yield* f.session.snapshot()).available).toBe(false);
 		}),
 );
+
+const v3Options = {
+	firmware: [3, 1, 0, 19] as const,
+	qmkProtocolVersion: 12,
+	qmkValues: [{ prefix: [3, 3], values: [156] }],
+};
+it.scoped(
+	"qualified V3 reads, applies and restores only speed on the existing handle",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* setup("A", false, v3Options);
+			yield* Effect.gen(function* () {
+				const lighting = yield* LightingService;
+				const target = { serial: "A", session: "a1" };
+				const selected = yield* lighting.select(target);
+				expect(selected.status).toBe("ready");
+				expect(selected.capabilities.transport).toBe("v3");
+				expect(selected.capabilities.fields).toMatchObject([
+					{
+						field: "effectSpeed",
+						valueId: 3,
+						evidence: { basis: "hardware-qualified" },
+					},
+				]);
+				expect(selected.applied).toEqual([
+					{ field: "effectSpeed", value: 156 },
+				]);
+				expect(Option.isNone(selected.capabilities.save)).toBe(true);
+				const before = (yield* f.fake.writes).length;
+				for (const change of [
+					{ field: "brightness", value: 20 },
+					{ field: "effect", value: 1 },
+					{ field: "color1", value: { hue: 1, saturation: 255 } },
+					{ field: "color2", value: { hue: 1, saturation: 255 } },
+				]) {
+					const result = yield* lighting
+						.setDesired(target, change)
+						.pipe(Effect.either);
+					expect(result).toMatchObject({
+						_tag: "Left",
+						left: { _tag: "LightingValueUnsupported" },
+					});
+				}
+				expect(yield* lighting.save(target).pipe(Effect.either)).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "LightingValueUnsupported" },
+				});
+				expect((yield* f.fake.writes).length).toBe(before);
+				for (const value of [187, 156]) {
+					yield* lighting.setDesired(target, { field: "effectSpeed", value });
+					expect((yield* lighting.flush(target)).applied).toEqual([
+						{ field: "effectSpeed", value },
+					]);
+				}
+				const writes = yield* f.fake.writes;
+				expect(
+					writes
+						.filter((b) => b[1] === 7)
+						.map((b) => Array.from(b.slice(1, 5))),
+				).toEqual([
+					[7, 3, 3, 187],
+					[7, 3, 3, 156],
+				]);
+				expect(
+					writes
+						.filter((b) => b[1] === 8)
+						.every((b) => b[2] === 3 && b[3] === 3),
+				).toBe(true);
+				expect(writes.some((b) => b[1] === 9)).toBe(false);
+				expect(yield* f.fake.opens).toBe(1);
+				expect(yield* f.fake.closes).toBe(0);
+				yield* lighting.deselect();
+				expect(
+					yield* lighting
+						.setDesired(target, { field: "effectSpeed", value: 99 })
+						.pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "LightingTargetUnavailable" },
+				});
+				expect(yield* f.fake.writes).toEqual(writes);
+			}).pipe(Effect.provide(sharedLighting(() => [f.session])));
+		}),
+);
+for (const mismatch of [
+	{ ...v3Options, qmkProtocolVersion: 11 },
+	{ ...v3Options, qmkProtocolVersion: 13 },
+	{ ...v3Options, firmware: [3, 1, 0, 20] as const },
+	{ ...v3Options, firmware: [1, 1, 0, 19] as const },
+]) {
+	it.scoped(
+		`does not qualify nearby V3 identity ${JSON.stringify(mismatch.firmware)}/${mismatch.qmkProtocolVersion}`,
+		() =>
+			Effect.gen(function* () {
+				const f = yield* setup("A", false, mismatch);
+				yield* Effect.gen(function* () {
+					const lighting = yield* LightingService;
+					const state = yield* lighting.select({ serial: "A", session: "a1" });
+					expect(state.status).toBe("unavailable");
+					expect(state.capabilities.fields).toEqual([]);
+					expect(
+						(yield* f.fake.writes).some(
+							(b) => b[1] === 7 || b[1] === 8 || b[1] === 9,
+						),
+					).toBe(false);
+				}).pipe(Effect.provide(sharedLighting(() => [f.session])));
+			}),
+	);
+}

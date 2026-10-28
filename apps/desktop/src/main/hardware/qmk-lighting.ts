@@ -42,7 +42,7 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 			const firmware = state.firmware;
 			// The bundled QUAKE_01.00.21_NEW.uf2 and recovered legacy lighting consumer
 			// qualify this exact identity. A protocol number alone is not firmware evidence.
-			const qualified =
+			const legacy =
 				version === 10 &&
 				firmware?.deviceName === 1 &&
 				firmware.major === 1 &&
@@ -54,8 +54,9 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 					: "unknown",
 				protocolVersion: version,
 			};
+			const v3 = version === 12 && identity.firmware === "QUAKE:3:1.0.19";
 			const evidence = { identity, basis: "source-qualified" as const };
-			// Legacy values are recovered from QMKLightingService.js. v3 channels need their own qualification.
+			// V3 speed alone is hardware-qualified by native read/apply/restore evidence.
 			return {
 				info: {
 					path: "shared-owner",
@@ -67,8 +68,12 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 				capabilities: {
 					target,
 					identity,
-					transport: qualified ? ("legacy" as const) : ("unavailable" as const),
-					fields: qualified
+					transport: legacy
+						? ("legacy" as const)
+						: v3
+							? ("v3" as const)
+							: ("unavailable" as const),
+					fields: legacy
 						? [
 								{
 									field: "brightness" as const,
@@ -96,8 +101,22 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 									evidence,
 								},
 							]
-						: [],
-					save: qualified
+						: v3
+							? [
+									{
+										field: "effectSpeed" as const,
+										valueId: 3 as const,
+										readable: true,
+										writable: true,
+										range: { min: 0, max: 255 },
+										evidence: {
+											identity,
+											basis: "hardware-qualified" as const,
+										},
+									},
+								]
+							: [],
+					save: legacy
 						? Option.some({ evidence, completion: "ack-and-readback" as const })
 						: Option.none(),
 				},
@@ -115,6 +134,15 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 					) =>
 						Effect.gen(function* () {
 							const session = yield* owner(target);
+							const v3 = registration.capabilities.transport === "v3";
+							if (
+								v3 &&
+								(command.command === 9 ||
+									(command.command !== 1 && command.lightingValue !== 3))
+							)
+								return yield* new LightingIoFailed(undefined);
+							const prefix = (valueId: number) =>
+								v3 ? [3, valueId] : [valueId];
 							const operations =
 								command.command === 1
 									? [{ _tag: "protocol" as const }]
@@ -124,14 +152,14 @@ export function sharedLighting(sessions: () => readonly HardwareSession[]) {
 											? [
 													{
 														_tag: "set" as const,
-														prefix: [command.lightingValue],
+														prefix: prefix(command.lightingValue),
 														values: command.values,
 													},
 												]
 											: [
 													{
 														_tag: "get" as const,
-														prefix: [command.lightingValue],
+														prefix: prefix(command.lightingValue),
 														length: command.resultLength,
 													},
 												];

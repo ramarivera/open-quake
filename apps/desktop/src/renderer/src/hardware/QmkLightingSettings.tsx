@@ -204,7 +204,7 @@ export function QmkLightingSettings(): React.JSX.Element {
 					<button
 						type="button"
 						className="button"
-						disabled={busy}
+						disabled={busy || !lighting.canSave}
 						onClick={() => void update({ _tag: "save" })}
 					>
 						{t("save")}

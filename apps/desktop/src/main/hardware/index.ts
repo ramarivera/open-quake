@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { HardwareSession } from "@open-quake/device";
-import { Cause, Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Cause, Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { dialog, ipcMain, powerMonitor } from "electron";
 import { LightingService } from "../../../../../packages/device/src/lighting/lighting-service";
 import {
@@ -106,6 +106,7 @@ export function registerHardware(
 												fields: state.capabilities.fields,
 												values: state.applied,
 												saveStatus: state.saveStatus,
+												canSave: Option.isSome(state.capabilities.save),
 											};
 										}).pipe(
 											Effect.tapErrorCause((cause) =>

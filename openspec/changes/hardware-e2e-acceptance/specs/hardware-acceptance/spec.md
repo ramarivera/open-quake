@@ -26,3 +26,12 @@ The suite SHALL emit a fixed named inventory with pass, fail, skip and physical-
 
 - **WHEN** automated checks complete
 - **THEN** touch, knob gestures, physical hot-plug, visual placement and human audio/input acceptance remain explicitly unverified rather than disappearing from the denominator
+
+### Requirement: Narrow hardware-qualified V3 control
+
+For exact QUAKE:3:1.0.19 firmware and protocol 12, production lighting SHALL expose only readable and writable effect speed through shared-owner channel 3/value 3. Brightness, color, effect selection and flash save SHALL remain unavailable. Other identities SHALL not inherit this qualification.
+
+#### Scenario: Installed qualified V3 device is selected
+
+- **WHEN** the lighting consumer selects the exact qualified identity
+- **THEN** it reads and applies speed with actual readback through the existing shared owner, and unsupported changes and save perform no IO

@@ -77,6 +77,7 @@ export const HardwareResponse = Schema.Union(
 		fields: Schema.Array(LightingFieldCapability),
 		values: Schema.Array(LightingChange),
 		saveStatus: Schema.Literal("unknown", "unsaved", "saved", "failed"),
+		canSave: Schema.Boolean,
 	}),
 	Schema.TaggedStruct("qmkTargets", {
 		targets: Schema.Array(
