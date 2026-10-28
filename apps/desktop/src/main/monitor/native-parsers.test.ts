@@ -357,6 +357,24 @@ describe("qualified platform fixtures", () => {
 		).toHaveLength(1);
 		expect(run.mock.calls.map(([file]) => file)).not.toContain("powermetrics");
 	});
+	it("reports failed GPU reads as unavailable and retries a failed model lookup", async () => {
+		let sysctlCalls = 0;
+		const run = vi.fn(async (file: string) => {
+			if (file.endsWith("sysctl")) {
+				sysctlCalls++;
+				if (sysctlCalls === 1) throw new Error("transient");
+				return "Mac15,12\n";
+			}
+			throw new Error("ioreg failed");
+		});
+		const collector = nativeCollector("darwin", run);
+		const first = await Effect.runPromise(collector.collect("gpu"));
+		expect(first.state).toBe("unavailable");
+		const second = await Effect.runPromise(collector.collect("gpu"));
+		if (process.arch === "arm64")
+			expect(second.values.model).toBe(`${cpus()[0]?.model.trim()} · Mac15,12`);
+		else expect(second.values.model).toBeUndefined();
+	});
 	it("keeps real battery percentage and charging state from mocked pmset output", async () => {
 		const collector = nativeCollector(
 			"darwin",

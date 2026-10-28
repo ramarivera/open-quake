@@ -347,7 +347,11 @@ function Power({ sample }: { sample: MetricSample }): React.JSX.Element {
 			/>
 			<Heading>{l.currentCapacity}</Heading>
 			{v.hasBattery === false && v.source === "ac" ? (
-				<span className="monitor-state">{l.acNoBattery}</span>
+				<>
+					<span className="monitor-state">{l.acNoBattery}</span>
+					{/* Retained AC-only values must still show they are stale. */}
+					{sample.state !== "available" && <Status sample={sample} />}
+				</>
 			) : (
 				<Status sample={sample} />
 			)}

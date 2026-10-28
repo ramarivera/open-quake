@@ -59,24 +59,26 @@ export function nativeCollector(
 		| { iface: string; up: number; down: number; time: number }
 		| undefined;
 	const slow = new Map<ModuleId, { remaining: number; result: Result }>();
-	let hardwareIdentifier: Promise<string> | undefined;
-	const macHardwareIdentifier = (signal: AbortSignal): Promise<string> => {
-		hardwareIdentifier ??= (async () => {
-			let model: string | undefined;
-			try {
-				model = parseHardwareModel(
-					await run("/usr/sbin/sysctl", ["-n", "hw.model"], signal),
-				);
-			} catch {
-				/* The CPU model remains a useful identifier if sysctl is unavailable. */
-			}
-			const chip = cpus()[0]?.model.trim();
-			return (
-				[chip, model].filter(Boolean).join(" · ") ||
-				(process.arch === "arm64" ? "Apple Silicon" : "Mac")
+	// Cached only once sysctl succeeds, so a transient failure retries next sample.
+	let hardwareIdentifier: string | undefined;
+	const macHardwareIdentifier = async (
+		signal: AbortSignal,
+	): Promise<string> => {
+		if (hardwareIdentifier) return hardwareIdentifier;
+		let model: string | undefined;
+		try {
+			model = parseHardwareModel(
+				await run("/usr/sbin/sysctl", ["-n", "hw.model"], signal),
 			);
-		})();
-		return hardwareIdentifier;
+		} catch {
+			/* The CPU model remains a useful identifier if sysctl is unavailable. */
+		}
+		const chip = cpus()[0]?.model.trim();
+		const identifier =
+			[chip, model].filter(Boolean).join(" · ") ||
+			(process.arch === "arm64" ? "Apple Silicon" : "Mac");
+		if (model) hardwareIdentifier = identifier;
+		return identifier;
 	};
 	const externalInterface = () =>
 		Object.entries(interfaces()).find(([, entries]) =>
@@ -277,13 +279,17 @@ export function nativeCollector(
 				if (rawLoad !== undefined && Number(rawLoad) <= 100)
 					load = Number(rawLoad);
 			} catch {
-				/* GPU utilization is optional; hardware identity still has value. */
+				/* Reported below as an unavailable sample, so status leaves Live. */
 			}
 			return {
-				state: "available",
+				state: load !== undefined ? "available" : "unavailable",
 				values: {
 					...(load !== undefined ? { load } : {}),
-					model: await macHardwareIdentifier(signal),
+					// Apple silicon graphics are part of the chip; on Intel Macs the CPU
+					// identifier would mislabel a discrete GPU, so it is omitted there.
+					...(process.arch === "arm64"
+						? { model: await macHardwareIdentifier(signal) }
+						: {}),
 					temperatureAvailability: "unsupported-on-mac",
 				},
 			};
