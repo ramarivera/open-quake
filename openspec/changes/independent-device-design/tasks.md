@@ -91,3 +91,10 @@ delivery remain open under `open-quake-lih.24` and their owning tasks.
 ## Device widget coverage lane
 
 - [x] test-device-widgets: KNOB-016 rendered focus outline/angle at three spans; align outline width with the existing two-pixel contract.
+
+## Owner wheel feedback, 2026-10-28
+
+- [x] 4.1 Fade and diffuse the wheel backdrop toward the left; remove the transient top/bottom direction bar while retaining selection and reduced-motion behavior. Bead open-quake-l86.35.
+- [ ] 4.2 Inspect hidden native wheel captures, run focused renderer checks and ship the owner correction.
+
+The owner-requested wheel preview uses a 160px wider left fade, 18px background blur and a transparent mask, preserving crisp text and the 200ms list nudge. The transient top/bottom direction element, timer and styles are removed. Hidden native 1920x480 capture is retained in SSD scratch at open-quake/editor-followups/knob/function-wheel.png and inspected; this is a renderer preview, not a physical-device observation.

@@ -18,7 +18,6 @@ export function FunctionWheel({
 	motion?: "full" | "reduce";
 }): React.JSX.Element | null {
 	const [nudge, setNudge] = useState(0);
-	const [indicator, setIndicator] = useState(false);
 	const [width, setWidth] = useState(440);
 	const labels = useRef<HTMLDivElement>(null);
 	const entryId = entries[index]?.id;
@@ -46,15 +45,12 @@ export function FunctionWheel({
 	}, [entries, index]);
 	useEffect(() => {
 		setNudge(0);
-		setIndicator(false);
 		if (
 			!entryId ||
 			motion === "reduce" ||
 			window.matchMedia("(prefers-reduced-motion: reduce)").matches
 		)
 			return;
-		setIndicator(true);
-		const indicatorTimer = setTimeout(() => setIndicator(false), 300);
 		const started = performance.now();
 		const from = direction * 40;
 		let frame = 0;
@@ -67,7 +63,6 @@ export function FunctionWheel({
 		frame = requestAnimationFrame(tick);
 		return () => {
 			cancelAnimationFrame(frame);
-			clearTimeout(indicatorTimer);
 		};
 	}, [entryId, direction, motion]);
 	return (
@@ -75,7 +70,7 @@ export function FunctionWheel({
 			<span role="status" aria-live="polite" className="visually-hidden">
 				{entries[index]?.name}
 			</span>
-			<div className="knob-wheel-backdrop" style={{ width }} />
+			<div className="knob-wheel-backdrop" style={{ width: width + 160 }} />
 			<div
 				className="knob-wheel"
 				role="img"
@@ -112,9 +107,6 @@ export function FunctionWheel({
 						);
 					})}
 				</div>
-				{indicator ? (
-					<div className="knob-wheel-direction" data-direction={direction} />
-				) : null}
 			</div>
 		</>
 	);

@@ -211,11 +211,16 @@
 	top: 0;
 	height: 480px;
 	z-index: 99999;
-	/* Opaque so tile text underneath can't show through the labels. */
-	background: rgb(10 12 20);
-	box-shadow:
-		inset 1px 0 0 var(--strip-hairline),
-		-24px 0 48px rgb(0 0 0 / 45%);
+	/* Fade into the tiles away from the physical knob; labels stay on the dark side. */
+	background: rgb(10 12 20 / 94%);
+	backdrop-filter: blur(18px);
+	mask-image: linear-gradient(
+		to right,
+		transparent 0%,
+		rgb(0 0 0 / 12%) 15%,
+		rgb(0 0 0 / 60%) 40%,
+		#000 72%
+	);
 	pointer-events: none;
 }
 .knob-wheel {
@@ -258,19 +263,6 @@
 }
 .knob-wheel-label[data-slot="4"] {
 	right: 60px;
-}
-.knob-wheel-direction {
-	position: absolute;
-	left: 0;
-	right: 0;
-	height: 3px;
-	background: var(--strip-accent);
-}
-.knob-wheel-direction[data-direction="1"] {
-	bottom: 0;
-}
-.knob-wheel-direction[data-direction="-1"] {
-	top: 0;
 }
 .knob-tile-target {
 	position: absolute;

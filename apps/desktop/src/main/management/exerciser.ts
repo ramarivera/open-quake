@@ -24,7 +24,11 @@ import {
 } from "./exerciser-dom";
 import { resetFixtureStore } from "./exerciser-fixture";
 import { expectedInert, skipReason, skipRules } from "./exerciser-policy";
-import { failureReason } from "./exerciser-replies";
+import {
+	failureReason,
+	isPassiveOperation,
+	operationName,
+} from "./exerciser-replies";
 
 assert(!app.isPackaged, "Management exerciser is forbidden in packaged apps");
 assert.equal(
@@ -66,17 +70,9 @@ function recordInvocation(
 ) {
 	invocations.set(channel, (invocations.get(channel) ?? 0) + 1);
 	if (!event.sender.getURL().includes("surface=management")) return;
-	const input = args[0];
-	const operation =
-		typeof input === "object" && input !== null
-			? "type" in input
-				? input.type
-				: "_tag" in input
-					? input._tag
-					: ""
-			: "";
+	const operation = operationName(args[0]);
 	if (
-		["read", "query", "snapshot", "status"].includes(String(operation)) ||
+		isPassiveOperation(operation) ||
 		/status|device-ready|strip-message|ready$/.test(channel)
 	)
 		return;
@@ -109,16 +105,10 @@ ipcMain.handle = (channel, listener) => {
 	registered.handle.push(channel);
 	handle(channel, async (event, ...args: unknown[]) => {
 		recordInvocation(channel, event, args);
-		const input = args[0];
-		const operation =
-			typeof input === "object" && input !== null
-				? String(
-						"type" in input ? input.type : "_tag" in input ? input._tag : "",
-					)
-				: "";
+		const operation = operationName(args[0]);
 		const management =
 			event.sender.getURL().includes("surface=management") &&
-			!["read", "query", "snapshot", "status"].includes(operation);
+			!isPassiveOperation(operation);
 		const current = activation;
 		const renderer = event.sender.getURL().includes("surface=management");
 		if (renderer) pendingRequests++;
@@ -128,21 +118,11 @@ ipcMain.handle = (channel, listener) => {
 			const reply: unknown = await listener(event, ...args);
 			const reason = failureReason(reply);
 			if (reason !== undefined) {
-				const input = args[0];
 				mainReplies.push({
 					activation: current,
 					channel,
 					sender: event.sender.id,
-					type:
-						typeof input === "object" && input !== null
-							? String(
-									"type" in input
-										? input.type
-										: "_tag" in input
-											? input._tag
-											: "",
-								)
-							: "",
+					type: operation,
 					reason,
 				});
 			}
@@ -1006,8 +986,10 @@ async function targeted(win: BrowserWindow) {
 		async () => {
 			await navigate(win, "emoji");
 			await click(win, 'button[title="New emoji package"]');
+			await settleRenderer(win);
 			const start = mainReplies.length;
-			await textInput(win, ".emoji-pack input", "中".repeat(11));
+			const sent = controlInvocations.get("emoji:request") ?? 0;
+			await textInput(win, ".emoji-pack input", "a".repeat(21));
 			await waitFor(
 				win,
 				"!!document.querySelector('.emoji-pack input[aria-invalid=true]')",
@@ -1019,9 +1001,9 @@ async function targeted(win: BrowserWindow) {
 				"package rename guidance",
 			);
 			assert.equal(
-				mainReplies.length,
-				start,
-				"Invalid draft reached the domain",
+				controlInvocations.get("emoji:request") ?? 0,
+				sent,
+				"Invalid draft sent an emoji command",
 			);
 			await capture(win, "emoji-invalid-name");
 			await textInput(win, ".emoji-pack input", "Pack test");
@@ -1206,6 +1188,10 @@ async function finish() {
 				`FAIL ${failure.page}: ${failure.control}: ${failure.reason}\n`,
 			);
 		exitCode = summary.failed || summary.errors ? 1 : 0;
+	} catch (cause) {
+		process.stderr.write(
+			`Management exerciser report failed: ${message(cause)}\n`,
+		);
 	} finally {
 		app.exit(exitCode);
 	}
@@ -1248,7 +1234,16 @@ async function exerciseRevealed(
 				`!!document.querySelector(${JSON.stringify(selectorFor(control))})`,
 			)
 		) {
-			await select(win, selectorFor(control), control.value);
+			await select(win, selectorFor(control), control.value).catch(
+				(cause: unknown) => {
+					results.push({
+						page,
+						control: `Restore ${control.label}`,
+						status: "failed",
+						reason: message(cause),
+					});
+				},
+			);
 		}
 	}
 	if (control.restoreRadio && !control.selected && !skipReason(control))

@@ -20,3 +20,9 @@ Delivery uses branch `fix/keys-editor-sweep` and a PR against main. The beads re
 - [x] 4.4 Fix the three late PR152 findings, with regression coverage. Bead open-quake-l86.29.
 - [x] 4.5 Separate enlarged two-line titles from artwork, with regression coverage. Title subset of open-quake-l86.24.
 - [x] 4.6 Run before/after management exercise, desktop types/tests, device tests and root lint; record the verified change for delivery.
+
+## 5. Carried PR155 input findings
+
+- [x] 5.1 Keep numeric action drafts editable when cleared and block Save until valid; preserve blank force semantics. Bead open-quake-l86.32.
+- [x] 5.2 Remove validation blockers when Function replaces or unmounts invalid action inputs; cover mounted Save behavior. Bead open-quake-l86.33.
+- [ ] 5.3 Validate the changed consumers and ship in a follow-up PR with one addressing round.
