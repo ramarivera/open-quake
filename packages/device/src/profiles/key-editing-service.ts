@@ -91,31 +91,15 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 					return yield* Effect.fail(
 						ProfileValidationFailed.fromCause(undefined),
 					);
-				if (original && !geometry.placement) {
-					if (
-						original.config.type !== key.config.type &&
-						!keyEditable(original, "allowDelete")
-					)
-						return yield* Effect.fail(
-							ProfileValidationFailed.fromCause(undefined),
-						);
-					const titleChanged =
-						JSON.stringify(original.config.title) !==
-							JSON.stringify(key.config.title) ||
-						JSON.stringify(original.config.alterTitle) !==
-							JSON.stringify(key.config.alterTitle);
-					const iconChanged =
-						original.config.icon !== key.config.icon ||
-						Option.getOrElse(original.config.alterIcon, () => "") !==
-							Option.getOrElse(key.config.alterIcon, () => "");
-					if (
-						(!keyEditable(original, "title") && titleChanged) ||
-						(!keyEditable(original, "icon") && iconChanged)
-					)
-						return yield* Effect.fail(
-							ProfileValidationFailed.fromCause(undefined),
-						);
-				}
+				if (
+					original &&
+					!geometry.placement &&
+					original.config.type !== key.config.type &&
+					!keyEditable(original, "allowDelete")
+				)
+					return yield* Effect.fail(
+						ProfileValidationFailed.fromCause(undefined),
+					);
 
 				const result = editKeyLayout(
 					profile.pages.find((p) => p.id === target.pageId)?.keys ?? [],

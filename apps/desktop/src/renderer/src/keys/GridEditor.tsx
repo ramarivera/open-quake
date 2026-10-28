@@ -3,7 +3,6 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { MAX_SEQUENCE_OPERATIONS } from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	type KeyTarget,
-	keyEditable,
 	keyText,
 	keyTitle,
 } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
@@ -129,11 +128,7 @@ export function GridEditor({
 			: current.current?.target.keyCode === keyCode
 				? current.current.savedKey
 				: page.keys.find((key) => key.keyCode === keyCode);
-		if (
-			!source ||
-			(!library && (!source.config.type || !keyEditable(source, "allowDrag")))
-		)
-			return;
+		if (!source || (!library && !source.config.type)) return;
 		const next: GridDrag = {
 			epoch: epoch.current + 1,
 			library,
@@ -484,12 +479,7 @@ export function GridEditor({
 						},
 						stripLayout(profile, page),
 					);
-					const key = page.keys.find((key) => key.keyCode === tile?.keyCode);
-					const locked =
-						key &&
-						Option.isSome(key.config.basicEditableItems) &&
-						!key.config.basicEditableItems.value.allowDrag;
-					setMirrorPressed(locked ? undefined : tile?.keyCode);
+					setMirrorPressed(tile?.keyCode);
 				}}
 				onPointerUpCapture={() => setMirrorPressed(undefined)}
 				onPointerCancelCapture={() => setMirrorPressed(undefined)}
@@ -644,11 +634,7 @@ export function GridEditor({
 					/>
 				</section>
 			)}
-			<fieldset
-				className="keys-cells"
-				aria-label="Select key"
-				disabled={layout.vivid}
-			>
+			<fieldset className="keys-cells" aria-label="Select key">
 				{Array.from(
 					{ length: 16 },
 					(_, i) => `${Math.floor(i / 8) + 1},${(i % 8) + 1}`,

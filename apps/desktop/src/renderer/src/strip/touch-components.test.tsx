@@ -1182,7 +1182,7 @@ describe("touch production components", () => {
 	});
 
 	it.each([false, true])(
-		"SCREEN-141 mirror lock=%s suppresses pressed effects while leaving the tile inspectable",
+		"SCREEN-141 legacy mirror lock=%s permits pressed effects and inspection",
 		async (locked) => {
 			const { root, node } = host(),
 				base = fixtureProfile(),
@@ -1233,8 +1233,8 @@ describe("touch production components", () => {
 				'[data-state="tile"][data-key-code="1,1"]',
 			);
 			if (!tile) throw new Error("Missing mirror tile");
-			expect(tile.dataset.editLocked === "true").toBe(locked);
-			expect(tile.dataset.pressed === "true").toBe(!locked);
+			expect(tile.dataset.editLocked).toBeUndefined();
+			expect(tile.dataset.pressed === "true").toBe(true);
 			const drag = new Event("dragstart", { bubbles: true, cancelable: true });
 			tile.dispatchEvent(drag);
 			expect(drag.defaultPrevented).toBe(true);

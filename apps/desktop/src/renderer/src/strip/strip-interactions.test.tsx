@@ -294,7 +294,7 @@ it("SCREEN-035/036 replaces all sixteen current cells repeatedly without an artw
 	}
 });
 
-it("WIDGETS-010 bounds feedback to 200ms, clears release, and excludes every conversation type and locked preview", async () => {
+it("WIDGETS-010 bounds feedback to 200ms, clears release, and excludes every conversation type and permits feedback for legacy-locked previews", async () => {
 	vi.useFakeTimers();
 	const m = await mount(null);
 	cleanups.push(m.close);
@@ -362,7 +362,7 @@ it("WIDGETS-010 bounds feedback to 200ms, clears release, and excludes every con
 		}
 		await show("hotkey", false, true);
 		await show("hotkey", true, true);
-		expect(m.host.querySelector('[data-pressed="true"]')).toBeNull();
+		expect(m.host.querySelector('[data-pressed="true"]')).not.toBeNull();
 	} finally {
 		vi.useRealTimers();
 	}

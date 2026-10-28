@@ -382,7 +382,7 @@ describe("clock burn-down per-key enrichment", () => {
 		expect(activeClockTarget(envelope, "unknown", "1,1")).toBeUndefined();
 		expect(activeClockTarget(envelope, "B", "2,2")).toBeUndefined();
 	});
-	it("preset keeps all editing locks and has no knob or touch effect", () => {
+	it("preset preserves legacy flags as data and has no knob or touch effect", () => {
 		const key = a.pages[0].keys[0];
 		expect(key?.config).toMatchObject({
 			supportKnob: false,
@@ -397,7 +397,7 @@ describe("clock burn-down per-key enrichment", () => {
 			},
 		});
 	});
-	it("the real editor enforces every built-in clock lock without committing a draft", async () => {
+	it("the real editor permits clock title/icon/move but keeps structural resize/delete locks", async () => {
 		const f = setup();
 		const repository = await f.profiles().runPromise(ProfileRepository);
 		const editor = ManagedRuntime.make(
@@ -432,13 +432,11 @@ describe("clock burn-down per-key enrichment", () => {
 						field === "allowDrag" ? { destination: "1,2" } : {},
 					).pipe(Effect.either),
 				);
-				expect(
-					result._tag === "Left" || result.right._tag === "rejected",
-					field,
-				).toBe(true);
-				expect(await editor.runPromise(KeyEditing.pending)).toEqual(
-					Option.none(),
-				);
+				expect(result).toMatchObject({
+					_tag: "Right",
+					right: { _tag: field === "grid" ? "rejected" : "ready" },
+				});
+				await editor.runPromise(KeyEditing.revert(target.token));
 			}
 			expect(
 				await editor.runPromise(KeyEditing.remove(target).pipe(Effect.either)),
