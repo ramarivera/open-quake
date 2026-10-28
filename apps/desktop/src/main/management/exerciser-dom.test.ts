@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
-import { enumerateControls } from "./exerciser-dom";
+import { enumerateControls, installObserver } from "./exerciser-dom";
 
 afterEach(() => {
 	document.body.replaceChildren();
@@ -137,4 +137,23 @@ it("enumerates JSON input only after Import profile is opened", () => {
 			(control) => control.identity === "keys-import-json",
 		),
 	).toBe(true);
+});
+
+it("ignores animated timer text mutations while retaining actionable text changes", async () => {
+	document.body.innerHTML =
+		'<main><span role="timer">0</span><button>Before</button></main>';
+	installObserver();
+	const state = (
+		window as Window & { managementExercise?: { mutations: number } }
+	).managementExercise;
+	if (!state) throw new Error("Missing observer state");
+	const timer = document.querySelector('[role="timer"]')?.firstChild;
+	const button = document.querySelector("button")?.firstChild;
+	if (!timer || !button) throw new Error("Missing observer fixture text");
+	timer.textContent = "1";
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(state.mutations).toBe(0);
+	button.textContent = "After";
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(state.mutations).toBeGreaterThan(0);
 });

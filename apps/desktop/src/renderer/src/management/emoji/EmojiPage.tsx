@@ -15,6 +15,10 @@ import { defaultMotion, motionPresets, utf8Length } from "./composer";
 import { EmojiImage, useEmojiAsset } from "./EmojiImage";
 import "./emoji.css";
 
+function focusRename(input: HTMLInputElement | null): void {
+	input?.focus();
+}
+
 type Ready = Extract<EmojiReply, { _tag: "ready" }>;
 const swatches = [
 	"ffffff",
@@ -534,13 +538,15 @@ export function EmojiPage(): React.JSX.Element {
 									{rename?.id === entry.id ? (
 										<div>
 											<input
-												ref={(input) => {
-													input?.focus();
-												}}
+												ref={focusRename}
 												aria-label={`Rename ${entry.name}`}
 												value={rename.name}
-												maxLength={20}
 												aria-invalid={weightedLength(rename.name.trim()) > 20}
+												aria-describedby={
+													weightedLength(rename.name.trim()) > 20
+														? `emoji-rename-${entry.id}-error`
+														: undefined
+												}
 												onChange={(e) =>
 													setRename({ id: entry.id, name: e.target.value })
 												}
@@ -554,7 +560,10 @@ export function EmojiPage(): React.JSX.Element {
 												}}
 											/>
 											{weightedLength(rename.name.trim()) > 20 && (
-												<small role="alert">
+												<small
+													id={`emoji-rename-${entry.id}-error`}
+													role="alert"
+												>
 													Package names must be at most 20 weighted units.
 												</small>
 											)}

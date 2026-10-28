@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { failureReason } from "./exerciser-replies";
+import {
+	failureReason,
+	isPassiveOperation,
+	operationName,
+} from "./exerciser-replies";
 
 describe("management IPC failure detection", () => {
 	it.each([
@@ -38,4 +42,22 @@ describe("management IPC failure detection", () => {
 			expect(failureReason(reply)).toBeUndefined();
 		},
 	);
+});
+
+it("classifies read operations consistently without retaining request data", () => {
+	for (const input of [
+		{ type: "read" },
+		{ _tag: "query" },
+		{ type: "snapshot" },
+		{ type: "status" },
+	])
+		expect(isPassiveOperation(operationName(input))).toBe(true);
+	for (const input of [
+		{ type: "command", value: "private" },
+		{ _tag: "save" },
+		null,
+		3,
+	])
+		expect(isPassiveOperation(operationName(input))).toBe(false);
+	expect(operationName({ type: "command", _tag: "read" })).toBe("command");
 });

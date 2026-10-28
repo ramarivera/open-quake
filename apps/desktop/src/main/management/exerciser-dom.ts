@@ -36,9 +36,10 @@ export function installObserver(): void {
 		state.mutations += records.filter(
 			(record) =>
 				!(
-					record.target instanceof Element &&
-					record.target.closest(".strip-panel, .mc-runtime, [role=timer]")
-				) &&
+					record.target instanceof Element
+						? record.target
+						: record.target.parentElement
+				)?.closest(".strip-panel, .mc-runtime, [role=timer]") &&
 				!(
 					record.type === "attributes" &&
 					["style", "data-exercise-id"].includes(record.attributeName ?? "")

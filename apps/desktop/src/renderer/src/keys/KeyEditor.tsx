@@ -1104,6 +1104,7 @@ export function KeyEditor({
 									htmlFor={`key-action-${index}`}
 								>
 									<ActionValueInput
+										key={`${selectionToken}:${key.config.type}:${index}:${action.type}`}
 										id={`key-action-${index}`}
 										action={action}
 										onChange={(value) => changeActions(index, value)}

@@ -63,3 +63,69 @@ it("reports malformed JSON so the editor can refuse to save the stale value", as
 	await input(field, '{"enabled":false}');
 	expect(validity.at(-1)).toBe(true);
 });
+
+it("keeps a cleared numeric draft without publishing it and restores validity with a replacement", async () => {
+	const values: ProfileJson[] = [];
+	const valid: boolean[] = [];
+	const f = await mount(
+		<ActionValueInput
+			id="number"
+			action={{ type: "time", value: 12 }}
+			onChange={(value) => {
+				values.push(value);
+			}}
+			onValidityChange={(value) => {
+				valid.push(value);
+			}}
+		/>,
+	);
+	cleanup.push(f.close);
+	const field = query(f.host, "#number", HTMLInputElement);
+	await input(field, "");
+	expect(field.value).toBe("");
+	expect(values).toEqual([]);
+	expect(valid.at(-1)).toBe(false);
+	await input(field, "24");
+	expect(values).toEqual([24]);
+	expect(valid.at(-1)).toBe(true);
+});
+
+it("preserves the legacy blank force value as valid", async () => {
+	let value: ProfileJson = 1;
+	let valid = false;
+	const f = await mount(
+		<ActionValueInput
+			id="force"
+			action={{ type: "force", value }}
+			onChange={(next) => {
+				value = next;
+			}}
+			onValidityChange={(next) => {
+				valid = next;
+			}}
+		/>,
+	);
+	cleanup.push(f.close);
+	await input(query(f.host, "#force", HTMLInputElement), "");
+	expect(value).toBe("");
+	expect(valid).toBe(true);
+});
+
+it("releases an invalid field's Save blocker when it is removed", async () => {
+	let valid = true;
+	const f = await mount(
+		<ActionValueInput
+			id="json"
+			action={{ type: "settings", value: { enabled: true } }}
+			onChange={() => {}}
+			onValidityChange={(next) => {
+				valid = next;
+			}}
+		/>,
+	);
+	cleanup.push(f.close);
+	await input(query(f.host, "#json", HTMLTextAreaElement), "{");
+	expect(valid).toBe(false);
+	await f.render(<div />);
+	expect(valid).toBe(true);
+});

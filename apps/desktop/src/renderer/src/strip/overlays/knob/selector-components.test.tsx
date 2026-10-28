@@ -323,7 +323,7 @@ describe("SCREEN-075/076/077/080/084 wheel", () => {
 			expect(host.querySelector(".knob-wheel-direction")).toBeNull();
 		},
 	);
-	it("cancels an interrupted 200ms nudge and 300ms direction indicator, and reduced motion resets immediately", async () => {
+	it("keeps interrupted wheel nudges smooth without flashing a top or bottom direction bar", async () => {
 		await render(
 			<FunctionWheel entries={entries(8)} index={0} direction={1} />,
 		);
@@ -331,16 +331,12 @@ describe("SCREEN-075/076/077/080/084 wheel", () => {
 		await render(
 			<FunctionWheel entries={entries(8)} index={1} direction={-1} />,
 		);
-		expect(
-			host
-				.querySelector(".knob-wheel-direction")
-				?.getAttribute("data-direction"),
-		).toBe("-1");
+		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
 		await advance(220);
 		expect(
 			host.querySelector<HTMLElement>(".knob-wheel-list")?.style.transform,
 		).toBe("translateY(0px)");
-		expect(host.querySelector(".knob-wheel-direction")).not.toBeNull();
+		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
 		await advance(80);
 		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
 		await render(
