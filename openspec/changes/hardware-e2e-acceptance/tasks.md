@@ -35,6 +35,8 @@ Execution issue `open-quake-fdc.4`. Ramiro approved the schema change.
 
 - [x] 3.1 Add the exact hardware-qualified V3 speed capability and shared-owner mapping, with unsupported operations rejected before IO.
 - [x] 3.2 Verify capability/schema, production consumer, renderer and actual native speed application/restoration.
-- [ ] 3.3 Ship the narrow fix separately with at most one review round.
+- [x] 3.3 Ship the narrow fix separately with at most one review round.
 
 Narrow V3 implementation verifies exact identity, scalar descriptor 3, shared prefix [3,3], unsupported edits/save before IO and disabled renderer save. Native production run passed 8/10 supplemental checks with 2 explicit unsupported fields, speed restored 156, original brightness 247/mode 0 retained, 13/13 handles closed and 538 safe diagnostics with zero drops/failures. Physical illumination remains unverified.
+
+PR137 squash-merged as a5b26ea5 after one review round; Codex reviewed the final head with no findings and the full hosted validate/package matrix passed. Later bot findings, if any, carry into the next PR. Physical acceptance (visible illumination, touch/knob gestures, cable hot-plug, provider audio) stays open under `open-quake-l86.7`.
