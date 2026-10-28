@@ -308,9 +308,11 @@ it("gives synced shortcuts without row icons their action artwork, not brightnes
 		const config = profile.pages[0].keys[0]?.config;
 		expect(config?.type).toBe("hotkey");
 		expect(config?.icon).not.toBe("0-1");
-		expect(keyArtwork(config?.icon ?? "", "hotkey")).toBe(
+		// Through the production tile adapter, which the panel uses.
+		expect(await resolveTileArtwork(config?.icon ?? "", "hotkey")).toBe(
 			keyArtwork("library:hotkey:1", "hotkey"),
 		);
+		expect(await resolveTileArtwork(config?.icon ?? "", "hotkey")).not.toBe("");
 		expect(keyArtwork(config?.icon ?? "", "hotkey")).not.toBe(
 			keyArtwork("0-1", "brightness"),
 		);

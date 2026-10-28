@@ -129,7 +129,12 @@ export async function resolveTileArtwork(
 				)
 			: "";
 	}
-	return !source || /^[\d-]+$/.test(source) ? keyArtwork(source, type) : "";
+	// Numeric IDs and library:<type>:<n> references use bundled semantic artwork.
+	return !source ||
+		/^[\d-]+$/.test(source) ||
+		/^library:[\w-]+:\d+$/.test(source)
+		? keyArtwork(source, type)
+		: "";
 }
 
 export function useTileArtwork(source: string, type: string) {
