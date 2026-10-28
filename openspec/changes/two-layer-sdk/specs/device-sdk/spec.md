@@ -402,6 +402,19 @@ The opt-in management exerciser SHALL reset targeted scenarios through the fixtu
 - **WHEN** report finalization throws
 - **THEN** it logs the exception before exiting with failure
 
+### Requirement: Guided touch and knob capture with the production panel
+An explicitly enabled capture SHALL observe the production app event bridge using one device owner, inert touch tiles and fresh scratch data. It SHALL guide touch, knob and reconnect without physical-key instructions. Evidence SHALL contain bounded input timing/coordinates and fixed identifiers, excluding serials, raw frames, text, credentials and audio. Observed sequences SHALL remain distinct from physical acceptance.
+
+#### Scenario: Single-session guide
+- **WHEN** a prepared capture is explicitly launched with the prior device owner stopped
+- **THEN** the production panel remains visible with safe tiles and the current instruction
+- **AND** the recorder subscribes to the app event bridge without opening another HID handle
+
+#### Scenario: Bounded or incomplete capture
+- **WHEN** a step times out, the event limit is reached or the session ends early
+- **THEN** the report remains incomplete and preserves captured observations
+- **AND** no event sequence alone claims physical target accuracy or cursor suppression
+
 ### Requirement: Probe serial-byte rejection
 The hardware query probe SHALL reject evidence containing the selected device serial as text, numeric arrays or Uint8Array views including Buffer. It SHALL inspect only the bytes belonging to a view.
 

@@ -156,3 +156,50 @@ if serial text or bytes reach the evidence. Replies establish what the
 firmware reports, not what the panel or LEDs physically show. In the
 reconstructed firmware, the first keep-alive after idle restarts the lighting
 effect, and the LEDs were seen flashing during these runs.
+
+## Guided touch and knob capture
+
+The development-only `guided-input` entry launches the production app with fresh
+scratch data and one device owner. It subscribes to the existing panel preload
+bridge. It does not create another HID reader. Sixteen inert page tiles and empty
+knob assignments contain no configured provider or host actions. Brief knob
+presses can interrupt the idle voice lane; a hold has no valid capture route and
+can show unavailable feedback. There are no player tiles to enable volume mode. The
+fixture doesn't read or replace the user's saved profiles.
+
+From the repository root, this hidden rehearsal uses synthetic input and blocks
+native HID import:
+
+```sh
+pnpm --filter @open-quake/desktop exec node scripts/guided-input.mjs --self-test
+```
+
+A physical session uses the same command with `--capture`. Before an agent runs
+it, arrange the bounded focus/readiness approval for the production management
+window and QUAKE panel, stop the current open-quake owner, and connect exactly one
+QUAKE. Don't launch the obsolete guide from `test/hardware-input-capture`, which
+asks for physical keys. Restore the ordinary app after the capture exits.
+
+The on-panel prompt advances through these actions:
+
+1. Tap and release the center tile.
+2. Turn the knob left five clicks, then right five clicks.
+3. Briefly press and release the knob three times.
+4. Tap and release the top-left, top-right, bottom-right and bottom-left tiles.
+5. Swipe across the screen and lift your finger.
+6. Unplug the QUAKE USB cable, reconnect it, then tap and release a tile.
+
+There are no physical-key instructions and no automated lighting changes. Observe
+whether the Mac pointer stays put and whether the app reacts correctly. Those
+observations require a human; an event sequence cannot establish them.
+
+The script prints its fresh `guided-run-*` directory under hardware E2E scratch.
+`capture.json` stores at most 10,000 projected decoded events with monotonic timing,
+raw vendor coordinates and step IDs. Timing measures arrival at the renderer
+event bridge, converted to session-relative milliseconds, rather than physical
+contact time or queue-drain time. Left and right use the app's decoded -1/+1
+directions; physical direction mapping still needs confirmation. It excludes serials, raw HID bytes, text,
+credentials and audio. A checkpoint remains incomplete until the sequence finishes.
+A timeout, interruption or buffer overflow leaves an incomplete report and exits
+unsuccessfully. `panel.png` captures only the isolated fixture panel. A mock run
+is explicitly marked `selfTest: true`; every report keeps `physicalAccepted: false`.

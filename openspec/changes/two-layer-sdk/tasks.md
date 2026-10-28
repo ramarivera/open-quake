@@ -244,10 +244,21 @@ across all three runs. Assigned beads retain delivery/merge notes for the lead.
 
 PR157 delivery: squash merge `ebc68640398932a49230ce1ec4f98f928af7367a`, exact-head completed Devin review with no findings and all package/download checks passed. Owner app includes the correction. Native management sweep passed all 12 targeted scenarios; five existing speech configuration failures remain tracked separately in `open-quake-l86.31`.
 
+## Guided production-panel input capture, open-quake-l86.19
+
+- [x] Prepare an opt-in single-owner capture entry around the production app with fresh scratch data, inert touch tiles and no physical-key instructions. Observe the existing renderer event bridge, record bounded timing/coordinates and guide touch, knob and cable reconnect.
+- [x] Verify guide progression, privacy/bounds, safe fixture configuration and a hidden mock run of the real renderer. Commit/push and retain physical acceptance as a separate human session.
+
+Guided fixture verification: four focused progression/privacy/profile/voice-route tests pass; desktop types and lint pass. The production renderer/preload plus opt-in entry built and completed all twelve synthetic steps in a hidden mock run, with native HID imports blocked. Captured fixture panel inspected; report status observed, selfTest true, physicalAccepted false. Evidence: SSD hardware scratch `guided-run-jsLiHV/`. No physical session, real HID handle, microphone, provider call, foreground input or lighting mutation occurred. Physical acceptance remains unverified.
+
 ## Typed probe evidence privacy, open-quake-l86.18
 
 - [x] Reject serial bytes in Uint8Array and Buffer views, including nested evidence, without reading bytes outside a view. Verify with fake-only probe regressions and owning types/lint, then deliver.
 
 - [x] Review current input/diagnostic seams and propose bounded agent testability improvements without implementing a new recorder or observer. Proposal: `design.md` section Agent testability proposal; bead `open-quake-l86.20`.
 
-Typed-byte verification: the new regression fails against the prior guard and passes after the fix. All six fake-only probe tests, desktop typecheck and root lint pass. No native HID is loaded and no actual device serial is used. PR delivery remains tracked on `open-quake-l86.18`.
+Typed-byte verification: the new regression fails against the prior guard and passes after the fix. All six fake-only probe tests, desktop typecheck and root lint pass. No native HID is loaded and no actual device serial is used. PR160 delivered by squash merge `4ce04913156667830df91911fb4222234dc492e8` after one completed review round and green build/package/download checks. Beads `open-quake-l86.18` and `open-quake-l86.20` closed.
+
+Physical-route preparation: the fixture has no player tiles or knob assignments. Production pinKnobProfile rejects its empty center slot before microphone setup, including after device selection; the focused regression covers both states. Generic brief presses can interrupt idle voice, and a hold may show unavailable feedback. Prompts now request brief presses. This source check is not a physical gesture test. PR159/160 delivery was reconciled while resolving planning-only base conflicts; reviewed runtime source retained.
+
+PR162 single review round: corrected signed direction checkpoints, retained queued observations before overflow termination, and preserved renderer arrival intervals with validated timestamps converted to session-relative time. Seven focused tests, desktop types and changed-file lint pass. Hidden production renderer rehearsal `guided-run-pQp4ey` completed twelve steps with36events and explicit selfTest true/physicalAccepted false; screenshot inspected. Tap targets still require human confirmation. Hosted CI and merge remain pending; no re-review requested.
