@@ -917,11 +917,18 @@ export function KeyEditor({
 								</button>
 							</Row>
 						)}
-						<Row label={keyText("selectDecoKeeIcon", locale)}>
+						<Row
+							label={keyText("selectDecoKeeIcon", locale)}
+							hint={
+								!keyEditable(key, "icon")
+									? "This key's icon is locked. You can browse the library."
+									: undefined
+							}
+						>
 							<button
 								type="button"
-								disabled={!keyEditable(key, "icon")}
-								onClick={() => setIcons((value) => !value)}
+								aria-haspopup="dialog"
+								onClick={() => setIcons(true)}
 							>
 								{keyText("iconLib.title", locale)}
 							</button>
@@ -1159,6 +1166,10 @@ export function KeyEditor({
 							const active = current.current;
 							if (!active || active.target.token !== selection.target.token)
 								return;
+							if (!keyEditable(active.key, "icon")) {
+								setStatus("This key's icon is locked.");
+								return;
+							}
 							void update(
 								{
 									...active.key,

@@ -2,10 +2,73 @@
 import { act, createElement } from "react";
 import { expect, it, vi } from "vitest";
 import type { KeyReply, KeyRequest } from "../../../shared/key-library";
-import { element, mount } from "../management/dom-test";
+import { click, element, mount } from "../management/dom-test";
 import { IconLibrary } from "./IconLibrary";
 
 vi.mock("virtual:mdi-icons", () => ({ default: [] }));
+
+it("offers the regular Phosphor catalog alongside existing sets and custom artwork", async () => {
+	window.quakeKeyLibrary = {
+		request: async (command) => ({
+			_tag: "success",
+			packs:
+				command.type === "icons"
+					? [
+							{
+								id: "local",
+								name: "My icons",
+								icons: [
+									{
+										id: "custom",
+										name: "My artwork",
+										tags: [],
+										data: "data:image/png;base64,AAAA",
+									},
+								],
+							},
+						]
+					: [],
+		}),
+		onRuntime: () => () => {},
+		onPreview: () => () => {},
+	};
+	const view = await mount(
+		createElement(IconLibrary, { onSelect: () => {}, onClose: () => {} }),
+	);
+	try {
+		await act(async () => {
+			await vi.dynamicImportSettled();
+		});
+		await click(element<HTMLButtonElement>('button[aria-label="Phosphor"]'));
+		expect(
+			element<HTMLButtonElement>('button[aria-label="Phosphor"]').getAttribute(
+				"aria-pressed",
+			),
+		).toBe("true");
+		expect(
+			Number(
+				element<HTMLButtonElement>(
+					'button[aria-label="Phosphor"]',
+				).querySelector("small")?.textContent,
+			),
+		).toBeGreaterThan(1000);
+		expect(
+			document.querySelectorAll(".icon-library-cell").length,
+		).toBeGreaterThan(0);
+		expect(
+			document.querySelector('[aria-label="Uninstall Phosphor"]'),
+		).toBeNull();
+		expect(
+			element<HTMLButtonElement>('button[aria-label="Material Design Icons"]'),
+		).toBeDefined();
+		await click(element<HTMLButtonElement>('button[aria-label="My icons"]'));
+		expect(
+			document.querySelector('[aria-label="Select My artwork"]'),
+		).not.toBeNull();
+	} finally {
+		await view.unmount();
+	}
+});
 
 it("MGMT-423 shows distinct operation stages, keeps search usable and dismisses on completion", async () => {
 	let library = (_value: KeyReply) => {},

@@ -71,9 +71,11 @@ export function IconLibrary({
 	const [packs, setPacks] = useState<readonly LibraryPack[]>([]),
 		[applications, setApplications] = useState<readonly LibraryPack[]>([]),
 		[mdi, setMdi] = useState<readonly MdiIcon[]>(),
+		[phosphor, setPhosphor] =
+			useState<typeof import("virtual:phosphor-icons")["default"]>(),
 		[query, setQuery] = useState(""),
 		[search, setSearch] = useState(""),
-		[group, setGroup] = useState("mdi"),
+		[group, setGroup] = useState("phosphor"),
 		[zoom, setZoom] = useState(72),
 		[width, setWidth] = useState(window.innerWidth),
 		[limit, setLimit] = useState(0),
@@ -129,6 +131,11 @@ export function IconLibrary({
 				const module = await import("virtual:mdi-icons");
 				if (!isLive()) return;
 				setMdi(module.default);
+				setProgress(80);
+				setStage("iconLib.loadingIcons");
+				const phosphorModule = await import("virtual:phosphor-icons");
+				if (!isLive()) return;
+				setPhosphor(phosphorModule.default);
 				setProgress(100);
 			} catch (cause) {
 				if (isLive())
@@ -158,6 +165,17 @@ export function IconLibrary({
 	const groups = useMemo(
 		() =>
 			[
+				{
+					id: "phosphor",
+					name: "Phosphor",
+					icons: (phosphor ?? []).map((icon) => ({
+						id: icon.name,
+						name: icon.name,
+						tags: icon.tags,
+						extraData: undefined,
+						data: () => `data:image/svg+xml,${encodeURIComponent(icon.svg)}`,
+					})),
+				},
 				{
 					id: "mdi",
 					name: keyText("iconLib.groupMaterial", locale),
@@ -192,7 +210,7 @@ export function IconLibrary({
 							pack.icons.length > 0) &&
 						(pack.icons.length || !search),
 				),
-		[mdi, packs, applications, search, locale],
+		[mdi, phosphor, packs, applications, search, locale],
 	);
 	const selected = groups.find((pack) => pack.id === group) ?? groups[0];
 	const total = selected?.icons.length ?? 0;
@@ -346,10 +364,15 @@ export function IconLibrary({
 								>
 									<span>{pack.name}</span>
 									<small>
-										{pack.id === "mdi" && !mdi ? "…" : pack.icons.length}
+										{(pack.id === "mdi" && !mdi) ||
+										(pack.id === "phosphor" && !phosphor)
+											? "…"
+											: pack.icons.length}
 									</small>
 								</button>
-								{!["mdi", "local", "applications"].includes(pack.id) && (
+								{!["phosphor", "mdi", "local", "applications"].includes(
+									pack.id,
+								) && (
 									<button
 										type="button"
 										aria-label={`Uninstall ${pack.name}`}

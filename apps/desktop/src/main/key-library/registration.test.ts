@@ -452,6 +452,8 @@ it("restricts the owned picker to icon operations and returns pixels without edi
 		const child = BrowserWindow.getAllWindows().at(-1);
 		if (!child) throw new Error("Missing picker");
 		expect(child).not.toBe(f.impostor);
+		child.emit("ready-to-show");
+		expect(child.showInactive).toHaveBeenCalledOnce();
 		for (const command of [
 			f.activation,
 			{ type: "select", deviceId: "device", profileId: "q", pageId: "one" },
