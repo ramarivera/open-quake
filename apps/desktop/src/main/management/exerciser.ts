@@ -268,14 +268,22 @@ async function click(win: BrowserWindow, selector: string): Promise<void> {
 	);
 	await delay(120);
 	const point = Schema.decodeUnknownSync(
-		Schema.Struct({ x: Schema.Number, y: Schema.Number, hit: Schema.Boolean }),
+		Schema.Struct({
+			x: Schema.Number,
+			y: Schema.Number,
+			hit: Schema.Boolean,
+			obstruction: Schema.String,
+		}),
 	)(
 		await evaluate(
 			win,
-			`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return undefined;const r=el.getBoundingClientRect();if(!r.width||!r.height)return undefined;const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);const hit=document.elementFromPoint(x,y);return {x,y,hit:hit===el||el.contains(hit)}})()`,
+			`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return undefined;const r=el.getBoundingClientRect();if(!r.width||!r.height)return undefined;const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2);const hit=document.elementFromPoint(x,y);return {x,y,hit:hit===el||el.contains(hit),obstruction:hit?.tagName+'.'+(hit?.className??'')}})()`,
 		),
 	);
-	assert(point.hit, `Control centre is obstructed: ${selector}`);
+	assert(
+		point.hit,
+		`Control centre is obstructed: ${selector} by ${point.obstruction} at ${point.x},${point.y}`,
+	);
 	win.webContents.sendInputEvent({ type: "mouseMove", x: point.x, y: point.y });
 	win.webContents.sendInputEvent({
 		type: "mouseDown",
@@ -319,12 +327,12 @@ async function select(
 		win,
 		`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'});document.querySelector(${JSON.stringify(selector)}).focus()`,
 	);
-	if (
+	const changing =
 		(await evaluate(
 			win,
 			`document.querySelector(${JSON.stringify(selector)}).value`,
-		)) !== value
-	) {
+		)) !== value;
+	if (changing) {
 		const labels = Schema.decodeUnknownSync(Schema.Array(Schema.String))(
 			await evaluate(
 				win,
@@ -351,6 +359,12 @@ async function select(
 	}
 	key(win, "Tab");
 	await delay(180);
+	if (changing && (selector === "#keys-profile" || selector === "#keys-page"))
+		await waitFor(
+			win,
+			`document.querySelector(${JSON.stringify(selector)})?.value===${JSON.stringify(value)} && !document.querySelector('#key-title')`,
+			"selected profile/page has cleared the previous key editor",
+		);
 	if (verify)
 		assert.equal(
 			await evaluate(
@@ -449,7 +463,9 @@ async function exercise(
 					/^(?:force|level|gap|duration|delay)$/i.test(control.label) ||
 					/^-?\d+(?:\.\d+)?$/.test(control.value)
 					? "1"
-					: "exercise",
+					: control.value === "exercise"
+						? "exercise-2"
+						: "exercise",
 			);
 		} else if (control.type === "range") {
 			await evaluate(
@@ -682,12 +698,12 @@ async function targeted(win: BrowserWindow) {
 		picker.close();
 	});
 	// Preserve built-in editing flags in this sparse copied resource. They caused the reported bugs.
-	for (const [name, destination] of [
-		["Move key to empty cell [open-quake-fb9]", "1,8"],
-		["Swap two keys [open-quake-fb9]", "1,5"],
+	for (const [name, source, destination] of [
+		["Move key to empty cell [open-quake-fb9]", "1,4", "1,8"],
+		["Swap two keys [open-quake-fb9]", "1,8", "1,5"],
 	] as const) {
 		await scenario(name, async () => {
-			await chooseKey(win, "1,4");
+			await chooseKey(win, source);
 			const disabled = await evaluate(
 				win,
 				"document.querySelector('#key-destination')?.disabled",
@@ -695,7 +711,7 @@ async function targeted(win: BrowserWindow) {
 			const before = await readKeys(win);
 			const original = before.profiles
 				.find((p) => p.id === "exercise-keys")
-				?.pages[0].keys.find((k) => k.keyCode === "1,4");
+				?.pages[0].keys.find((k) => k.keyCode === source);
 			assert(original);
 			await select(win, "#key-destination", destination);
 			await click(win, ".key-editor .group:has(#key-title) .button-primary");
@@ -710,7 +726,7 @@ async function targeted(win: BrowserWindow) {
 			);
 			if (destination === "1,5")
 				assert.equal(
-					persisted?.find((k) => k.keyCode === "1,4")?.config.title.text,
+					persisted?.find((k) => k.keyCode === source)?.config.title.text,
 					"Exercise B",
 					"Swap didn't preserve the other key",
 				);
@@ -796,6 +812,43 @@ async function targeted(win: BrowserWindow) {
 			);
 		},
 	);
+	await scenario(
+		"Function library Emojis receives native clicks [open-quake-dbf]",
+		async () => {
+			await navigate(win, "keys");
+			await click(win, ".function-library-add > summary");
+			await click(win, ".function-library-add button:last-child");
+			await waitFor(
+				win,
+				"!!document.querySelector('.emoji-page')",
+				"Emoji page from library",
+			);
+		},
+	);
+	await scenario(
+		"JSON input and restore receive native clicks [open-quake-ayj]",
+		async () => {
+			await navigate(win, "keys");
+			await click(win, ".keys-import > summary");
+			await textInput(win, "#keys-import-json", "[]");
+			assert.equal(
+				await evaluate(
+					win,
+					"document.querySelector('#keys-import-json').value",
+				),
+				"[]",
+			);
+			await textInput(win, "#keys-import-json", "");
+			assert.equal(
+				await evaluate(
+					win,
+					"document.querySelector('#keys-import-json').value",
+				),
+				"",
+			);
+		},
+	);
+
 	await select(win, "#keys-profile", "exercise-keys");
 	await capture(win, "keys-targeted");
 	await writeFile(

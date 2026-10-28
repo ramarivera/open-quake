@@ -85,6 +85,24 @@ export const knobVoiceReady = (
 	);
 };
 
+// JSON records can arrive in a different property order after a key save.
+// Compare every knob field while ignoring only that serialization detail.
+const knobFingerprint = (value: unknown): string =>
+	JSON.stringify(value, (_name, value: unknown) =>
+		value !== null && typeof value === "object" && !Array.isArray(value)
+			? Object.fromEntries(
+					Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+				)
+			: value,
+	);
+
+/** A clean editor can follow a newly inherited or externally saved knob. */
+export const knobDraftIsPristine = (
+	draft: KnobResource,
+	baseline: Profile,
+): boolean =>
+	knobFingerprint(draft) === knobFingerprint(profileKnobDraft(baseline));
+
 /** Grid-key-only saves advance the shared revision without changing a knob draft. */
 export const knobDraftRevision = (
 	baseline: Profile,
@@ -92,6 +110,6 @@ export const knobDraftRevision = (
 ): number =>
 	baseline.id === latest.id &&
 	latest.revision >= baseline.revision &&
-	JSON.stringify(baseline.knob) === JSON.stringify(latest.knob)
+	knobFingerprint(baseline.knob) === knobFingerprint(latest.knob)
 		? latest.revision
 		: baseline.revision;

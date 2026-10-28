@@ -90,9 +90,21 @@ export function enumerateControls(): Control[] {
 		) ?? [];
 
 	return Array.from(nodes)
-		.filter(
-			(node) => node.getClientRects().length > 0 && !node.closest("[inert]"),
-		)
+		.filter((node) => {
+			if (!node.getClientRects().length || node.closest("[inert]"))
+				return false;
+			// Chromium retains rectangles for descendants of closed details.
+			// Only the first summary remains actionable, including in nested details.
+			let ancestor: Element | null = node.parentElement;
+			while (ancestor) {
+				if (ancestor instanceof HTMLDetailsElement && !ancestor.open) {
+					const summary = ancestor.querySelector(":scope > summary");
+					if (!summary?.contains(node)) return false;
+				}
+				ancestor = ancestor.parentElement;
+			}
+			return true;
+		})
 		.sort((left, right) => {
 			if (!dialogs.length) return 0;
 			const closes = (node: HTMLElement) =>

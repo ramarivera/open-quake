@@ -14,7 +14,10 @@ import {
 	resetKeyIcons,
 	titleWeight,
 } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
-import type { KeyGeometry } from "../../../../../../packages/device/src/profiles/key-geometry.js";
+import {
+	editKeyLayout,
+	type KeyGeometry,
+} from "../../../../../../packages/device/src/profiles/key-geometry.js";
 import {
 	builtinProfiles,
 	profileLabel,
@@ -22,6 +25,7 @@ import {
 import {
 	createEmptyProfileKey,
 	ProfileEnvelope,
+	type ProfileJson,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { occupiedCells } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
@@ -43,6 +47,7 @@ import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { WallpaperSettings } from "../wallpaper/WallpaperViews";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
+import { ActionValueInput } from "./ActionValueInput";
 import { AgentKeyFields } from "./AgentKeyFields";
 import { AssistantEditor } from "./AssistantEditor";
 import { editableFocus } from "./editor-input";
@@ -258,6 +263,16 @@ export function KeyEditor({
 			(p) => p.id === envelope?.activeByDevice[serial]?.pageId,
 		) ??
 		profile?.pages[0];
+	const rejectionMessage = (reason: string): string =>
+		reason === "structural-key-locked"
+			? locale === "de"
+				? "Diese Taste ist strukturell geschützt und kann nicht ersetzt oder getauscht werden."
+				: "This tile has structural protection and cannot be replaced or swapped."
+			: locale === "de" && reason === "layout-locked-or-invalid"
+				? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
+				: reason === "layout-locked-or-invalid"
+					? "This edit is locked or overlaps other keys."
+					: reason;
 	const update = async (
 		key: ProfileKey,
 		token?: string,
@@ -286,19 +301,7 @@ export function KeyEditor({
 			reply._tag === "rejected" &&
 			current.current?.target.token === next.target.token
 		)
-			setStatus(
-				reply.keyCodes
-					? ""
-					: reply.reason === "structural-key-locked"
-						? locale === "de"
-							? "Diese Taste ist strukturell geschützt und kann nicht ersetzt oder getauscht werden."
-							: "This tile has structural protection and cannot be replaced or swapped."
-						: locale === "de" && reply.reason === "layout-locked-or-invalid"
-							? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
-							: reply.reason === "layout-locked-or-invalid"
-								? "This edit is locked or overlaps other keys."
-								: reply.reason,
-			);
+			setStatus(reply.keyCodes ? "" : rejectionMessage(reply.reason));
 	};
 	const selectPage = async (
 		nextProfile: string,
@@ -401,6 +404,7 @@ export function KeyEditor({
 			key,
 			geometry: {},
 			savedKey: key,
+			pageKeys: pg.keys,
 			target: {
 				token: crypto.randomUUID(),
 				profileId: p.id,
@@ -442,7 +446,7 @@ export function KeyEditor({
 			}
 			if (preview._tag !== "success") {
 				setOverlaps(preview.keyCodes ?? []);
-				if (!preview.keyCodes) setStatus(preview.reason);
+				if (!preview.keyCodes) setStatus(rejectionMessage(preview.reason));
 				return;
 			}
 			const reply = await window.quakeKeyLibrary.request({
@@ -451,7 +455,7 @@ export function KeyEditor({
 			});
 			if (!ownsSave()) return;
 			if (reply._tag === "rejected") {
-				setStatus(reply.reason);
+				setStatus(rejectionMessage(reply.reason));
 				return;
 			}
 			if (reply.envelope) {
@@ -459,22 +463,25 @@ export function KeyEditor({
 				const p = Schema.decodeUnknownSync(ProfileEnvelope)(
 					reply.envelope,
 				).profiles.find((p) => p.id === old.target.profileId);
-				const requested = old.geometry.destination ?? old.target.keyCode;
-				const destination =
-					p?.pages
-						.find((page) => page.id === old.target.pageId)
-						?.keys.find(
-							(key) =>
-								key.config.type &&
-								key.config.display &&
-								occupiedCells(key).includes(requested),
-						)?.keyCode ?? requested;
-				const savedKey = { ...old.key, keyCode: destination };
+				const layout = editKeyLayout(old.pageKeys, old.key, old.geometry);
+				const moved =
+					layout._tag === "ready"
+						? layout.keys.find((key) => key.config === old.key.config)
+						: undefined;
+				const savedPage = p?.pages.find(
+					(page) => page.id === old.target.pageId,
+				);
+				const savedKey = savedPage?.keys.find(
+					(key) => key.keyCode === moved?.keyCode,
+				);
+				if (!savedKey || !savedPage) return;
+				const destination = savedKey.keyCode;
 				const next = {
 					...old,
 					key: savedKey,
 					geometry: {},
 					savedKey,
+					pageKeys: savedPage.keys,
 					target: {
 						...old.target,
 						keyCode: destination,
@@ -595,7 +602,7 @@ export function KeyEditor({
 		previewProfile,
 		previewProfile.pages.find((p) => p.id === page.id) ?? page,
 	).tiles.find((tile) => tile.keyCode === key?.keyCode);
-	const changeActions = (index: number, value: string): void => {
+	const changeActions = (index: number, value: ProfileJson): void => {
 		if (!key) return;
 		void update({
 			...key,
@@ -605,12 +612,7 @@ export function KeyEditor({
 					i === index
 						? {
 								...a,
-								value:
-									typeof a.value === "number" ||
-									a.type === "time" ||
-									a.type === "page"
-										? Number(value)
-										: value,
+								value,
 							}
 						: a,
 				),
@@ -1068,8 +1070,9 @@ export function KeyEditor({
 							onChange={(next) => void update(next)}
 						/>
 						{key.config.actions
+							.map((action, index) => ({ action, index }))
 							.filter(
-								(action) =>
+								({ action }) =>
 									action.type !== "musicSource" &&
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
@@ -1079,7 +1082,7 @@ export function KeyEditor({
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)
-							.map((action, index) => (
+							.map(({ action, index }) => (
 								<Row
 									key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}
 									label={
@@ -1091,20 +1094,10 @@ export function KeyEditor({
 									}
 									htmlFor={`key-action-${index}`}
 								>
-									<input
+									<ActionValueInput
 										id={`key-action-${index}`}
-										type={
-											action.type === "time" || action.type === "page"
-												? "number"
-												: "text"
-										}
-										value={
-											typeof action.value === "string" ||
-											typeof action.value === "number"
-												? action.value
-												: JSON.stringify(action.value)
-										}
-										onChange={(e) => changeActions(index, e.target.value)}
+										action={action}
+										onChange={(value) => changeActions(index, value)}
 									/>
 								</Row>
 							))}

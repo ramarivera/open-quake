@@ -16,13 +16,12 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	const metrics = genericTileMetrics(tile.box, {
 		pos: config.title.pos,
 		style: config.title.style,
+		size: config.title.size,
 		userModifiedStyle: explicit,
 	});
 	const styles = config.title.style.split("|");
 	const fontStyle = metrics.italic ? "italic" : "normal";
-	const fontSize = explicit
-		? Math.round(metrics.fontSize * (config.title.size / 8))
-		: metrics.fontSize;
+	const fontSize = metrics.fontSize;
 	const title = config.title.text;
 	const placement =
 		metrics.titleAnchor === "top"

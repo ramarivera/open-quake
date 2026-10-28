@@ -362,6 +362,30 @@ describe("generic tile", () => {
 		).toBe(22);
 	});
 
+	it.each(["top", "bot"] as const)(
+		"keeps size-12 two-line titles clear of the icon at %s",
+		(pos) => {
+			const metrics = genericTileMetrics(
+				{ width: 216, height: 216 },
+				{ pos, style: "", size: 12, userModifiedStyle: true },
+			);
+			expect(metrics.fontSize).toBe(36);
+			const titleHeight = metrics.fontSize * 1.2 * 2;
+			const iconTop = metrics.iconCenter * 216 - metrics.iconSize / 2;
+			const iconBottom = iconTop + metrics.iconSize;
+			if (pos === "top")
+				expect(iconTop).toBeGreaterThanOrEqual(
+					metrics.padding + titleHeight + 8,
+				);
+			else
+				expect(iconBottom).toBeLessThanOrEqual(
+					216 - metrics.padding - titleHeight - 8,
+				);
+			expect(iconTop).toBeGreaterThanOrEqual(0);
+			expect(iconBottom).toBeLessThanOrEqual(216);
+		},
+	);
+
 	it("draws a flat plate with artwork and a bottom label", () => {
 		const envelope = decode(stripFixtureEnvelope());
 		const { profile, page } = selectStripPage(envelope, undefined);
