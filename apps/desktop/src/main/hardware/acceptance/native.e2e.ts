@@ -12,8 +12,13 @@ import { makeNodeHidLayer } from "../../../../../../packages/device/src/node-hid
 import { createDesktopDiagnostics } from "../../diagnostics/index.js";
 import { makeDesktopRuntime } from "../../diagnostics/runtime.js";
 import { runHardwareAcceptance } from "./consumer.js";
+import { runExtendedAcceptance } from "./extended.js";
 import { ownNativeDevice } from "./native-owner.js";
-import { acceptanceOptions, allowedAcceptanceWrite } from "./policy.js";
+import {
+	acceptanceOptions,
+	allowedAcceptanceWrite,
+	allowedExtendedWrite,
+} from "./policy.js";
 import { finalizeNativeResult } from "./result.js";
 import { summarize } from "./scenarios.js";
 
@@ -21,6 +26,8 @@ const command = promisify(execFile);
 
 it("runs the explicitly selected native QUAKE control acceptance inventory", async () => {
 	const options = acceptanceOptions(process.env);
+	const extended = process.env.OPEN_QUAKE_HW_E2E_EXTENDED === "1";
+	const allows = extended ? allowedExtendedWrite : allowedAcceptanceWrite;
 	const owner = await ownNativeDevice(options.directory);
 	const { directory } = owner;
 	try {
@@ -43,7 +50,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 								Effect.map((handle) => ({
 									...handle,
 									write: (bytes) =>
-										allowedAcceptanceWrite(bytes, options.mutations)
+										allows(bytes, options.mutations)
 											? handle.write(bytes)
 											: Effect.fail(new QuakeHidWriteFailed(undefined)),
 								})),
@@ -55,16 +62,29 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 		);
 		const runtime = makeDesktopRuntime(layer, diagnostics, "voice.device");
 		try {
-			const results = await runtime.runPromise(
-				Effect.scoped(
-					runHardwareAcceptance({
-						serial: options.serial,
-						mutations: options.mutations,
-						keepAliveIntervalMs: 15_000,
-						keepAliveObservationMs: 17_000,
-					}),
-				),
-			);
+			const extra = extended
+				? await runtime.runPromise(
+						Effect.scoped(
+							runExtendedAcceptance({
+								serial: options.serial,
+								mutations: options.mutations,
+								cycles: 12,
+							}),
+						),
+					)
+				: undefined;
+			const results = extended
+				? []
+				: await runtime.runPromise(
+						Effect.scoped(
+							runHardwareAcceptance({
+								serial: options.serial,
+								mutations: options.mutations,
+								keepAliveIntervalMs: 15_000,
+								keepAliveObservationMs: 17_000,
+							}),
+						),
+					);
 			await runtime.dispose();
 			const health = await diagnostics.close();
 			const { stdout: revision } = await command("git", ["rev-parse", "HEAD"]);
@@ -79,11 +99,16 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				"result.ts",
 				"exact-device.ts",
 				"lock.ts",
+				"extended.ts",
+				"v3-lighting.ts",
+				"restore-lighting.ts",
 			])
 				sourceHash.update(await readFile(new URL(name, import.meta.url)));
 			const report = {
 				status:
-					results.some((item) => item.status === "failed") ||
+					(extra
+						? extra.checks.some((item) => item.status === "failed")
+						: results.some((item) => item.status === "failed")) ||
 					health.storageFailures > 0 ||
 					health.dropped > 0
 						? "failed"
@@ -93,7 +118,17 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				platform: process.platform,
 				architecture: process.arch,
 				suiteSha256: sourceHash.digest("hex"),
-				...summarize("native", results),
+				...(extra
+					? {
+							passed: extra.checks.filter((item) => item.status === "passed")
+								.length,
+							failed: extra.checks.filter((item) => item.status === "failed")
+								.length,
+							total: extra.checks.length,
+							suite: "supplemental-native",
+							...extra,
+						}
+					: summarize("native", results)),
 				diagnostics: health,
 				scenarios: results,
 			};
@@ -104,7 +139,9 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				"Native failures are retained in result.json",
 			);
 			console.info(
-				`Native hardware scenarios: ${report.nativePassed}/${report.total}, ${report.nativePercent.toFixed(1)}%; ${report.skipped} skipped, ${report.manualOrSupervised} manual-or-supervised`,
+				extended
+					? `Supplemental native checks: ${report.passed}/${report.total} passed, ${report.failed} failed`
+					: `Native hardware scenarios: ${report.passed}/${report.total}; see result.json for bounded coverage`,
 			);
 		} finally {
 			await runtime.dispose();

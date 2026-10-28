@@ -9,6 +9,10 @@ Hardware acceptance currently mixes fake-HID evidence with manual checks. Ramiro
 - Report passed, failed, skipped and physical-only scenarios separately; fake runs never count as physical coverage.
 - Prepare a fresh build and run existing hidden native UI smoke checks.
 
+## Approved extension after PR135
+
+Ramiro explicitly requested more autonomous automated testing and granted local Mac mini test approval. Extend the native checks to the three existing qualified lighting fields, concurrent queries, repeated software reconnects and real USB microphone capture through production drivers. Retain the original twenty-scenario denominator; supplemental checks do not claim physical gestures, USB cable unplug, visible light or a live provider loop. Do not save device lighting to flash or alter product preferences.
+
 ## Capabilities
 
 ### New Capabilities
