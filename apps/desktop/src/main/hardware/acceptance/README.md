@@ -105,9 +105,29 @@ differs from the desktop it replaced and isn't a flat frame. `panel-result.json`
 records the pixel evidence and tile counts; `desktop.png`, `display.png` and
 `panel.png` stay in scratch.
 
-Launch Electron from a script file rather than an inline shell command: the
+Attach only the selected QUAKE: the production bus opens every attached
+device, so the fixture refuses to start when any other QUAKE is present.
+
+From `apps/desktop`, build once:
+
+```bash
+pnpm build
+pnpm exec electron-vite build -c src/main/hardware/acceptance/panel-display.config.ts
+```
+
+Then run Electron from a script file rather than an inline shell command. The
 owner check treats any process whose command line names both Electron and an
-`oq-` checkout as a competing owner, including the launching shell.
+`oq-` checkout as a competing owner, including the launching shell:
+
+```bash
+#!/bin/bash
+# run-panel.sh <fresh-run-name>, kept outside the repository
+cd /path/to/open-quake/apps/desktop || exit 2
+unset ELECTRON_RUN_AS_NODE
+export OPEN_QUAKE_HW_E2E=1 OPEN_QUAKE_HW_E2E_SERIAL="<serial>" \
+	OPEN_QUAKE_HW_E2E_ARTIFACTS="/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-hardware-e2e/$1"
+exec ./node_modules/.bin/electron out/panel-display/panel-display.js
+```
 
 This is supplemental evidence for the `display` scenario, which stays
 supervised. It shows what macOS sends to the QUAKE, not the backlight or the
