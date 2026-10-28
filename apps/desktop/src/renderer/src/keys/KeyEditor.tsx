@@ -79,6 +79,10 @@ export function KeyEditor({
 		[pageId, setPageId] = useState(""),
 		[locale, setLocale] = useState<ProfileLocale>(storedKeyLocale),
 		[selection, setSelection] = useState<Selection>(),
+		// Indices of action inputs holding malformed JSON; Save is refused meanwhile.
+		[invalidActions, setInvalidActions] = useState<ReadonlySet<number>>(
+			() => new Set(),
+		),
 		[icons, setIcons] = useState(false),
 		[alternate, setAlternate] = useState(false),
 		[status, setStatus] = useState(""),
@@ -120,6 +124,11 @@ export function KeyEditor({
 		setStatus(editorText("activationFailed"));
 		return false;
 	};
+	// A different key starts with no malformed JSON inputs.
+	const selectionToken = selection?.target.token;
+	useEffect(() => {
+		if (selectionToken !== undefined) setInvalidActions(new Set());
+	}, [selectionToken]);
 	useEffect(() => {
 		localStorage.setItem(KEY_LOCALE_STORAGE, locale);
 		window.dispatchEvent(new Event("key-locale"));
@@ -1098,6 +1107,15 @@ export function KeyEditor({
 										id={`key-action-${index}`}
 										action={action}
 										onChange={(value) => changeActions(index, value)}
+										onValidityChange={(valid) =>
+											setInvalidActions((current) => {
+												if (valid === !current.has(index)) return current;
+												const next = new Set(current);
+												if (valid) next.delete(index);
+												else next.add(index);
+												return next;
+											})
+										}
 									/>
 								</Row>
 							))}
@@ -1116,6 +1134,7 @@ export function KeyEditor({
 							<button
 								type="button"
 								className="button-primary"
+								disabled={invalidActions.size > 0}
 								onClick={() => void save()}
 							>
 								{keyText("save", locale)}

@@ -45,3 +45,21 @@ it("keeps structured action values as JSON and explains malformed input without 
 	expect(f.host.textContent).toContain("Enter a valid JSON value.");
 	expect(value).toEqual({ enabled: false, steps: [3] });
 });
+
+it("reports malformed JSON so the editor can refuse to save the stale value", async () => {
+	const validity: boolean[] = [];
+	const f = await mount(
+		<ActionValueInput
+			id="value"
+			action={{ type: "settings", value: { enabled: true } }}
+			onChange={() => {}}
+			onValidityChange={(valid) => validity.push(valid)}
+		/>,
+	);
+	cleanup.push(f.close);
+	const field = query(f.host, "#value", HTMLTextAreaElement);
+	await input(field, '{"enabled":');
+	expect(validity.at(-1)).toBe(false);
+	await input(field, '{"enabled":false}');
+	expect(validity.at(-1)).toBe(true);
+});

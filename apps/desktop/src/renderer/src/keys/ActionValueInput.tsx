@@ -7,10 +7,13 @@ export function ActionValueInput({
 	id,
 	action,
 	onChange,
+	onValidityChange,
 }: {
 	readonly id: string;
 	readonly action: { readonly type: string; readonly value: ProfileJson };
 	readonly onChange: (value: ProfileJson) => void;
+	/** Reports malformed JSON so the editor can refuse to save the stale value. */
+	readonly onValidityChange?: (valid: boolean) => void;
 }): React.JSX.Element {
 	const encoded = JSON.stringify(action.value);
 	const [source, setSource] = useState(encoded);
@@ -19,6 +22,9 @@ export function ActionValueInput({
 		setSource(encoded);
 		setInvalid(false);
 	}, [encoded]);
+	useEffect(() => {
+		onValidityChange?.(!invalid);
+	}, [invalid, onValidityChange]);
 	if (typeof action.value === "boolean")
 		return (
 			<input
