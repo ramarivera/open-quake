@@ -1,7 +1,11 @@
 import { Option, Schema } from "effect";
 import { expect, it } from "vitest";
 import { editKeyLayout } from "./key-geometry.js";
-import { createEmptyProfileKey, ProfileKey } from "./profile-contracts.js";
+import {
+	createEmptyProfileKey,
+	ProfileKey,
+	ProfilePage,
+} from "./profile-contracts.js";
 import { inspectProfileImport } from "./profile-import.js";
 import { profileOverflow } from "./profile-invariants.js";
 
@@ -123,17 +127,19 @@ for (const destination of ["1,4", "1,5"]) {
 	});
 }
 
-it("Vivid protects every full-screen covered cell from replacement", () => {
-	const original = {
+it("a saved Vivid page with another visible key still decodes", () => {
+	const vivid = {
 		...tile("1,1"),
 		config: { ...tile("1,1").config, type: "colorfulScreen" },
 	};
-	expect(
-		editKeyLayout([original], tile("2,8"), {
-			placement: true,
-			replaceOverlaps: true,
-		}),
-	).toEqual({ _tag: "rejected", reason: "locked" });
+	// The storage reader decodes pages with this schema; failing it reseeds profiles.
+	const keys = [vivid, tile("1,2")].map((key) =>
+		Schema.encodeSync(ProfileKey)(key),
+	);
+	expect(() =>
+		Schema.decodeUnknownSync(ProfilePage)({ id: "vivid", keys }),
+	).not.toThrow();
+	expect(profileOverflow(keys)).toEqual([]);
 });
 
 it("a hidden structural swap target cannot be displaced", () => {
