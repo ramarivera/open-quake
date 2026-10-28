@@ -94,7 +94,10 @@ export function competingOwners(output: string, ownPid: number): number[] {
 		return /DK[- ]?Suite(?:\.app|\b)/i.test(command) ||
 			// Only the product executable or bundle, not tools given the repo path.
 			/^(?:\S*\/)?open-quake(?:\s|$)/i.test(command) ||
-			/^(?:\S*\/)?open-quake\.app\//i.test(command) ||
+			// An absolute bundle path may contain spaces; tools named by bare
+			// command, such as rg, aren't owners. An absolute tool path is a
+			// tolerated false positive that blocks the run.
+			/^\/.*\/open-quake\.app\/Contents\//i.test(command) ||
 			(/electron(?:-vite)?/i.test(command) &&
 				/(?:open-quake|\boq-[\w-]+)/i.test(command))
 			? [pid]
