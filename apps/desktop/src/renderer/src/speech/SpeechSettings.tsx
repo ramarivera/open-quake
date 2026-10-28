@@ -17,6 +17,10 @@ import {
 } from "../../../shared/speech";
 import { useAppLocale } from "../i18n";
 import { Group, Row } from "../ui/Form";
+import {
+	canReuseSpeechCredential,
+	speechDraftError,
+} from "./speech-settings-draft";
 
 export function SpeechSettingsPanel(): React.JSX.Element | null {
 	const [view, setView] = useState<SpeechSettingsView>();
@@ -68,20 +72,23 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 			live = false;
 		};
 	}, [loading]);
+	const request = {
+		_tag: "Save" as const,
+		settings: draft,
+		...(sttKey ? { sttKey } : {}),
+		...(ttsKey ? { ttsKey } : {}),
+		...(Object.values(sttXfy).some(Boolean) ? { sttXfy } : {}),
+		...(Object.values(ttsXfy).some(Boolean) ? { ttsXfy } : {}),
+	};
+	const draftError = view ? speechDraftError(request, view) : "";
 	if (!window.quakeSpeech) return null;
 	const save = async () => {
+		if (!view || draftError || busy) return;
 		setBusy(true);
 		setError("");
 		setSavedSettings(undefined);
 		try {
-			const raw = await window.quakeSpeech?.request({
-				_tag: "Save",
-				settings: draft,
-				...(sttKey ? { sttKey } : {}),
-				...(ttsKey ? { ttsKey } : {}),
-				...(Object.values(sttXfy).some(Boolean) ? { sttXfy } : {}),
-				...(Object.values(ttsXfy).some(Boolean) ? { ttsXfy } : {}),
-			});
+			const raw = await window.quakeSpeech?.request(request);
 			const reply = Schema.decodeUnknownSync(SpeechSettingsReply)(raw);
 			if (reply._tag === "rejected") setError(reply.code);
 			else {
@@ -181,7 +188,11 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 						onChange={setSttKey}
 						bundle={sttXfy}
 						onBundle={setSttXfy}
-						stored={view?.sttCredential ?? false}
+						stored={canReuseSpeechCredential(
+							view?.settings.stt,
+							draft.stt,
+							view?.sttCredential ?? false,
+						)}
 						disabled={busy}
 					/>
 				</>
@@ -229,7 +240,11 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 						onChange={setTtsKey}
 						bundle={ttsXfy}
 						onBundle={setTtsXfy}
-						stored={view?.ttsCredential ?? false}
+						stored={canReuseSpeechCredential(
+							view?.settings.tts,
+							draft.tts,
+							view?.ttsCredential ?? false,
+						)}
 						disabled={busy}
 					/>
 				</>
@@ -283,10 +298,16 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				/>
 			</Row>
 			<Row label="Apply speech settings">
+				{draftError ? (
+					<p id="speech-draft-error" role="status">
+						{draftError}
+					</p>
+				) : null}
 				<button
 					type="button"
 					className="button"
-					disabled={busy || !view}
+					disabled={busy || !view || Boolean(draftError)}
+					aria-describedby={draftError ? "speech-draft-error" : undefined}
 					onClick={() => void save()}
 				>
 					{busy ? "Saving…" : "Save speech settings"}
