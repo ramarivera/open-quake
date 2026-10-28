@@ -23,6 +23,7 @@ import type { SettingsBackendBridge } from "../../../shared/settings-backend";
 import { App } from "../App";
 import { AppLocaleProvider } from "../i18n";
 import { button, click, element, mount } from "../management/dom-test";
+import { GeneralSettings } from "./GeneralSettings";
 import { PermissionGuidance } from "./PermissionGuidance";
 import { SetupWizard } from "./SetupWizard";
 import { SETUP_SHOWN } from "./setup-launch";
@@ -461,5 +462,26 @@ it.each([false, true])(
 		expect(
 			request.mock.calls.filter(([command]) => command.type === "manage"),
 		).toHaveLength(1);
+	},
+);
+
+it.each(["en", "de"] as const)(
+	"omits an empty login hint once the OS status is known in %s",
+	async (locale) => {
+		const bridge = fakeBridge();
+		await mount(
+			<AppLocaleProvider initialLocale={locale} bridge={null}>
+				<GeneralSettings
+					setup={createSetupStore(bridge)}
+					bridge={bridge}
+					onOpenSetup={() => {}}
+				/>
+			</AppLocaleProvider>,
+			false,
+		);
+		const login = element<HTMLInputElement>('input[id$="-login"]');
+		expect(login.disabled).toBe(false);
+		expect(bridge.loginStatus).toHaveBeenCalled();
+		expect(login.closest(".row")?.querySelector(".row-hint")).toBeNull();
 	},
 );

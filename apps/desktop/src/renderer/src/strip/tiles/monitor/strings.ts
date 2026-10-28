@@ -134,9 +134,7 @@ export const settingsLabels = {
 	overrideRateAria: "Override samples per second",
 	overrideMetricsHint: "Default: CPU only.",
 	liveSection: "Live status",
-	liveDescription: "What this computer is reporting now.",
-	liveUnsaved:
-		"What this computer is reporting now. Unsaved changes aren't applied yet.",
+	liveUnsaved: "Unsaved changes aren't applied yet.",
 	liveMonitoring: "Monitoring",
 	liveRunning: "Running · {hz} Hz",
 	liveOverride: "Override · {hz} Hz",

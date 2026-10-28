@@ -84,7 +84,7 @@ export function ClockEnrichmentSettings({
 							: "";
 	return (
 		<div className="weather-settings">
-			<Group title={strings.clockWeatherCard} description="">
+			<Group title={strings.clockWeatherCard}>
 				{failure ? <Callout tone="warning">{t("saveFailed")}</Callout> : null}
 				<Row label={strings.weatherShow}>
 					<input

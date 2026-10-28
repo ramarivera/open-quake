@@ -717,17 +717,14 @@ function StepBody({
 			);
 		case "review":
 			return (
-				<>
-					<p className="setup-lead">{t("setup.review.body")}</p>
-					<Summary
-						t={t}
-						snapshot={snapshot}
-						locale={locale}
-						profiles={profiles}
-						runtime={runtime}
-						onEdit={busy ? undefined : onEdit}
-					/>
-				</>
+				<Summary
+					t={t}
+					snapshot={snapshot}
+					locale={locale}
+					profiles={profiles}
+					runtime={runtime}
+					onEdit={busy ? undefined : onEdit}
+				/>
 			);
 	}
 }

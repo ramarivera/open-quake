@@ -5,7 +5,6 @@
 			"sessionsTab": "Conversations",
 			"agentsTab": "Agents",
 			"localLibraryTab": "Agent library",
-			"libraryHint": "Talk to your model or a connected runtime, and manage local agents, skills and models.",
 			"aiConfig": "AI configuration",
 			"settings": "Device & channels",
 			"kicker": "Assistant"
@@ -57,7 +56,6 @@
 			"searchSkills": "Search Skills",
 			"createSkill": "Create Skill",
 			"allSkills": "All Skills",
-			"allSkillsHint": "Create, edit, delete, and inspect each Skill directory",
 			"searchSkillPlaceholder": "Search name, folder, or description",
 			"delete": "Delete",
 			"noMatchingSkills": "No matching Skills",
@@ -257,7 +255,6 @@
 			"sessionsTab": "Unterhaltungen",
 			"agentsTab": "Agenten",
 			"localLibraryTab": "Agentenbibliothek",
-			"libraryHint": "Sprich mit deinem Modell oder einer verbundenen Laufzeit und verwalte lokale Agenten, Skills und Modelle.",
 			"aiConfig": "KI-Konfiguration",
 			"settings": "Gerät & Kanäle",
 			"kicker": "Assistent"
@@ -309,7 +306,6 @@
 			"searchSkills": "Skills suchen",
 			"createSkill": "Skill erstellen",
 			"allSkills": "Alle Skills",
-			"allSkillsHint": "Skill-Verzeichnisse erstellen, bearbeiten, löschen und ansehen",
 			"searchSkillPlaceholder": "Name, Ordner oder Beschreibung suchen",
 			"delete": "Löschen",
 			"noMatchingSkills": "Keine passenden Skills",
