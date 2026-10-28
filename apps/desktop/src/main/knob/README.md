@@ -81,24 +81,51 @@ decoding, and publishes private temporary files through atomic rename. Failed
 replacements preserve the prior valid capture. Content-addressed invalidation
 prevents old revisions/locales from being read, without deleting unrelated files.
 
-On a cold detent the model uses its ring immediately and warms asynchronously.
-The knob asks the same profile manager for a hidden, serialized, abortable
-capture when its canonical cache is absent. Capture is bounded to ten seconds;
-no second manager runtime is created. Warming rereads only canonical files,
-rechecks current profile content and locale before publishing, and leaves
-missing/corrupt entries out of the picker without poisoning valid entries.
+The model uses one compact FunctionWheel presentation for every profile turn,
+whether thumbnails are ready or still loading. Missing images use the wheel's
+text labels. Thumbnail warming is asynchronous and never changes the selector
+or replays a detent. The knob asks the same profile manager for a hidden,
+serialized, abortable capture when its canonical cache is absent. Capture is
+bounded to ten seconds; no second manager runtime is created. Warming rereads
+only canonical files and rechecks current profile content and locale before
+publishing.
 Errors retain their original causes privately and diagnostics serialize only
 catalog/source identities. No external thumbnail URL is accepted.
 
 Renderer overlays live entirely in `strip/overlays/knob/` and mount inside the
 existing strip canvas. `KnobDial` and `VolumeCapsule` are exported for the strip
 grid owner. Pass its actual tile dimensions and read-only state when composing.
-`KnobPanelLayer` mounts in StripPanel and uses the actual strip layout for tile bounds. Tapping an unsupported grid tile clears focus. The picker consumes
-`mountStripTouch`'s normalized `quake-strip-overlay-touch` route and owns touch
-while open, preventing underlying grid actions. Pointer input uses the inverse
-root rotation and scale before the same card/page gesture consumer. The picker
-and FunctionWheel never render together. Physical focus/volume acquisition
-outside the picker remains owning-lane work.
+`KnobPanelLayer` mounts in StripPanel and uses the actual strip layout for tile
+bounds. Tapping an unsupported grid tile clears focus. Profile feedback uses
+only the translucent, compact FunctionWheel, which leaves tile labels visible.
+Physical focus/volume acquisition remains owning-lane work.
+
+## Knob state machine
+
+The model serializes every device event and owns all deadlines with Effect
+Clock. Its idle rotation priority is focused tile, active player volume, then
+profile selection. Every profile detent advances the same ordered profile list
+and resets a 200 ms settle deadline. At that deadline the current profile is
+persisted once. Selecting the already active profile closes without a write.
+The same FunctionWheel feedback appears with warm and cold thumbnail caches and
+hides 1200 ms after a committed selection or external profile change. Its translucent
+background and 320 px height keep the strip's tile labels readable.
+
+Firmware press codes stay distinct. Code 1 confirms a pending profile selection
+or interrupts voice when no selection is pending. Code 2 dismisses pending
+selection and selects Colorful Screen. Code 5 dismisses pending selection and
+starts push-to-talk; code 255 releases that same hold generation. Profile
+rotation commits after 200 ms without another detent; a press during that
+interval confirms immediately. Press behavior never depends on whether a
+thumbnail arrived first. Physical
+short, double and hold classes come from firmware; the host adds no gesture
+classification timer. These decisions preserve the recovered firmware
+classifications documented in `openspec/changes/knob-model-parity/design.md`.
+
+DOM pointer and touch fallback is enabled only while the vendor device
+connection is unavailable. A connected device owns the panel input path, so a
+late native report cannot race a vertically mirrored macOS pointer event into a
+second tile action. Disconnect returns ownership to the DOM fallback.
 
 ## Native verification
 

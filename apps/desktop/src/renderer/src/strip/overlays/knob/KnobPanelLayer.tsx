@@ -8,7 +8,6 @@ import { useStripMotion } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
 import { focusTargetRect } from "./geometry";
 import { KnobDial } from "./KnobDial";
-import { ProfilePicker } from "./ProfilePicker";
 import { useKnob } from "./useKnob";
 import { VolumeCapsule } from "./VolumeCapsule";
 import "./knob.css";
@@ -161,14 +160,7 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 						/>
 					</div>
 				) : null}
-				{selector.mode === "picker" ? (
-					<ProfilePicker
-						snapshot={snapshot}
-						entries={entries}
-						request={request}
-					/>
-				) : null}
-				{selector.mode === "ring" && selector.ringVisible && entries.length ? (
+				{selector.ringVisible && entries.length ? (
 					<FunctionWheel
 						entries={entries}
 						index={selector.index}

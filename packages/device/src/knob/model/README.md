@@ -7,22 +7,22 @@ A new session invalidates old commands and cancels timers and owned voice work.
 
 Physical input uses firmware classifications, not host gesture thresholds:
 rotation value 1 increases; press 1 interrupts voice, 2 selects Colorful Screen,
-5 starts a correlated hold, and 255 releases that hold. The thumbnail picker
-consumes short press. Double and hold dismiss its selection first, then continue
-to Colorful Screen or push-to-talk, matching SCREEN-082/092. The voice port maps
-to `knob-push-to-talk`; this module does not capture audio or implement an answer
-turn. The generation remains owned after release so replacement or disposal can
-cancel a responding voice turn.
+5 starts a correlated hold, and 255 releases that hold. A pending profile
+selection consumes short press. Double and hold dismiss that selection first,
+then continue to Colorful Screen or push-to-talk, matching SCREEN-082/092. The
+voice port maps to `knob-push-to-talk`; this module does not capture audio or
+implement an answer turn. The generation remains owned after release so
+replacement or disposal can cancel a responding voice turn.
 
 Rotation priority is supported visible tile, armed available player volume,
-ready thumbnail picker, then FunctionWheel. Stored left/right/center slots do
-not execute on physical idle rotation. The legacy KnobService retains saved
-configuration compatibility and focused-command validation.
+then profile selection. Stored left/right/center slots do not execute on
+physical idle rotation. The legacy KnobService retains saved configuration
+compatibility and focused-command validation.
 
-The ring commits after 200 ms and hides at 3000 ms. Picker commits after 5000 ms
-from the last detent or page arrow. Its ring feedback hides after 1200 ms.
+Warm and cold caches use one FunctionWheel presentation. Each detent commits the
+current profile 200 ms after the last detent; feedback hides after 1200 ms.
 Effect Clock owns every deadline. React cannot delay a commit. Cache warming
-never replays a detent or replaces an open picker's entries.
+never replays a detent or changes the selected profile.
 
 `KnobModelPorts` is the composition contract:
 

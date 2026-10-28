@@ -111,8 +111,8 @@ export interface KnobVoiceInput {
 
 export const KNOB_TIMING = {
 	ringCommit: 200,
-	ringHide: 3000,
-	pickerCommit: 5000,
+	ringHide: 1200,
+	pickerCommit: 200,
 	pickerRingHide: 1200,
 	progress: 100,
 	visualCoalesce: 16,

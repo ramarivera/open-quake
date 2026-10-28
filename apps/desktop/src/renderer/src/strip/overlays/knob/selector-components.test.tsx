@@ -310,11 +310,11 @@ describe("SCREEN-075/076/077/080/084 wheel", () => {
 			const labels = host.querySelectorAll<HTMLElement>(".knob-wheel-label");
 			expect(labels).toHaveLength(5);
 			expect(labels[2]?.textContent).toBe(entries(count)[count - 1]?.name);
-			expect(labels[0]?.style.top).toBe("68.19px");
-			expect(labels[4]?.style.top).toBe("401.81px");
+			expect(labels[0]?.style.top).toBe("52px");
+			expect(labels[4]?.style.top).toBe("268px");
 			expect(
 				host.querySelector<HTMLElement>(".knob-wheel-backdrop")?.style.width,
-			).toBe("1000px");
+			).toBe("360px");
 			expect(host.querySelector("button")).toBeNull();
 			expect(host.querySelector("svg")).toBeNull();
 			expect(host.querySelector(".knob-wheel-direction")).toBeNull();

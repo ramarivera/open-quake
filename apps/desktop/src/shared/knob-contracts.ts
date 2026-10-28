@@ -1,12 +1,15 @@
 import { Schema } from "effect";
-import { KnobModelSnapshot } from "../../../../packages/device/src/knob/model/contracts.js";
+import {
+	KNOB_TIMING,
+	KnobModelSnapshot,
+} from "../../../../packages/device/src/knob/model/contracts.js";
 
 export type {
 	FocusKey,
 	KnobModelContext,
 	MenuProfile,
 } from "../../../../packages/device/src/knob/model/contracts.js";
-export { KnobModelSnapshot };
+export { KNOB_TIMING, KnobModelSnapshot };
 export const KNOB_REQUEST = "knob:request";
 export const KNOB_SNAPSHOT = "knob:snapshot";
 const session = { sessionId: Schema.NonEmptyTrimmedString };

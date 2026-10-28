@@ -26,7 +26,7 @@ const create = () =>
 	});
 describe("knob registration binding lifecycle", () => {
 	for (const mutation of ["add", "rename", "reorder", "delete"] as const)
-		for (const mode of ["picker", "focus", "volume"] as const)
+		for (const mode of ["selector", "focus", "volume"] as const)
 			it(`${mutation} through production registration preserves ${mode} and unchanged thumbnails`, async () => {
 				const key = createEmptyProfileKey("1,1");
 				const base = Schema.decodeUnknownSync(ProfileEnvelope)({
@@ -107,7 +107,7 @@ describe("knob registration binding lifecycle", () => {
 								...event,
 							}),
 						);
-					if (mode === "picker")
+					if (mode === "selector")
 						await registration.onDevice({
 							source: "mock",
 							kind: "rotate",
@@ -149,8 +149,8 @@ describe("knob registration binding lifecycle", () => {
 					).toEqual(
 						before.context.profiles.find((p) => p.id === "active")?.thumbnail,
 					);
-					if (mode === "picker") {
-						expect(after.selector.mode).toBe("picker");
+					if (mode === "selector") {
+						expect(after.selector.mode).toBe("ring");
 						expect(selectorProfiles(after)[after.selector.index]?.id).toBe(
 							"active",
 						);
