@@ -65,6 +65,7 @@ export interface Control {
 	/** Rendered inside an open modal dialog. */
 	inDialog: boolean;
 	identity: string;
+	position: string;
 	selector: string;
 	generated: boolean;
 	label: string;
@@ -81,7 +82,7 @@ export interface Control {
 /** Include collapsed details after their summary is opened by the crawler. */
 export function enumerateControls(): Control[] {
 	const dialogs = document.querySelectorAll<HTMLElement>(
-		"dialog[open], [role=dialog][aria-modal=true]",
+		"dialog[open], [role=dialog][aria-modal=true], [role=alertdialog][aria-modal=true]",
 	);
 	const scope = dialogs[dialogs.length - 1] ?? document.querySelector("main");
 	const nodes =
@@ -90,9 +91,14 @@ export function enumerateControls(): Control[] {
 		) ?? [];
 
 	return Array.from(nodes)
-		.filter(
-			(node) => node.getClientRects().length > 0 && !node.closest("[inert]"),
-		)
+		.filter((node) => {
+			const closed = node.closest("details:not([open])");
+			return (
+				node.getClientRects().length > 0 &&
+				!node.closest("[inert]") &&
+				(!closed || !!closed.querySelector(":scope > summary")?.contains(node))
+			);
+		})
 		.sort((left, right) => {
 			if (!dialogs.length) return 0;
 			const closes = (node: HTMLElement) =>
@@ -127,32 +133,47 @@ export function enumerateControls(): Control[] {
 				);
 				cursor = parent;
 			}
-			const row = node.closest(".profile-row");
-			const list = row?.parentElement;
-			const counts =
-				(window as Window & { managementExerciseInitialRows?: number[] })
-					.managementExerciseInitialRows ?? [];
-			const listIndex = list
-				? Array.from(document.querySelectorAll(".profile-columns ul")).indexOf(
-						list,
-					)
-				: -1;
+			const row = node.closest<HTMLElement>(".profile-row");
+			const fixture = window as Window & {
+				managementExerciseInitialProfiles?: string[];
+				managementExerciseGeneratedProfiles?: Record<string, number>;
+			};
+			const profileId = row?.dataset.profileRowId;
 			const generated =
-				!!row &&
-				!!list &&
-				Array.from(list.children).indexOf(row) >=
-					(counts[listIndex] ?? Infinity);
+				!!profileId &&
+				!fixture.managementExerciseInitialProfiles?.includes(profileId);
+			fixture.managementExerciseGeneratedProfiles ??= {};
+			const aliases = fixture.managementExerciseGeneratedProfiles;
+			if (generated && profileId && aliases[profileId] === undefined)
+				aliases[profileId] = Object.keys(aliases).length;
+			const rowIdentity = generated
+				? `generated-${aliases[profileId ?? ""]}`
+				: profileId;
+			const rowPath: string[] = [];
+			let child: Element | null = node;
+			while (child && child !== row) {
+				const parent: Element | null = child.parentElement;
+				rowPath.unshift(
+					`${child.tagName.toLowerCase()}:nth-child(${parent ? Array.from(parent.children).indexOf(child) + 1 : 1})`,
+				);
+				child = parent;
+			}
 			const id = node.dataset.exerciseId ?? `control-${crypto.randomUUID()}`;
 			node.dataset.exerciseId = id;
 			return {
 				id,
 				identity:
 					node.id ||
-					`${path.join("/")}:${label.trim().replace(/\s+/g, " ").slice(0, 180)}`,
+					(rowIdentity
+						? `profile:${rowIdentity}:${rowPath.join("/")}`
+						: `${path.join("/")}:${node.matches("input,textarea,select") ? node.tagName.toLowerCase() : label.trim().replace(/\s+/g, " ").slice(0, 180)}`),
+				position: node.id || `${path.join("/")}:${node.tagName}`,
 				// The exercise id also resolves controls inside dialogs outside <main>.
 				selector: node.id
 					? `[id=${JSON.stringify(node.id)}]`
-					: `[data-exercise-id=${JSON.stringify(id)}]`,
+					: profileId
+						? `.profile-row[data-profile-row-id=${JSON.stringify(profileId)}] > ${rowPath.join(" > ")}`
+						: `[data-exercise-id=${JSON.stringify(id)}]`,
 				pressed: node.getAttribute("aria-pressed"),
 				inDialog: dialogs.length > 0,
 				generated,
@@ -196,6 +217,9 @@ export function enumerateControls(): Control[] {
 						node.checked) ||
 					(node.matches("[aria-pressed=true]") &&
 						!!node.closest(".mc-tabs,[role=tablist]")) ||
+					(node.matches(".emoji-pack > button:first-child") &&
+						node.closest(".emoji-pack")?.getAttribute("data-current") ===
+							"true") ||
 					node.matches(
 						"[role=tab][aria-selected=true], [role=radio][aria-checked=true], [aria-current=page]",
 					) ||

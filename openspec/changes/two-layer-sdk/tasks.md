@@ -25,6 +25,7 @@ deferred to the parent per lane COMMON.md.
 
 ## 3. Verify and resolve partial evidence
 
+- [x] 3.7 Isolate and reset management scenarios, stabilize generated profile identities, explore select-revealed controls, detect all IPC failure replies, guarantee fixture exit and friendly scratch errors. Investigate emoji selection/validation and localized duplicate profile rename. Verify three identical sweeps, desktop types/tests and lint. Beads `open-quake-l86.28`, `open-quake-l86.30`, `open-quake-fuu`, `open-quake-0z4`.
 - [x] 3.6 Build and run a production-root management UI exerciser with fixture-only fake HID, hidden windows and isolated scratch data. Enumerate every sidebar page and its safe controls using native Electron input; report effects/errors, screenshot pages, and assert icon-library opening, persisted move/swap/title edits and active-profile panel delivery. Track failures without fixing product bugs. Bead: open-quake-l86.25.
 
 - [x] 3.1 L1: run `pnpm install`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run test`; all exit 0, lint checks 38 files, typecheck reports 6 successful tasks, protocol has 25 passing tests. `pnpm --filter @open-quake/device test` independently passes the real consumer wiring test; record results in the lane PR
@@ -218,3 +219,19 @@ requirement-length warnings. JSON and screenshots stay in
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-ui-exerciser/run-KJhnU4/`.
 No product bugs were fixed, no native HID was opened, and no owner's userData
 was used. PR integration belongs to the parent.
+
+Management exerciser hardening, 2026-10-28, task 3.7: three consecutive hidden
+fixture sweeps `run-LHs5dV`, `run-CL1EdU`, `run-WBdAZk` each visit 13/13 pages
+and produce the same 599 records, 584 controls, 350 exercised controls, 356 passes,
+9 strict failures, 217 skips, 17 expected inert records and zero renderer or
+uncaught-main errors. The complete record/status multisets match with zero
+intermittent records. All ten targeted scenarios pass; Emoji and Profiles have
+zero failures. The nine preserved failure records belong to the existing stale
+knob conflict `open-quake-3nd` and newly exposed synthetic speech configuration
+rejections `open-quake-l86.31`, including their diagnostic groups. Sweeps exit 1
+for these failures; validation was not weakened. Desktop typecheck, 3,756 tests
+with one existing skip, root lint and OpenSpec validation pass. Missing-volume
+handling and failure during report finalization were directly probed. All
+artifacts remain outside git under the SSD scratch root. Main advanced from the
+tested `1d967e4c` to disjoint `e62b57e1` during acceptance; source stayed fixed
+across all three runs. Assigned beads retain delivery/merge notes for the lead.

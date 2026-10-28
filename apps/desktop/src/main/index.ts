@@ -197,6 +197,8 @@ function createManagementWindow(): BrowserWindow {
 	return win;
 }
 
+declare const __OPEN_QUAKE_MANAGEMENT_EXERCISER__: boolean;
+
 if (!app.requestSingleInstanceLock()) {
 	process.stderr.write(
 		"open-quake is already running. Refusing a second device connection; focusing the existing management window.\n",
@@ -1007,6 +1009,15 @@ if (!app.requestSingleInstanceLock()) {
 								});
 						const localeRegistration = localeModule.start();
 						const profiles = profilesModule.start();
+						if (
+							typeof __OPEN_QUAKE_MANAGEMENT_EXERCISER__ !== "undefined" &&
+							__OPEN_QUAKE_MANAGEMENT_EXERCISER__
+						) {
+							const { bindFixtureStore } = await import(
+								"./management/exerciser-fixture"
+							);
+							bindFixtureStore(application);
+						}
 						const agents = agentsModule.start();
 						const integrations = integrationsModule.start();
 						const obs = obsModule.start();

@@ -36,7 +36,7 @@ export const expectedInert = [
 	{
 		id: "selected",
 		reason:
-			"Already selected tab or radio; activating it preserves the selected state",
+			"Already selected tab, radio or emoji package; activating it preserves the selected state",
 	},
 	{ id: "single-option", reason: "Selector has no alternative enabled option" },
 ];

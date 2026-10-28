@@ -359,3 +359,34 @@ conflicting or excessive dimensions, including progressive JPEG frames.
 - **THEN** no data URL is published or rendered
 - **WHEN** a complete JPEG frame is within the decoded-pixel budget
 - **THEN** ordinary sequenced resource assembly still publishes it to its target cell
+
+### Requirement: Management exerciser isolates fixture state and records contract failures
+The opt-in management exerciser SHALL reset targeted scenarios through the fixture store owner before each scenario and before the page crawl. It SHALL identify profile controls independently of names and generated IDs, explore controls revealed by a selector before restoring it, and record unsuccessful replies across the exercised IPC contracts. It SHALL keep windows hidden and use fixture data only.
+
+#### Scenario: Move followed by swap
+- **WHEN** an empty-cell move succeeds before a swap scenario
+- **THEN** the swap starts with the original fixture key positions and revision
+- **AND** the later page crawl starts with the original profiles
+
+#### Scenario: Generated profile is renamed or reordered
+- **WHEN** profile rows change names or positions during exploration
+- **THEN** controls retain their profile identity and generated rows do not recursively duplicate themselves
+
+#### Scenario: Selector reveals controls
+- **WHEN** changing a selector reveals additional controls
+- **THEN** the exerciser explores those controls before restoring the original selection
+
+#### Scenario: Invalid emoji package name
+- **WHEN** a package rename exceeds 20 weighted units
+- **THEN** the UI keeps the draft editable and shows guidance beside the field without sending the invalid command
+- **AND** the domain validation remains enforced for other callers
+
+#### Scenario: Duplicate profile name
+- **WHEN** a profile is renamed to an existing profile name
+- **THEN** persistence preserves the previous name and the UI shows localized guidance to choose another name
+- **AND** the exerciser distinguishes this expected rejection from valid unique rename samples
+
+#### Scenario: Repeated sweep and failing report finalization
+- **WHEN** the exerciser runs three times on the same source
+- **THEN** its pass and failure records are identical apart from documented timing tolerances
+- **AND** it exits with failure if report finalization throws
