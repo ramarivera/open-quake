@@ -168,7 +168,8 @@ can show unavailable feedback. There are no player tiles to enable volume mode. 
 fixture doesn't read or replace the user's saved profiles.
 
 From the repository root, this hidden rehearsal uses synthetic input and blocks
-native HID import:
+native HID import. It also reloads the panel mid-guide to check recorder
+reattachment:
 
 ```sh
 pnpm --filter @open-quake/desktop exec node scripts/guided-input.mjs --self-test
@@ -201,5 +202,7 @@ contact time or queue-drain time. Left and right use the app's decoded -1/+1
 directions; physical direction mapping still needs confirmation. It excludes serials, raw HID bytes, text,
 credentials and audio. A checkpoint remains incomplete until the sequence finishes.
 A timeout, interruption or buffer overflow leaves an incomplete report and exits
-unsuccessfully. `panel.png` captures only the isolated fixture panel. A mock run
+unsuccessfully in physical and self-test modes. A swipe needs movement and
+release within one uninterrupted contact; separate taps do not satisfy it.
+`panel.png` captures only the isolated fixture panel. A mock run
 is explicitly marked `selfTest: true`; every report keeps `physicalAccepted: false`.

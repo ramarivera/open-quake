@@ -422,3 +422,8 @@ The hardware query probe SHALL reject evidence containing the selected device se
 - **WHEN** serial bytes occur in a nested typed byte view
 - **THEN** the probe rejects the evidence before writing it
 - **AND** bytes outside the view do not become evidence
+
+#### Scenario: Capture lifecycle failures and gestures
+- **WHEN** the guided fixture fails or its panel navigates within the same window
+- **THEN** failures exit nonzero and the new document receives a recorder before capture continues
+- **AND** swipe observation requires movement and release during one continuous contact, not separate taps

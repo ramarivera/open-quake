@@ -78,6 +78,30 @@ it("keeps each direction checkpoint pending for opposite turns", () => {
 	turn(1, 10);
 	expect(c.current()?.id).toBe("press");
 });
+it("requires a moving contact and its release, not separate stationary taps", () => {
+	const c = createGuidedCapture(() => 0);
+	const tap = (x = 100) => {
+		c.accept(touch(1, x));
+		c.accept(touch(0, x));
+	};
+	tap();
+	for (const direction of [-1, 1])
+		for (let i = 0; i < 5; i++) c.accept({ kind: "rotate", direction });
+	for (let i = 0; i < 3; i++) {
+		c.accept({ kind: "press", state: 1 });
+		c.accept({ kind: "press", state: 0 });
+	}
+	for (let i = 0; i < 4; i++) tap();
+	expect(c.current()?.id).toBe("swipe");
+	tap(100);
+	tap(900);
+	expect(c.current()?.id).toBe("swipe");
+	c.accept(touch(1, 100));
+	c.accept(touch(1, 900));
+	expect(c.current()?.id).toBe("swipe");
+	c.accept(touch(0, 900));
+	expect(c.current()?.id).toBe("unplug");
+});
 it("preserves arrival intervals and queued observations when the renderer overflows", () => {
 	let now = 1000;
 	const c = createGuidedCapture(() => now);

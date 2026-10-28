@@ -90,6 +90,24 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 		const down = phases.indexOf(1);
 		return down >= 0 && phases.slice(down + 1).includes(0);
 	};
+	const swiped = (mine: readonly Event[]) => {
+		let start: { x: number; y: number } | undefined;
+		let moved = false;
+		for (const event of mine) {
+			if (event.kind !== "touch") continue;
+			const point = event.points[0];
+			if (!point) continue;
+			if (point.action === 1) {
+				if (!start) start = point;
+				else if (point.x !== start.x || point.y !== start.y) moved = true;
+			} else {
+				if (start && moved) return true;
+				start = undefined;
+				moved = false;
+			}
+		}
+		return false;
+	};
 	const current = () => GUIDED_STEPS[index];
 	const tick = () => {
 		if (!current() || stopped) return;
@@ -135,14 +153,6 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 			const presses = mine.flatMap((e) =>
 				e.kind === "press" ? [e.state] : [],
 			);
-			const points = mine.flatMap((e) =>
-				e.kind === "touch" ? e.points.slice(0, 1) : [],
-			);
-			const span = (axis: "x" | "y") =>
-				points.length
-					? Math.max(...points.map((p) => p[axis])) -
-						Math.min(...points.map((p) => p[axis]))
-					: 0;
 			const done =
 				step.goal === "tap"
 					? tapped(mine)
@@ -155,9 +165,7 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 										(state, i) => i > 0 && state === 0 && presses[i - 1] === 1,
 									).length >= 3
 								: step.goal === "swipe"
-									? points.length >= 3 &&
-										Math.max(span("x"), span("y")) > 0 &&
-										tapped(mine)
+									? swiped(mine)
 									: mine.some(
 											(e) => e.kind === "status" && e.state === step.goal,
 										);
