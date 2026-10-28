@@ -102,3 +102,10 @@ it("MGMT-111 counts normalized keys rather than legacy null sentinels at the pag
 	}
 	expect(profileOverflow([...legacy, keys[0]])).toHaveLength(17);
 });
+it("moves a wide tile within its own footprint instead of resolving back to its anchor", () => {
+	const wide = tile("1,1", [2, 1]);
+	const result = editKeyLayout([wide], wide, { destination: "1,2" });
+	expect(result._tag).toBe("ready");
+	if (result._tag === "ready")
+		expect(result.keys.map((key) => key.keyCode)).toContain("1,2");
+});

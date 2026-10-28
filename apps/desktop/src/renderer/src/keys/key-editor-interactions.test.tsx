@@ -1646,6 +1646,118 @@ it("MGMT-071/045/046 opens multi-action editing after drop and retains knob and 
 	expect(f.host.querySelector("#key-function")).not.toBeNull();
 });
 
+for (const occupied of [false, true])
+	for (const width of [1, 2])
+		it(`Move / swap selector persists a ${occupied ? "swap" : "move"} of width ${width} and updates the panel preview`, async () => {
+			const one = gridKey("1,1", "hotkey", { size: [width, 1] });
+			const two = gridKey("2,8", "hotkey", {
+				size: [width, 1],
+				actions: [{ type: "key", value: "b" }],
+			});
+			const f = await gridFixture(occupied ? [one, two] : [one]);
+			await click(button(f.host, "1,1"));
+			const destination = occupied && width === 2 ? "2,7" : "2,8";
+			await input(
+				query(f.host, "#key-destination", HTMLSelectElement),
+				destination,
+			);
+			expect(f.calls.at(-1)).toMatchObject({
+				type: "preview",
+				geometry: { destination },
+			});
+			expect(f.stored().profiles[0].revision).toBe(0);
+			expect(
+				f.host.querySelector('[data-key-code="2,8"] .strip-tile-title')
+					?.textContent,
+			).toBe(one.config.title.text);
+			await click(button(f.host, "Save"));
+			await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+			expect(f.stored().profiles[0].pages[0].keys).toEqual(
+				expect.arrayContaining([
+					{ ...one, keyCode: "2,8" },
+					...(occupied ? [{ ...two, keyCode: "1,1" }] : []),
+				]),
+			);
+			expect(
+				f.host.querySelector('[data-key-code="2,8"] .strip-tile-title')
+					?.textContent,
+			).toBe(one.config.title.text);
+			expect(
+				f.host.querySelector('[data-key-code="1,1"] .strip-tile-title')
+					?.textContent ?? "",
+			).toBe(occupied ? two.config.title.text : "");
+			expect(button(f.host, "2,8").getAttribute("aria-pressed")).toBe("true");
+			await input(query(f.host, "#key-title", HTMLInputElement), "Moved key");
+			await click(button(f.host, "Save"));
+			await settle(() => expect(f.stored().profiles[0].revision).toBe(2));
+			expect(
+				f
+					.stored()
+					.profiles[0].pages[0].keys.find((key) => key.keyCode === "2,8")
+					?.config.title.text,
+			).toBe("Moved key");
+		});
+
+it("the built-in Quick Luminance key is editable like any key despite its DK-Suite template lock", async () => {
+	const quick = builtinProfiles("darwin").find((p) =>
+		p.pages[0].keys.some((k) => k.config.type === "luminance"),
+	);
+	const key = quick?.pages[0].keys.find((k) => k.config.type === "luminance");
+	if (!key) throw new Error("Missing Quick Luminance fixture");
+	const f = await gridFixture([Schema.encodeSync(ProfileKey)(key)]);
+	await click(button(f.host, key.keyCode));
+	expect(query(f.host, "#key-title", HTMLInputElement).disabled).toBe(false);
+	expect(f.host.querySelector("#key-title-locked")).toBeNull();
+});
+
+it("a key whose profile locks its title says so", async () => {
+	const locked = gridKey("1,1", "hotkey");
+	const f = await gridFixture([
+		{
+			...locked,
+			config: {
+				...locked.config,
+				basicEditableItems: {
+					title: false,
+					icon: true,
+					grid: true,
+					allowDelete: true,
+					allowDrag: true,
+				},
+			},
+		},
+	]);
+	await click(button(f.host, "1,1"));
+	const title = query(f.host, "#key-title", HTMLInputElement);
+	expect(title.disabled).toBe(true);
+	expect(
+		f.host.querySelector(`#${title.getAttribute("aria-describedby")}`)
+			?.textContent,
+	).toContain("This key's profile locks its title.");
+});
+
+it("editable Luminance titles save and render like other keys", async () => {
+	const f = await gridFixture([gridKey("1,1", "luminance")]);
+	await click(button(f.host, "1,1"));
+	expect(query(f.host, "#key-title", HTMLInputElement).disabled).toBe(false);
+	await input(query(f.host, "#key-title", HTMLInputElement), "Panel light");
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config).toMatchObject({
+		title: { text: "Panel light" },
+		userModifiedTitle: true,
+	});
+	expect(
+		f.host.querySelector('[data-key-code="1,1"] .strip-tile-title')
+			?.textContent,
+	).toBe("Panel light");
+	await click(button(f.host, "1,1"));
+	await click(button(f.host, "1,1"));
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe(
+		"Panel light",
+	);
+});
+
 it("MGMT-073/074/076 SCREEN-137 moves/swaps equal spans by coordinates only and resolves a covered destination anchor", async () => {
 	const one = gridKey("1,1", "hotkey", { size: [2, 1] });
 	const two = gridKey("2,8", "hotkey", {

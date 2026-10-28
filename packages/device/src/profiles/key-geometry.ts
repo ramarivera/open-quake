@@ -34,7 +34,22 @@ export function editKeyLayout(
 	geometry: KeyGeometry = {},
 ): KeyLayoutResult {
 	const original = keys.find((k) => k.keyCode === key.keyCode);
-	const destination = geometry.destination ?? key.keyCode;
+	const requested = geometry.destination ?? key.keyCode;
+	// A wide tile can be targeted through a covered cell as well as its anchor.
+	// Match drag-and-drop without turning a partial one-cell drop into a swap.
+	const destination =
+		requested !== key.keyCode &&
+		!geometry.placement &&
+		effectiveSpan(key.config.type, key.config.size).some((n) => n > 1)
+			? (keys.find(
+					(other) =>
+						// Its own footprint is a shift, not a swap with itself.
+						other.keyCode !== key.keyCode &&
+						!isEmptyCell(other) &&
+						other.config.display &&
+						occupiedCells(other).includes(requested),
+				)?.keyCode ?? requested)
+			: requested;
 	const moving = destination !== key.keyCode;
 	if (Option.isNone(parseProfileCoordinate(destination)))
 		return { _tag: "rejected", reason: "outOfBounds" };
@@ -88,7 +103,8 @@ export function editKeyLayout(
 		if (
 			((sizeChanged || footprintChanged) && !keyEditable(original, "grid")) ||
 			(sizeChanged && FORCED_TILE_SPANS.has(original.config.type)) ||
-			(moving && (!keyEditable(original, "allowDrag") || isEmptyCell(key))) ||
+			(requested !== key.keyCode &&
+				(!keyEditable(original, "allowDrag") || isEmptyCell(key))) ||
 			JSON.stringify(original.config.basicEditableItems) !==
 				JSON.stringify(key.config.basicEditableItems)
 		)
