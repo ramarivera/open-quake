@@ -70,9 +70,9 @@ export const DEFAULT_ACCENT: Rgb = { r: 116, g: 128, b: 239 };
 export const STRIP_THEMES: Readonly<Record<StripThemeName, StripTheme>> = {
 	commonBaseTheme: {
 		name: "commonBaseTheme",
-		cellSize: 220,
-		cellGap: 20,
-		edgeGap: 10,
+		cellSize: 216,
+		cellGap: 24,
+		edgeGap: 12,
 		borderRadius: 48,
 		unitInnerGap: 0,
 		colorScheme: DEFAULT_ACCENT,

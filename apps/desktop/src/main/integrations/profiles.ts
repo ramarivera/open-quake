@@ -88,7 +88,8 @@ const baseConfig = (
 	size: [1, 1],
 	display: true,
 	supportKnob: false,
-	icon: "0-1",
+	// "0-1" is brightness artwork; other actions use their type's default.
+	icon: type === "brightness" ? "0-1" : `library:${type}:1`,
 	actions,
 });
 export function integrationProfiles<R>(

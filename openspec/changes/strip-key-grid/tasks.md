@@ -60,6 +60,10 @@ Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
 - [x] Live empty borders and bounded management feedback, exclusions and clock hover. Bead open-quake-lih.10.11.
 - [ ] Complete WIDGETS-001 specialized dispatch and provider coverage. Bead open-quake-lih.10.12.
 
+## Built-in tile visual correction 2026-10-28
+
+- [x] Keep the 2×8 profile mapping, use balanced square common-base cells, wrap long built-in labels, map built-in action icons, and keep the knob detent gauge clear of tile labels. Bead `open-quake-c1m`.
+
 ### Strip burn-down evidence
 
 Verified on 2026-10-26 after merging main 31c400cc, including monitor panels #100

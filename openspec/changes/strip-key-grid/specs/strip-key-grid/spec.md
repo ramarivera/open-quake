@@ -38,10 +38,12 @@ SCREEN-103.
 
 ### Requirement: Grid themes
 
-The grid SHALL use the profile theme's cell, gap and edge: common base 220/20/10
+The grid SHALL use the profile theme's cell, gap and edge: common base 216/24/12
 visible radius 28, meeting assistant 236/4/2 radius 14, system info 221/20/10 radius 28,
 monitor panel 220/20/10 radius 0. A cell's column SHALL start at
 `edge + (column−1)·(cell+gap)`, and the same formula SHALL apply to rows. The
+common-base 2×8 layout SHALL use square cells and even 24 px gaps with 12 px
+margins that fit the 1920×480 canvas without changing profile coordinates. The
 profile theme SHALL resolve in this order: compatibility `resourceId` `1-1` or
 `1-3`; then compatibility `titleKey` `meetingAssistant` or `systemMonitor`; then
 the exact names {会议助手, Meeting Assistant, MeetAI} or {System Info, SysView,
@@ -57,10 +59,15 @@ MGMT-052.
 - **WHEN** the active profile's compatibility resourceId is `1-1`
 - **THEN** cell `1,8` spans x 1682–1918 and y 2–238 with corner radius 14
 
+#### Scenario: Balanced square common-base geometry
+
+- **WHEN** an ordinary key renders on a common-base profile
+- **THEN** its 216×216 cell has 24 px gaps and 12 px margins on the 1920×480 canvas
+
 #### Scenario: Custom profile geometry
 
 - **WHEN** a profile named `Work` has no compatibility identity
-- **THEN** cell `2,1` spans x 10–230 and y 250–470 with corner radius 28
+- **THEN** cell `2,1` spans x 12–228 and y 252–468 with corner radius 28
 
 #### Scenario: Meeting mic cell
 
@@ -168,8 +175,10 @@ padding SHALL be rounded 9 percent of the short edge. Icon size SHALL be rounded
 min(42 percent of the short edge,168). Default title size SHALL be rounded
 clamp(22,11 percent of the short edge,34), weight 550, upright and below the icon.
 Explicit user styling SHALL determine title position and supported text style.
-Titles SHALL be bounded by the inner width and ellipsized, and hidden titles
-SHALL not render. Missing, delayed or colourless artwork SHALL retain the flat
+Titles SHALL be bounded by the inner width and wrap long labels inside the cell;
+hidden titles SHALL not render. Built-in profile action types SHALL resolve
+numeric legacy icon references to semantic artwork instead of the generic
+question-mark icon. Missing, delayed or colourless artwork SHALL retain the flat
 plate without extracted accents, glow, decorative rings or theme SVG variants.
 Only inline `data:image/` icons SHALL load. Covers SCREEN-022, SCREEN-033,
 WIDGETS-006, WIDGETS-007, WIDGETS-008, WIDGETS-009, WIDGETS-011, WIDGETS-013,
@@ -177,18 +186,23 @@ MGMT-056, MGMT-060.
 
 #### Scenario: Common-base 1×1
 
-- **WHEN** a hotkey with a visible title `Lock Screen` renders at 220×220 in common base
+- **WHEN** a hotkey with a visible title `Lock Screen` renders at 216×216 in common base
 - **THEN** the icon is 92 px and the default title is 24 px below it with weight 550
 
 #### Scenario: Two-by-two title
 
 - **WHEN** a `[2,2]` key renders in common base
-- **THEN** its box is 460×460, the icon is 168 px and the default title is 34 px
+- **THEN** its box is 456×456, the icon is 168 px and the default title is 34 px
 
 #### Scenario: Colourless icon
 
 - **WHEN** an icon has no saturated pixels
 - **THEN** the tile keeps its flat device surface without extracting an accent or drawing a glow
+
+#### Scenario: Built-in icon references
+
+- **WHEN** a visible tile from a built-in profile has a numeric legacy icon reference
+- **THEN** its action type resolves a semantic icon instead of the generic question mark
 
 ### Requirement: Strip press motion
 

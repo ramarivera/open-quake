@@ -6,10 +6,10 @@ import {
 } from "./panelFeedback";
 import "./panel.css";
 
-/** Logical-canvas geometry. The knob sits flush right, clear of the clock. */
-const KNOB = { cx: 1672, cy: 240, body: 168, cap: 106 } as const;
-const TRACK = 136;
-const HOME = { inner: 112, outer: 124 } as const;
+/** Compact dial sits in the row gap so its value doesn't cover tile labels. */
+const KNOB = { cx: 1672, cy: 240, body: 30 } as const;
+const TRACK = 23;
+const HOME = { inner: 18, outer: 22 } as const;
 /** Labels synthetic input; an opaque chip keeps it legible over any image. */
 const SOURCE_CHIP = {
 	x: KNOB.cx - KNOB.body - 28 - 236,
@@ -21,12 +21,12 @@ const PLATE = { x: 1192, y: 128, width: 648, height: 224 } as const;
 
 function valueSize(text: string): number {
 	return text.length <= 2
-		? 104
+		? 32
 		: text.length === 3
-			? 88
+			? 27
 			: text.length === 4
-				? 70
-				: 56;
+				? 22
+				: 20;
 }
 
 function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {

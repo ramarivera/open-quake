@@ -188,6 +188,8 @@ describe("panel feedback layer", () => {
 		expect(markup).toContain('data-visible="true"');
 		expect(markup).toContain("rotate(30deg)");
 		expect(markup).toContain(">+2<");
+		expect(markup).toContain('r="30"');
+		expect(markup).toContain("font-size:32");
 		expect(markup).toContain("Mock input");
 		expect(layer(fold([connected]), 0)).not.toContain("Mock input");
 	});

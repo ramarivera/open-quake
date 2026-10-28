@@ -19,6 +19,7 @@ import {
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import { ProfileEnvelope } from "../../../shared/profiles";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { hasSemanticKeyArtwork, keyArtwork } from "../keys/key-artwork";
 import { resolveProfileTheme, STRIP_THEMES, stripLayout } from "./geometry";
 import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripScreen } from "./StripScreen";
@@ -103,6 +104,77 @@ describe("strip screen", () => {
 				}
 			}
 		}
+	});
+
+	it("resolves every built-in tile icon without the generic question-mark fallback", () => {
+		const fallbackArtwork = keyArtwork("unmapped-icon", "unmapped-type");
+		for (const platform of ["darwin", "linux", "win32"] as const)
+			for (const profile of builtinProfiles(platform, "en"))
+				for (const page of profile.pages)
+					for (const key of page.keys) {
+						if (!key.config.icon || !key.config.type) continue;
+						const label = `${profile.name} ${key.keyCode} (${key.config.type}, ${key.config.icon})`;
+						expect(
+							hasSemanticKeyArtwork(key.config.icon, key.config.type),
+							label,
+						).toBe(true);
+						expect(
+							keyArtwork(key.config.icon, key.config.type),
+							label,
+						).not.toBe(fallbackArtwork);
+						// The mic and buzzer toggles swap to alterIcon, which must look different.
+						const alter = Option.getOrUndefined(key.config.alterIcon);
+						if (alter && ["0-58", "0-59"].includes(key.config.icon)) {
+							expect(hasSemanticKeyArtwork(alter, key.config.type), label).toBe(
+								true,
+							);
+							expect(keyArtwork(alter, key.config.type), label).not.toBe(
+								keyArtwork(key.config.icon, key.config.type),
+							);
+						}
+					}
+	});
+
+	it("keeps long built-in profile labels intact for wrapping", () => {
+		const shortcut = builtinProfiles("darwin", "en").find(
+			(profile) => profile.id === "1-2",
+		);
+		const chat = builtinProfiles("darwin", "en").find(
+			(profile) => profile.id === "1-5",
+		);
+		if (!shortcut || !chat)
+			throw new Error("Missing built-in profile fixtures");
+		const markupForTitle = (
+			profile: typeof shortcut,
+			title: string,
+		): string => {
+			const tile = stripLayout(profile, profile.pages[0]).tiles.find(
+				(entry) => entry.key.config.title.text === title,
+			);
+			if (!tile) throw new Error(`Missing built-in title ${title}`);
+			return renderToStaticMarkup(
+				createElement(GenericTile, {
+					tile,
+					context: {
+						now: undefined,
+						hourFormat: "24h",
+						voice: previewVoiceContext,
+					},
+				}),
+			);
+		};
+		expect(markupForTitle(shortcut, "Mission Control")).toContain(
+			'data-full-title="Mission Control"',
+		);
+		expect(markupForTitle(shortcut, "Lock Screen")).toContain(
+			'data-full-title="Lock Screen"',
+		);
+		expect(markupForTitle(chat, "Content Writer")).toContain(
+			'data-full-title="Content Writer"',
+		);
+		expect(markupForTitle(chat, "Compliance")).toContain(
+			'data-full-title="Compliance"',
+		);
 	});
 
 	it("renders a visible macOS profile without a saved preview and preserves valid selections", () => {
@@ -201,9 +273,9 @@ describe("strip screen", () => {
 		});
 		// 2×2 at 2,1 → rows 1–2; quakeBot at 2,8 → columns 5–8.
 		expect(markup).toContain(
-			'data-key-code="2,1" data-state="tile" data-press-scale="true" style="left:10px;top:10px;width:460px;height:460px',
+			'data-key-code="2,1" data-state="tile" data-press-scale="true" style="left:12px;top:12px;width:456px;height:456px',
 		);
-		expect(markup).toContain("left:970px;top:10px;width:940px;height:460px");
+		expect(markup).toContain("left:972px;top:12px;width:936px;height:456px");
 		expect(markup).toContain('data-dashed="false"');
 	});
 
@@ -251,20 +323,20 @@ describe("strip screen", () => {
 });
 
 describe("generic tile", () => {
-	it("centres the artwork above a readable bottom label", () => {
+	it("centres the artwork above a wrapping bottom label", () => {
 		expect(
 			genericTileMetrics(
-				{ width: 220, height: 220 },
+				{ width: 216, height: 216 },
 				{ pos: "top", style: "bold|italic|underline" },
 			),
 		).toMatchObject({
-			iconSize: 92,
-			padding: 20,
+			iconSize: 91,
+			padding: 19,
 			fontSize: 24,
 			titleAnchor: "bottom",
 			fontWeight: 550,
 			italic: false,
-			titleWidth: 180,
+			titleWidth: 178,
 		});
 		const wide = genericTileMetrics(
 			{ width: 460, height: 460 },
@@ -523,7 +595,7 @@ describe("strip selection and settings", () => {
 				theme.borderRadius,
 			]),
 		).toEqual([
-			[220, 20, 10, 48],
+			[216, 24, 12, 48],
 			[236, 4, 2, 24],
 			[221, 20, 10, 48],
 			[220, 20, 10, 0],
