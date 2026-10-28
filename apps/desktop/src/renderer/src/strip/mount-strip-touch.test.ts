@@ -130,10 +130,19 @@ const setup = async (child: ReactNode) => {
 		target.dispatchEvent(input);
 		return input;
 	};
+	// A DOM TouchEvent contact, which mount-strip-touch tracks by identifier.
+	const touchContact = (type: string, target: Element = slot) => {
+		const input = new Event(type, { bubbles: true, cancelable: true });
+		const touch = { identifier: 7, clientX: x, clientY: 480 - y };
+		Object.assign(input, { changedTouches: [touch], touches: [touch] });
+		target.dispatchEvent(input);
+		return input;
+	};
 	return {
 		view,
 		key,
 		pointer,
+		touchContact,
 		emit: (value: QuakeEvent) => event(value),
 		close: async () => {
 			dispose();
@@ -142,23 +151,99 @@ const setup = async (child: ReactNode) => {
 	};
 };
 
-it("releases a DOM contact when vendor input takes over", async () => {
-	const panel = await setup("Tile");
-	try {
-		panel.pointer("pointerdown");
-		expect(panel.key).toHaveBeenCalledWith(
-			expect.objectContaining({ keyAction: 0 }),
+it.each(["status", "touch"] as const)(
+	"open-quake-l86.22: %s takeover cancels a DOM tap and activates the vendor gesture once",
+	async (kind) => {
+		const panel = await setup("Tile");
+		try {
+			panel.pointer("pointerdown");
+			expect(panel.key).toHaveBeenCalledWith(
+				expect.objectContaining({ keyAction: 0 }),
+			);
+			const taps = vi.fn();
+			panel.view.container.addEventListener("quake-strip-tile-tap", taps);
+			if (kind === "status")
+				panel.emit({ source: "mock", kind: "status", state: "connected" });
+			const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+			if (!profile) throw new Error("Missing SysView");
+			const rect = stripLayout(profile, profile.pages[0]).tiles[0]?.slot;
+			if (!rect) throw new Error("Missing tile");
+			const x = rect.x + rect.width / 2,
+				y = 480 - rect.y - rect.height / 2;
+			panel.emit({
+				source: "mock",
+				kind: "touch",
+				points: [{ x, y, action: 1 }],
+			});
+			expect(taps).not.toHaveBeenCalled();
+			panel.emit({
+				source: "mock",
+				kind: "touch",
+				points: [{ x, y, action: 0 }],
+			});
+			panel.pointer("pointerup");
+			await new Promise((resolve) => setTimeout(resolve, 150));
+			expect(taps).toHaveBeenCalledOnce();
+			expect(panel.key.mock.calls.map(([detail]) => detail.keyAction)).toEqual([
+				0, 1, 0, 1,
+			]);
+		} finally {
+			await panel.close();
+		}
+	},
+);
+
+it.each(["status", "touch"] as const)(
+	"open-quake-l86.22: %s takeover cancels the sub-target without a confirmed tap",
+	async (kind) => {
+		const panel = await setup(
+			createElement(
+				"button",
+				{
+					type: "button",
+					"data-quake-overlay-touch": "target",
+					"data-quake-sub-touch": "target",
+				},
+				"Target",
+			),
 		);
-		panel.emit({ source: "mock", kind: "status", state: "connected" });
-		// DOM releases are delivered after the controller's release delay.
-		await new Promise((resolve) => setTimeout(resolve, 150));
-		expect(panel.key).toHaveBeenLastCalledWith(
-			expect.objectContaining({ keyAction: 1 }),
+		const target = required(panel.view.container, "button", HTMLButtonElement);
+		vi.spyOn(target, "getBoundingClientRect").mockReturnValue(
+			new DOMRect(0, 0, 1920, 480),
 		);
-	} finally {
-		await panel.close();
-	}
-});
+		const ends = vi.fn();
+		target.addEventListener("quake-sub-touch-end", ends);
+		try {
+			panel.pointer("pointerdown", target);
+			if (kind === "status")
+				panel.emit({ source: "mock", kind: "status", state: "connected" });
+			panel.emit({
+				source: "mock",
+				kind: "touch",
+				points: [{ x: 100, y: 100, action: 1 }],
+			});
+			expect(ends).toHaveBeenCalledOnce();
+			expect(ends.mock.calls[0]?.[0].detail).toMatchObject({
+				cancelled: true,
+				isEffective: false,
+				confirmedTap: false,
+			});
+			panel.emit({
+				source: "mock",
+				kind: "touch",
+				points: [{ x: 100, y: 100, action: 0 }],
+			});
+			panel.pointer("pointerup", target);
+			expect(ends).toHaveBeenCalledTimes(2);
+			expect(ends.mock.calls[1]?.[0].detail).toMatchObject({
+				isEffective: true,
+				confirmedTap: true,
+			});
+		} finally {
+			await panel.close();
+		}
+	},
+);
 
 it("keeps native editing in panel text fields while vendor touch owns input", async () => {
 	const panel = await setup(createElement("textarea"));
@@ -315,4 +400,39 @@ it("SCREEN-061: real DOM adapter refreshes element/parent/gadget bounds, discove
 	const count = ends.mock.calls.length;
 	tap(680);
 	expect(ends).toHaveBeenCalledTimes(count);
+});
+
+it("open-quake-l86.22: vendor takeover cancels a DOM touchstart contact without a confirmed tap", async () => {
+	const panel = await setup("Tile");
+	try {
+		panel.touchContact("touchstart");
+		expect(panel.key).toHaveBeenCalledWith(
+			expect.objectContaining({ keyAction: 0 }),
+		);
+		const taps = vi.fn();
+		panel.view.container.addEventListener("quake-strip-tile-tap", taps);
+		const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+		const rect =
+			profile && stripLayout(profile, profile.pages[0]).tiles[0]?.slot;
+		if (!rect) throw new Error("Missing tile");
+		const x = rect.x + rect.width / 2,
+			y = 480 - rect.y - rect.height / 2;
+		panel.emit({
+			source: "mock",
+			kind: "touch",
+			points: [{ x, y, action: 1 }],
+		});
+		expect(taps).not.toHaveBeenCalled();
+		panel.emit({
+			source: "mock",
+			kind: "touch",
+			points: [{ x, y, action: 0 }],
+		});
+		panel.touchContact("touchend");
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		// Only the vendor gesture taps; the superseded DOM contact never confirms.
+		expect(taps).toHaveBeenCalledOnce();
+	} finally {
+		await panel.close();
+	}
 });
