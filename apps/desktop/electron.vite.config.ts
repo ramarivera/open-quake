@@ -9,7 +9,13 @@ export default defineConfig({
 		plugins: [
 			{
 				name: "open-quake-native-media",
-				buildStart: () => buildNativeMedia(import.meta.dirname),
+				buildStart: () =>
+					buildNativeMedia(
+						import.meta.dirname,
+						process.env.OPEN_QUAKE_EXERCISER_BUILD
+							? resolve(process.env.OPEN_QUAKE_EXERCISER_BUILD, "native-media")
+							: undefined,
+					),
 			},
 		],
 		build: {
