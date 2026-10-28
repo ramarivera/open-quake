@@ -224,4 +224,11 @@ CI/review. This is one authorized batched continuation; this lane does not reply
 resolve, retrigger reviews, watch or merge. Evidence is retained under
 /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/assistant-routing/continuation/.
 
+## Speech settings form recovery, open-quake-l86.31
+
+- [x] Validate provider drafts and credential reuse scope before enabling Save, retain main validation and add visible missing-input feedback.
+- [ ] Verify the mounted form against invalid/valid drafts, partial XFY secrets and credential scope changes; run focused types/lint and deliver.
+
+Speech form evidence: all four mounted regressions fail against the unchanged pre-fix component because Save remains enabled. The corrected form plus existing main settings and IPC tests pass 11 checks. Desktop typecheck and root lint pass, retaining the existing 20 warnings and 3 informational diagnostics. No provider execution, real credentials, microphone capture or native input occurred. The broad native sweep is not repeated for this bounded form correction.
+
 - [x] Localization correction: use English prompt catalog fallback outside Chinese locales and verify regional locale normalization. Bead `open-quake-l86.36`, implementation tracked in `agent-naming/tasks.md` section 2.
