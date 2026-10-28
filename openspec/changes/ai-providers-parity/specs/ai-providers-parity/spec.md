@@ -310,7 +310,7 @@ AI-117, MGMT-358, MGMT-359 and SETTINGS-110 SHALL execute all six shipped Copilo
 - **THEN** the outbound prompt and controls match the saved key, the title stays edited and unrelated keys and locks stay unchanged
 
 ### Requirement: Local legacy prompt catalog
-AI-142 and AI-143 SHALL expose a local, provenance-documented prompt catalog with a Default entry. English SHALL use the English catalog; zh, de, fr, es, it, ja and ko SHALL use the historical Chinese fallback. Only decision 12 NSFW and jailbreak entries SHALL be excluded. Missing or malformed catalog input SHALL return Default alone without execution or network access.
+AI-142 and AI-143 SHALL expose a local, provenance-documented prompt catalog with a Default entry. Chinese locale subtags SHALL use the Chinese catalog. Every other locale SHALL use the English catalog, including regional English and locales without their own prompt translation. Only decision 12 NSFW and jailbreak entries SHALL be excluded. Missing or malformed catalog input SHALL return Default alone without execution or network access.
 
 #### Scenario: Locale and corrupt catalog handling
 - **WHEN** the loader receives each supported locale or missing/malformed source

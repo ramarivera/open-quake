@@ -12,7 +12,19 @@ it("AI-142/143 retains each allowed English/Chinese entry and prepends Default f
 	expect(
 		zh.some((e) => ["zh-61", "zh-118", "zh-120", "zh-121"].includes(e.id)),
 	).toBe(false);
-	for (const locale of ["de", "fr", "es", "it", "ko", "ja", "unknown"])
+	for (const locale of [
+		"en-US",
+		"en_GB",
+		"de",
+		"fr",
+		"es",
+		"it",
+		"ko",
+		"ja",
+		"unknown",
+	])
+		expect(loadSystemPrompts(locale)).toEqual(en);
+	for (const locale of ["zh-CN", "zh_TW", "ZH"])
 		expect(loadSystemPrompts(locale)).toEqual(zh);
 });
 it("AI-143 parses CSV quotes, commas and multiline prompts and fails closed to Default on missing or malformed input", () => {

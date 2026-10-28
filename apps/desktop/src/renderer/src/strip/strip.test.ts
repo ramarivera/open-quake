@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Array as EffectArray, Option, Schema } from "effect";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +6,10 @@ import {
 	builtinProfiles,
 	translateProfile,
 } from "../../../../../../packages/device/src/profiles/profile-catalog";
-import { createInitialProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import {
+	createInitialProfileEnvelope,
+	Profile,
+} from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { installProfileCatalog } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
 import {
 	clockProfile,
@@ -628,4 +631,42 @@ describe("strip selection and settings", () => {
 			true,
 		);
 	});
+});
+
+it("renders persisted Chinese and Japanese Agent defaults in the English strip and management preview", () => {
+	for (const sourceLocale of ["zh", "ja"] as const) {
+		const source = builtinProfiles("darwin", sourceLocale).find(
+			(p) => p.id === "1-8",
+		);
+		if (!source) throw new Error("Missing Agent fixture");
+		const legacy = {
+			...source,
+			pages: EffectArray.map(source.pages, (page) => ({
+				...page,
+				keys: page.keys.map((key) => ({
+					...key,
+					compatibility: Option.none(),
+				})),
+			})),
+		};
+		for (const titles of ["key-locale", "provided"] as const) {
+			const profile =
+				titles === "provided" ? translateProfile(legacy, "en") : legacy;
+			const markup = render({
+				profiles: ready(Schema.encodeSync(Profile)(profile)),
+				showEmptyGridDashedBorder: false,
+				titles,
+			});
+			for (const title of [
+				"Material Finder",
+				"Stock Master",
+				"Data Organizer",
+				"Tech Expert",
+			])
+				expect(markup).toContain(title);
+			expect(markup).not.toMatch(
+				/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u,
+			);
+		}
+	}
 });

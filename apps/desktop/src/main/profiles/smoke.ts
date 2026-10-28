@@ -236,6 +236,23 @@ async function smoke(): Promise<void> {
 				(await panel.webContents.capturePage()).toPNG(),
 			);
 		}
+		await profiles.select("1-8");
+		await panel.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+			const deadline = Date.now() + 5000;
+			const check = () => {
+				const titles = [...document.querySelectorAll('.strip-tile-title')].map(node => node.textContent);
+				if (["Material Finder", "Stock Master", "Data Organizer", "Tech Expert"].every(title => titles.includes(title))) return resolve(true);
+				if (Date.now() > deadline) return reject(new Error('Agent default titles did not render in English: ' + JSON.stringify(titles)));
+				setTimeout(check, 20);
+			}; check();
+		})`);
+		await writeFile(
+			join(scratch, "agent-english.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+		process.stdout.write(
+			"profiles smoke: English Agent defaults rendered on native panel\n",
+		);
 		await request(management, {
 			type: "manage",
 			command: { type: "select", id: "1-2" },

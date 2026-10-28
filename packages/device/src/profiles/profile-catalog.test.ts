@@ -17,7 +17,7 @@ import { QuakeDevice } from "../device-service";
 import { makeFakeHardwareTransport } from "../hardware/hardware-fake";
 import { hardwareKeyboardAdapter } from "../hardware/hardware-keyboard";
 import { HardwareControls } from "../hardware/hardware-service";
-import { keyEditable, resetKeyIcons } from "./key-editing-invariants";
+import { keyEditable, keyTitle, resetKeyIcons } from "./key-editing-invariants";
 import { editKeyLayout } from "./key-geometry";
 import {
 	builtinProfiles,
@@ -29,6 +29,7 @@ import {
 	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	type Profile,
 	ProfileEnvelope,
 } from "./profile-contracts.js";
 import {
@@ -826,4 +827,85 @@ it("shows the Agent titles for agent tiles saved before the rename", async () =>
 			),
 		).toBe(legacy);
 	}
+});
+
+it("localizes fresh and persisted Agent defaults across source languages without changing custom titles or actions", () => {
+	for (const sourceLocale of ["en", "zh", "ja", "de"] as const) {
+		const profile = builtinProfiles("darwin", sourceLocale).find(
+			(p) => p.id === "1-8",
+		);
+		if (!profile) throw new Error("Missing Agent fixture");
+		for (const original of profile.pages[0].keys.filter(
+			(key) => key.config.type === "clawbot",
+		)) {
+			const agent = original.config.actions.find((a) => a.type === "agentId");
+			const name = `openclawAgents.${String(agent?.value)}.name`;
+			expect(original.config.title.text).toBe(profileText(name, sourceLocale));
+			for (const compatibility of [original.compatibility, Option.none()]) {
+				const saved = { ...original, compatibility };
+				for (const locale of ["en", "zh", "ja", "de"] as const) {
+					expect(keyTitle(saved, locale)).toBe(profileText(name, locale));
+					const input: Profile = {
+						...profile,
+						pages: [{ ...profile.pages[0], keys: [saved] }],
+					};
+					const rendered = translateProfile(input, locale).pages[0].keys[0];
+					expect(rendered?.config.title.text).toBe(profileText(name, locale));
+					expect(rendered?.config.actions).toEqual(saved.config.actions);
+				}
+				for (const text of [
+					"我的自定义",
+					"Custom label",
+					profileText(name, "zh"),
+					"",
+				]) {
+					const custom = {
+						...saved,
+						config: {
+							...saved.config,
+							userModifiedTitle: true,
+							title: { ...saved.config.title, text },
+						},
+					};
+					expect(keyTitle(custom, "en")).toBe(text);
+					expect(
+						translateProfile(
+							{ ...profile, pages: [{ ...profile.pages[0], keys: [custom] }] },
+							"en",
+						).pages[0].keys[0]?.config.title.text,
+					).toBe(text);
+				}
+			}
+		}
+	}
+});
+
+it("preserves an unmarked custom Discord title equal to another locale default", () => {
+	const source = builtinProfiles("win32", "en").find(
+		(profile) => profile.id === "1-0",
+	);
+	if (!source) throw new Error("Missing Discord fixture");
+	const first = source.pages[0].keys[0];
+	if (!first) throw new Error("Missing Discord key");
+	const input: Profile = {
+		...source,
+		pages: [
+			{
+				...source.pages[0],
+				keys: [
+					{
+						...first,
+						config: {
+							...first.config,
+							userModifiedTitle: undefined,
+							title: { ...first.config.title, text: "Stumm" },
+						},
+					},
+				],
+			},
+		],
+	};
+	expect(
+		translateProfile(input, "en").pages[0].keys[0]?.config.title.text,
+	).toBe("Stumm");
 });

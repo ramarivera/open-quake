@@ -6,7 +6,7 @@ export default defineConfig({
 			outDir: "out/profiles-smoke",
 			rollupOptions: {
 				input: resolve("src/main/profiles/smoke.ts"),
-				external: ["electron", "effect"],
+				external: ["electron", "effect", "koffi"],
 			},
 		},
 	},
