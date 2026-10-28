@@ -879,3 +879,33 @@ it("localizes fresh and persisted Agent defaults across source languages without
 		}
 	}
 });
+
+it("preserves an unmarked custom Discord title equal to another locale default", () => {
+	const source = builtinProfiles("win32", "en").find(
+		(profile) => profile.id === "1-0",
+	);
+	if (!source) throw new Error("Missing Discord fixture");
+	const first = source.pages[0].keys[0];
+	if (!first) throw new Error("Missing Discord key");
+	const input: Profile = {
+		...source,
+		pages: [
+			{
+				...source.pages[0],
+				keys: [
+					{
+						...first,
+						config: {
+							...first.config,
+							userModifiedTitle: undefined,
+							title: { ...first.config.title, text: "Stumm" },
+						},
+					},
+				],
+			},
+		],
+	};
+	expect(
+		translateProfile(input, "en").pages[0].keys[0]?.config.title.text,
+	).toBe("Stumm");
+});

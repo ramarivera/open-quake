@@ -214,9 +214,7 @@ export const translateProfile = (
 					title._tag === "Left" ||
 					!title.right.i18nKey ||
 					title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
-					!Object.values(dictionaries).some(
-						(copy) => copy[title.right.i18nKey ?? ""] === key.config.title.text,
-					)
+					key.config.title.text !== profileText(title.right.i18nKey, "en")
 				)
 					return key;
 				return {
