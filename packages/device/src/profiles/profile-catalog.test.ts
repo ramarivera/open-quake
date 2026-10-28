@@ -4,6 +4,7 @@ import {
 	Layer,
 	ManagedRuntime,
 	Option,
+	Schema,
 } from "effect";
 import { describe, expect, it } from "vitest";
 import {
@@ -20,6 +21,7 @@ import { keyEditable, resetKeyIcons } from "./key-editing-invariants";
 import { editKeyLayout } from "./key-geometry";
 import {
 	builtinProfiles,
+	profileLabel,
 	profileText,
 	translateProfile,
 } from "./profile-catalog.js";
@@ -27,7 +29,7 @@ import {
 	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
-	type ProfileEnvelope,
+	ProfileEnvelope,
 } from "./profile-contracts.js";
 import {
 	applyManagerCommand,
@@ -725,4 +727,103 @@ it("MGMT-384: SysView ships one full-strip glass Celsius panel with exact input 
 		allowDelete: false,
 		allowDrag: false,
 	});
+});
+
+describe("Agent profile display compatibility", () => {
+	it("localizes persisted legacy and current defaults without changing stored data", () => {
+		const source = builtinProfiles("darwin").find((p) => p.id === "1-8");
+		if (!source) throw new Error("Missing Agent profile");
+		const names = {
+			en: "Agent",
+			zh: "智能体",
+			de: "Agent",
+			es: "Agente",
+			fr: "Agent",
+			it: "Agente",
+			ja: "エージェント",
+			ko: "에이전트",
+		} as const;
+		for (const storedName of [
+			"DK Claw",
+			"DK-Claw",
+			"DK龙虾",
+			...Object.values(names),
+		]) {
+			const encoded = encodeProfileEnvelope({
+				...createInitialProfileEnvelope(),
+				profiles: [{ ...source, name: storedName }],
+			});
+			const saved = Schema.decodeUnknownSync(ProfileEnvelope)(
+				JSON.parse(JSON.stringify(encoded)),
+			);
+			const profile = saved.profiles[0];
+			for (const [locale, name] of Object.entries(names)) {
+				expect(profileLabel(profile, locale as keyof typeof names)).toBe(name);
+				const translated = translateProfile(
+					profile,
+					locale as keyof typeof names,
+				);
+				expect(translated.name).toBe(name);
+				expect(translated.id).toBe("1-8");
+				expect(translated.knob).toEqual(profile.knob);
+				expect(
+					translated.pages.flatMap((page) =>
+						page.keys.map((key) => ({
+							type: key.config.type,
+							actions: key.config.actions,
+						})),
+					),
+				).toEqual(
+					profile.pages.flatMap((page) =>
+						page.keys.map((key) => ({
+							type: key.config.type,
+							actions: key.config.actions,
+						})),
+					),
+				);
+			}
+			expect(encodeProfileEnvelope(saved)).toEqual(encoded);
+		}
+	});
+	it("preserves explicit renames and duplicate names across locale changes", () => {
+		const source = builtinProfiles("darwin").find((p) => p.id === "1-8");
+		if (!source) throw new Error("Missing Agent profile");
+		for (const profile of [
+			{ ...source, name: "My helper" },
+			{ ...source, id: "custom-agent", name: "DK Claw" },
+		]) {
+			expect(profileLabel(profile, "ja")).toBe(profile.name);
+			expect(translateProfile(profile, "de").name).toBe(profile.name);
+		}
+	});
+});
+
+it("shows the Agent titles for agent tiles saved before the rename", async () => {
+	const { keyTitle } = await import("./key-editing-invariants.js");
+	const profile = builtinProfiles("darwin").find((p) =>
+		p.pages.some((page) => page.keys.some((k) => k.config.type === "quakeBot")),
+	);
+	const keys = profile?.pages.flatMap((page) => page.keys) ?? [];
+	for (const [type, legacy, current] of [
+		["quakeBot", "ClawBotView", "Agent"],
+		["quakeBotInput", "ClawBotInput", "Agent input"],
+	] as const) {
+		const key = keys.find((k) => k.config.type === type);
+		if (!key) throw new Error(`Missing ${type}`);
+		const saved = {
+			...key,
+			config: {
+				...key.config,
+				title: { ...key.config.title, text: legacy },
+				userModifiedTitle: false,
+			},
+		};
+		expect(keyTitle(saved, "en")).toBe(current);
+		expect(
+			keyTitle(
+				{ ...saved, config: { ...saved.config, userModifiedTitle: true } },
+				"en",
+			),
+		).toBe(legacy);
+	}
 });

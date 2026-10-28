@@ -25,7 +25,7 @@ it("MGMT-350 renders the shipped input payload and follows the selected assistan
 		icon: "0-130",
 		actions: [],
 		title: {
-			text: "ClawBotInput",
+			text: "Agent input",
 			pos: "top",
 			size: 6,
 			color: "#FFFFFF",

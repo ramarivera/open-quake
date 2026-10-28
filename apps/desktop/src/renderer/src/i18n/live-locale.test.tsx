@@ -318,7 +318,6 @@ it("WIDGETS-063 SETTINGS-067: all eight rendered clock/settings/enrichment label
 		for (const key of [
 			"title",
 			"seconds",
-			"secondsHint",
 			"description",
 			"themeDescription",
 			"theme",

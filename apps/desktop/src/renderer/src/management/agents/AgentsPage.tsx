@@ -382,7 +382,7 @@ function PanelSettings({
 									)}
 								</span>
 								<select
-									aria-label={`DK-Claw ${code}`}
+									aria-label={format(d.keyLabel, { code })}
 									value={slots[code]}
 									disabled={busy}
 									onChange={(event) => {
@@ -503,7 +503,6 @@ export function AgentsPage({
 				<div>
 					<p className="mc-page-kicker">{strings.clawControlPanel.kicker}</p>
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
-					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
 				{view && <RuntimeIndicator runtime={view.runtime} request={request} />}
 			</header>

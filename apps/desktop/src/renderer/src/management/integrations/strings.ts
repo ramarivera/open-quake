@@ -61,7 +61,6 @@ export const shortcutStrings = {
 	promptPlaceholder: "Enter a shortcut prompt for the app",
 	generating: "Generating…",
 	generate: "Generate Shortcuts",
-	aiHint: "AI generates one or more shortcuts from your description",
 	results: "Results",
 	colName: "Name",
 	colApp: "App",
@@ -81,7 +80,6 @@ export const shortcutStrings = {
 	addLibrary: "Add Library",
 	promptDefault:
 		"Generate shortcuts to open an image, adjust brightness, and export WebP",
-	subtitle: "Shortcut generation management",
 	presetPsCropLabel: "Photoshop",
 	presetPsCropPrompt: "Generate 16 common shortcuts for Photoshop.",
 	presetPsCurveLabel: "Illustrator",

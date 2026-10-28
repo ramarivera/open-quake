@@ -5,7 +5,6 @@
 			"sessionsTab": "Conversations",
 			"agentsTab": "Agents",
 			"localLibraryTab": "Agent library",
-			"libraryHint": "Talk to your model or a connected runtime, and manage local agents, skills and models.",
 			"aiConfig": "AI configuration",
 			"settings": "Device & channels",
 			"kicker": "Assistant"
@@ -24,7 +23,7 @@
 			"restartFailed": "The local runtime couldn't be restarted.",
 			"title": "Local OpenClaw runtime",
 			"notConfigured": "Not configured",
-			"shellNotConfigured": "OpenClaw runtime not configured",
+			"shellNotConfigured": "Local agent runtime not configured",
 			"shellUnavailable": "Agent runtime status unavailable",
 			"shellChecking": "Checking agent runtime",
 			"setupHint": "Install OpenClaw, then launch open-quake with OPEN_QUAKE_OPENCLAW_COMMAND set to the absolute path of its executable. For a running Hermes or OpenClaw server, add an HTTP connection in Agents > Conversations.",
@@ -57,7 +56,6 @@
 			"searchSkills": "Search Skills",
 			"createSkill": "Create Skill",
 			"allSkills": "All Skills",
-			"allSkillsHint": "Create, edit, delete, and inspect each Skill directory",
 			"searchSkillPlaceholder": "Search name, folder, or description",
 			"delete": "Delete",
 			"noMatchingSkills": "No matching Skills",
@@ -99,7 +97,7 @@
 			"wizardBasic": "Basic Info",
 			"wizardRole": "Role Config",
 			"wizardNext": "Next",
-			"agentDescPromptPlaceholder": "Describe the Agent role, tone and workflow. Generating configuration requires OpenClaw gateway to be running.",
+			"agentDescPromptPlaceholder": "Describe the agent role, tone and workflow.",
 			"saveAgent": "Save Agent",
 			"agentId": "Agent ID",
 			"agentIdPlaceholder": "Lowercase letters, digits and hyphens; start with a letter (e.g. my-agent2)",
@@ -142,7 +140,7 @@
 			"authSavePlaceholder": "Saved when you press Save",
 			"saveRow": "Save",
 			"deleteConfirmTitle": "Delete model",
-			"deleteConfirm": "This removes the model from the global OpenClaw catalog. Saved credentials will not be deleted.",
+			"deleteConfirm": "This removes the model from the global agent model catalog. Saved credentials will not be deleted.",
 			"deleteConfirmChild": "This removes the model from this agent's routing only. The global catalog and other agents are unchanged. Saved credentials will not be deleted.",
 			"providerCol": "Provider",
 			"modelCol": "Model",
@@ -172,13 +170,13 @@
 			"endpointBotId": "Endpoint/Bot ID"
 		},
 		"dkclaw": {
-			"cardBlurb": "Choose which agent each of the four DK-Claw keys opens on QUAKE, then sync to the device.",
+			"cardBlurb": "Choose an agent for each of the four Agent keys, then sync the assignments to QUAKE.",
 			"actionSync": "Sync to device",
-			"toastSyncSuccess": "Synced to the DK-Claw panel.",
-			"toastSyncDeferred": "Config saved; the device is showing another panel and will pick this up when DK-Claw is opened.",
+			"toastSyncSuccess": "Synced to the Agent panel.",
+			"toastSyncDeferred": "Config saved; the device is showing another panel and will pick this up when Agent is opened.",
 			"actionSyncing": "Syncing…",
-			"title": "DK-Claw keys",
-			"keyLabel": "Key {code}",
+			"title": "Agent keys",
+			"keyLabel": "Agent {code}",
 			"unsynced": "Not synced",
 			"pendingHint": "Changes apply to QUAKE after you sync.",
 			"stages": {
@@ -238,7 +236,7 @@
 			"confirmResetAction": "Reset"
 		},
 		"keyFields": {
-			"title": "OpenClaw key",
+			"title": "Agent key",
 			"agent": "Agent:",
 			"model": "Model:",
 			"defaultAgent": "Default Agent",
@@ -257,7 +255,6 @@
 			"sessionsTab": "Unterhaltungen",
 			"agentsTab": "Agenten",
 			"localLibraryTab": "Agentenbibliothek",
-			"libraryHint": "Sprich mit deinem Modell oder einer verbundenen Laufzeit und verwalte lokale Agenten, Skills und Modelle.",
 			"aiConfig": "KI-Konfiguration",
 			"settings": "Gerät & Kanäle",
 			"kicker": "Assistent"
@@ -276,7 +273,7 @@
 			"restartFailed": "Die lokale Laufzeit konnte nicht neu gestartet werden.",
 			"title": "Lokale OpenClaw-Laufzeit",
 			"notConfigured": "Nicht konfiguriert",
-			"shellNotConfigured": "OpenClaw-Laufzeit nicht konfiguriert",
+			"shellNotConfigured": "Lokale Agenten-Laufzeit nicht konfiguriert",
 			"shellUnavailable": "Status der Agent-Laufzeit nicht verfügbar",
 			"shellChecking": "Agent-Laufzeit wird geprüft",
 			"setupHint": "Installiere OpenClaw und starte open-quake mit OPEN_QUAKE_OPENCLAW_COMMAND auf den absoluten Pfad zur ausführbaren Datei gesetzt. Für einen laufenden Hermes- oder OpenClaw-Server füge unter Agenten > Unterhaltungen eine HTTP-Verbindung hinzu.",
@@ -309,7 +306,6 @@
 			"searchSkills": "Skills suchen",
 			"createSkill": "Skill erstellen",
 			"allSkills": "Alle Skills",
-			"allSkillsHint": "Skill-Verzeichnisse erstellen, bearbeiten, löschen und ansehen",
 			"searchSkillPlaceholder": "Name, Ordner oder Beschreibung suchen",
 			"delete": "Löschen",
 			"noMatchingSkills": "Keine passenden Skills",
@@ -351,7 +347,7 @@
 			"wizardBasic": "Grunddaten",
 			"wizardRole": "Rolle",
 			"wizardNext": "Weiter",
-			"agentDescPromptPlaceholder": "Beschreibe Rolle, Ton und Arbeitsweise des Agenten. Zum Erstellen der Konfiguration muss das OpenClaw-Gateway laufen.",
+			"agentDescPromptPlaceholder": "Beschreibe Rolle, Ton und Arbeitsweise des Agenten.",
 			"saveAgent": "Agent speichern",
 			"agentId": "Agenten-ID",
 			"agentIdPlaceholder": "Kleinbuchstaben, Ziffern und Bindestriche; beginnt mit einem Buchstaben (z. B. mein-agent2)",
@@ -394,7 +390,7 @@
 			"authSavePlaceholder": "Wird beim Speichern gesichert",
 			"saveRow": "Speichern",
 			"deleteConfirmTitle": "Modell löschen",
-			"deleteConfirm": "Entfernt das Modell aus dem globalen OpenClaw-Katalog. Gespeicherte Zugangsdaten werden nicht gelöscht.",
+			"deleteConfirm": "Entfernt das Modell aus dem globalen Agenten-Modellkatalog. Gespeicherte Zugangsdaten werden nicht gelöscht.",
 			"deleteConfirmChild": "Entfernt das Modell nur aus dem Routing dieses Agenten. Der globale Katalog und andere Agenten bleiben unverändert. Gespeicherte Zugangsdaten werden nicht gelöscht.",
 			"providerCol": "Anbieter",
 			"modelCol": "Modell",
@@ -424,13 +420,13 @@
 			"endpointBotId": "Endpunkt/Bot-ID"
 		},
 		"dkclaw": {
-			"cardBlurb": "Wähle, welchen Agenten jede der vier DK-Claw-Tasten auf QUAKE öffnet, und synchronisiere dann mit dem Gerät.",
+			"cardBlurb": "Weise jeder der vier Agenten-Tasten einen Agenten zu und synchronisiere die Zuordnungen mit QUAKE.",
 			"actionSync": "Mit Gerät synchronisieren",
-			"toastSyncSuccess": "Mit dem DK-Claw-Panel synchronisiert.",
-			"toastSyncDeferred": "Konfiguration gespeichert; das Gerät zeigt ein anderes Panel und übernimmt sie, sobald DK-Claw geöffnet wird.",
+			"toastSyncSuccess": "Mit dem Agenten-Panel synchronisiert.",
+			"toastSyncDeferred": "Konfiguration gespeichert; das Gerät zeigt ein anderes Panel und übernimmt sie, sobald das Agenten-Panel geöffnet wird.",
 			"actionSyncing": "Wird synchronisiert…",
-			"title": "DK-Claw-Tasten",
-			"keyLabel": "Taste {code}",
+			"title": "Agenten-Tasten",
+			"keyLabel": "Agent {code}",
 			"unsynced": "Nicht synchronisiert",
 			"pendingHint": "Änderungen gelten auf QUAKE erst nach dem Synchronisieren.",
 			"stages": {
@@ -490,7 +486,7 @@
 			"confirmResetAction": "Zurücksetzen"
 		},
 		"keyFields": {
-			"title": "OpenClaw-Taste",
+			"title": "Agenten-Taste",
 			"agent": "Agent:",
 			"model": "Modell:",
 			"defaultAgent": "Standard-Agent",
@@ -501,6 +497,132 @@
 			"resetDone": "Kontext zurückgesetzt",
 			"unavailable": "Kontext kann für diese Laufzeit nicht zurückgesetzt werden.",
 			"gateway": "Gateway-Einstellungen"
+		}
+	},
+	"zh": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "未配置本地智能体运行环境"
+		},
+		"dkclaw": {
+			"cardBlurb": "为四个智能体按键分别选择智能体，然后将按键分配同步到 QUAKE。",
+			"toastSyncSuccess": "已同步到智能体面板。",
+			"toastSyncDeferred": "配置已保存；设备当前显示其他面板，将在打开智能体面板时应用。",
+			"title": "智能体按键",
+			"keyLabel": "智能体 {code}"
+		},
+		"keyFields": {
+			"title": "智能体按键"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "描述智能体的角色、语气和工作流程。"
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "这将从全局智能体模型目录中移除该模型。已保存的凭据不会被删除。"
+		}
+	},
+	"es": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "Entorno de ejecución local del agente sin configurar"
+		},
+		"dkclaw": {
+			"cardBlurb": "Elige un agente para cada una de las cuatro teclas de Agente y sincroniza las asignaciones con QUAKE.",
+			"toastSyncSuccess": "Sincronizado con el panel de Agente.",
+			"toastSyncDeferred": "Configuración guardada; el dispositivo muestra otro panel y la aplicará al abrir Agente.",
+			"title": "Teclas de Agente",
+			"keyLabel": "Agente {code}"
+		},
+		"keyFields": {
+			"title": "Tecla de Agente"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "Describe el rol, el tono y el flujo de trabajo del agente."
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "Esto elimina el modelo del catálogo global de modelos de agentes. No se eliminarán las credenciales guardadas."
+		}
+	},
+	"fr": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "Environnement d'exécution local de l'agent non configuré"
+		},
+		"dkclaw": {
+			"cardBlurb": "Choisissez un agent pour chacune des quatre touches Agent, puis synchronisez les affectations avec QUAKE.",
+			"toastSyncSuccess": "Synchronisé avec le panneau Agent.",
+			"toastSyncDeferred": "Configuration enregistrée ; l'appareil affiche un autre panneau et l'appliquera à l'ouverture du panneau Agent.",
+			"title": "Touches Agent",
+			"keyLabel": "Agent {code}"
+		},
+		"keyFields": {
+			"title": "Touche Agent"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "Décrivez le rôle, le ton et le fonctionnement de l'agent."
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "Le modèle sera retiré du catalogue global des modèles d'agents. Les identifiants enregistrés ne seront pas supprimés."
+		}
+	},
+	"it": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "Ambiente di esecuzione locale dell'agente non configurato"
+		},
+		"dkclaw": {
+			"cardBlurb": "Scegli un agente per ciascuno dei quattro tasti Agente, poi sincronizza le assegnazioni con QUAKE.",
+			"toastSyncSuccess": "Sincronizzato con il pannello Agente.",
+			"toastSyncDeferred": "Configurazione salvata; il dispositivo mostra un altro pannello e la applicherà quando aprirai Agente.",
+			"title": "Tasti Agente",
+			"keyLabel": "Agente {code}"
+		},
+		"keyFields": {
+			"title": "Tasto Agente"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "Descrivi il ruolo, il tono e il flusso di lavoro dell'agente."
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "Il modello verrà rimosso dal catalogo globale dei modelli degli agenti. Le credenziali salvate non verranno eliminate."
+		}
+	},
+	"ja": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "ローカルのエージェント実行環境が未設定です"
+		},
+		"dkclaw": {
+			"cardBlurb": "4つのエージェントキーに割り当てるエージェントを選択し、割り当てを QUAKE に同期します。",
+			"toastSyncSuccess": "エージェントパネルに同期しました。",
+			"toastSyncDeferred": "設定を保存しました。デバイスは別のパネルを表示中のため、エージェントパネルを開くと反映されます。",
+			"title": "エージェントキー",
+			"keyLabel": "エージェント {code}"
+		},
+		"keyFields": {
+			"title": "エージェントキー"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "エージェントの役割、口調、ワークフローを説明してください。"
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "グローバルのエージェントモデルカタログからモデルを削除します。保存済みの認証情報は削除されません。"
+		}
+	},
+	"ko": {
+		"openclawRuntimeIndicator": {
+			"shellNotConfigured": "로컬 에이전트 실행 환경이 구성되지 않았습니다"
+		},
+		"dkclaw": {
+			"cardBlurb": "에이전트 키 4개에 각각 할당할 에이전트를 선택한 다음 할당을 QUAKE에 동기화하세요.",
+			"toastSyncSuccess": "에이전트 패널에 동기화했습니다.",
+			"toastSyncDeferred": "설정을 저장했습니다. 장치에 다른 패널이 표시되어 있으며 에이전트 패널을 열면 적용됩니다.",
+			"title": "에이전트 키",
+			"keyLabel": "에이전트 {code}"
+		},
+		"keyFields": {
+			"title": "에이전트 키"
+		},
+		"clawAgentManagement": {
+			"agentDescPromptPlaceholder": "에이전트의 역할, 말투, 작업 흐름을 설명하세요."
+		},
+		"clawAIConfig": {
+			"deleteConfirm": "전역 에이전트 모델 카탈로그에서 모델을 제거합니다. 저장된 인증 정보는 삭제되지 않습니다."
 		}
 	}
 }

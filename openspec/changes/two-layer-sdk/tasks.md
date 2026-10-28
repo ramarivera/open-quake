@@ -25,6 +25,8 @@ deferred to the parent per lane COMMON.md.
 
 ## 3. Verify and resolve partial evidence
 
+- [x] 3.6 Build and run a production-root management UI exerciser with fixture-only fake HID, hidden windows and isolated scratch data. Enumerate every sidebar page and its safe controls using native Electron input; report effects/errors, screenshot pages, and assert icon-library opening, persisted move/swap/title edits and active-profile panel delivery. Track failures without fixing product bugs. Bead: open-quake-l86.25.
+
 - [x] 3.1 L1: run `pnpm install`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run test`; all exit 0, lint checks 38 files, typecheck reports 6 successful tasks, protocol has 25 passing tests. `pnpm --filter @open-quake/device test` independently passes the real consumer wiring test; record results in the lane PR
 - [ ] 3.2 Hardware: verify USB identity variants, live HID timing, physical matrix layout and release semantics
 - [ ] 3.3 P-tier: establish A2 image encoding, key/icon mapping, sequence rollover, fragmentation, acknowledgments and retry behavior before claiming image-transfer parity
@@ -190,3 +192,29 @@ Device lane validation: current main `4aa4a9f1` merged. Root test command with S
 ## PR #112 post-merge matrix follow-up
 
 - [x] Restore state-derived panel matrix releases, ordinary KeyRuntime execution and held-hotkey/emoji routing. Bead `open-quake-lih.11.24`; shared delivery and gates in `../device-lifecycle/tasks.md` section 11. Finding 4380831182.
+
+
+Management exerciser evidence, 2026-10-28, bead `open-quake-l86.25`: production
+composition root with production renderer/preload, fixture-only fake HID, hidden
+windows and scratch data. All 13 sidebar pages captured. The final sweep found
+688 control records, activated 360, skipped 316 under the explicit policy, and
+classified 12 as expected inert. Seven targeted scenarios passed profile delivery
+and editable empty-cell movement, and failed icon-library opening, locked
+move/swap, locked Luminance rename and editable covered-cell swapping. The full
+report has 21 strict failure records, including repeated main diagnostic spans,
+and zero renderer/uncaught-main exceptions. Validation and duplicate-name
+rejections from synthetic inputs are investigation findings, not established
+product defects. Follow-ups: `open-quake-3nd`, `open-quake-nf7`,
+`open-quake-dbf`, `open-quake-ayj`, `open-quake-0z4`, `open-quake-fuu`; earlier
+hidden-profile rejection: `open-quake-8ea`. Existing regressions remain
+`open-quake-di9`, `open-quake-fb9`, `open-quake-efm`.
+
+Desktop typecheck and tests pass, 3706 tests and one existing skip. Tests used
+`TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/oq-tmp` and two workers after one
+initial timeout passed in isolation. Root lint passes with the existing
+20 warnings and three infos. The production and fixture builds pass.
+`openspec validate two-layer-sdk` passes; strict mode retains three pre-existing
+requirement-length warnings. JSON and screenshots stay in
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-ui-exerciser/run-KJhnU4/`.
+No product bugs were fixed, no native HID was opened, and no owner's userData
+was used. PR integration belongs to the parent.

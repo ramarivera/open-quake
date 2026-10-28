@@ -65,12 +65,12 @@ The full-screen voice overlay SHALL be a near-opaque sheet showing a state chip 
 
 ### Requirement: Knob overlays and panel feedback
 
-The tile focus SHALL be a 2 px accent ring around the focused tile with a compact angle indicator that moves by the existing detent angle. No metal disc or tick crown SHALL be drawn. The function wheel SHALL present the same five neighbouring profile names as a right-edge list sheet: the centre entry large in the text colour with an accent marker, the neighbours muted. The profile picker SHALL use flat cards with thumbnails, a single accent focus ring, a "Current" badge, page arrows and the settle bar. The volume capsule SHALL be a flat pill in its existing bounds, with its existing phases, accent fill when active and a numeric value. The panel's mock knob readout SHALL be a compact flat gauge (hairline track, accent arc, tabular value) centered in the row gap so it does not obscure tile labels. Touch marks SHALL be thin accent rings. The controls-offline notice SHALL be an opaque sheet with a danger rule.
+The tile focus SHALL be a 2 px accent ring around the focused tile with a compact angle indicator that moves by the existing detent angle. No metal disc or tick crown SHALL be drawn. The function wheel SHALL present the same five neighbouring profile names on a full-height opaque right-edge sheet: the centre entry large in the text colour with an accent marker, the neighbours muted. The profile picker SHALL use flat cards with thumbnails, a single accent focus ring, a "Current" badge, page arrows and the settle bar. The volume capsule SHALL be a flat pill in its existing bounds, with its existing phases, accent fill when active and a numeric value. The panel's knob readout SHALL be a legible opaque flat dial (hairline track, accent arc, tabular value at least 28 logical px) that may briefly cover the tiles behind it while knob input is active. Touch marks SHALL be thin accent rings. The controls-offline notice SHALL be an opaque sheet with a danger rule.
 
-#### Scenario: Knob detent feedback leaves tile labels visible
+#### Scenario: Knob detent feedback stays legible
 
 - **WHEN** live knob input displays its detent count on a two-row panel
-- **THEN** the compact gauge sits in the row gap and does not cover either row's labels
+- **THEN** an opaque dial shows the value at a readable size and hides again after the input goes idle
 
 #### Scenario: Wheel rotation
 

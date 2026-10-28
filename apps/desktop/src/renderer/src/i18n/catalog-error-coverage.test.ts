@@ -1,10 +1,22 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import profileLocales from "../../../../../../packages/device/src/profiles/builtins/locales.json";
+import keyLocales from "../../../../../../packages/device/src/profiles/key-locales.json";
 import { RuntimeErrors } from "../../../../../../packages/edge/src/agent-http/runtime-errors";
 import { AiErrors } from "../../../../../../packages/edge/src/ai/ai-errors";
 import { ChatErrors } from "../../../../../../packages/edge/src/chat/chat-errors";
 import { APP_LANGUAGES } from "../../../shared/locale";
+import { agentsCopy } from "../management/agents/locale-copy";
+import { STRIP_STRINGS } from "../strip/overlays/voice/strings-table";
 import catalogErrors from "./catalog-errors.json";
+import { appDictionaries } from "./index";
 import recovered from "./recovered.json";
+
+const featureDictionaries = import.meta.glob<Record<string, unknown>>(
+	"../**/strings.json",
+	{ eager: true, import: "default" },
+);
 
 const rendererCatalogs = [AiErrors, ChatErrors, RuntimeErrors];
 
@@ -71,4 +83,30 @@ describe("renderer error copy", () => {
 			expect(catalogErrors[locale].generic).not.toMatch(/^[A-Z0-9_.]+$/);
 		}
 	});
+});
+
+it("renders every bundled locale string without legacy DK-Claw names", () => {
+	const strings = (tree: unknown): string[] => {
+		if (typeof tree === "string") return [tree];
+		if (!tree || typeof tree !== "object") return [];
+		return Object.values(tree).flatMap(strings);
+	};
+	for (const { value: locale } of APP_LANGUAGES) {
+		for (const value of strings([
+			appDictionaries[locale],
+			catalogErrors[locale],
+			profileLocales[locale],
+			keyLocales[locale],
+			STRIP_STRINGS[locale],
+			agentsCopy(locale),
+			...Object.values(featureDictionaries).map((copy) => copy[locale]),
+		])) {
+			const rendered = renderToStaticMarkup(createElement("span", null, value));
+			expect(rendered, `${locale}: ${value}`).not.toMatch(/DK[- ]Claw|DK龙虾/);
+		}
+		expect(agentsCopy(locale).keyFields.title).not.toMatch(/OpenClaw|ClawBot/);
+		expect(
+			agentsCopy(locale).openclawRuntimeIndicator.shellNotConfigured,
+		).not.toContain("OpenClaw");
+	}
 });

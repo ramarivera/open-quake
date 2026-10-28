@@ -15,7 +15,7 @@ import type {
 } from "../../../shared/locale";
 import { APP_LANGUAGES } from "../../../shared/locale";
 import agentHttp from "../management/agent-http/strings.json";
-import agents from "../management/agents/strings.json";
+import { agentsCopy } from "../management/agents/locale-copy";
 import chat from "../management/chat/strings.json";
 import settings from "../settings/strings.json";
 import wallpaper from "../wallpaper/strings.json";
@@ -36,7 +36,7 @@ export const appDictionaries: AppDictionaries = {
 		app: { language: "Language", english: "English", german: "German" },
 		chat: chat.en,
 		agentHttp: agentHttp.en,
-		agents: agents.en,
+		agents: agentsCopy("en"),
 		settings: settings.en,
 		wallpaper: wallpaper.en,
 		...recovered.en,
@@ -46,17 +46,17 @@ export const appDictionaries: AppDictionaries = {
 		app: { language: "Sprache", english: "Englisch", german: "Deutsch" },
 		chat: chat.de,
 		agentHttp: agentHttp.de,
-		agents: agents.de,
+		agents: agentsCopy("de"),
 		settings: settings.de,
 		wallpaper: wallpaper.de,
 		...recovered.de,
 	},
-	zh: recovered.zh,
-	es: recovered.es,
-	fr: recovered.fr,
-	ko: recovered.ko,
-	it: recovered.it,
-	ja: recovered.ja,
+	zh: { ...recovered.zh, agents: agentsCopy("zh") },
+	es: { ...recovered.es, agents: agentsCopy("es") },
+	fr: { ...recovered.fr, agents: agentsCopy("fr") },
+	ko: { ...recovered.ko, agents: agentsCopy("ko") },
+	it: { ...recovered.it, agents: agentsCopy("it") },
+	ja: { ...recovered.ja, agents: agentsCopy("ja") },
 };
 // Bundled dictionaries only. Disable development translation requests even if
 // the host environment happens to contain GT credentials.

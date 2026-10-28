@@ -137,11 +137,20 @@ export const builtinProfiles = (
 		});
 	});
 };
+// Display-only aliases for installed catalogs. Stored names and IDs stay untouched.
+const agentProfileDefaultNames = new Set([
+	"DK Claw",
+	"DK-Claw",
+	"DK龙虾",
+	...Object.values(locales).map((copy) => copy.DKClaw),
+]);
 export const profileLabel = (
 	profile: Profile,
 	locale: ProfileLocale,
 ): string => {
 	const entry = BUILTIN_PROFILES.find((p) => p.id === profile.id);
+	if (entry?.id === "1-8" && !agentProfileDefaultNames.has(profile.name))
+		return profile.name;
 	return entry ? profileText(entry.title, locale) : profile.name;
 };
 export const translateProfile = (

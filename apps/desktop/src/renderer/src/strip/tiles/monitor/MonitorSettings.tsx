@@ -149,7 +149,7 @@ function LiveStatus({
 	return (
 		<Group
 			title={l.liveSection}
-			description={dirty ? l.liveUnsaved : l.liveDescription}
+			description={dirty ? l.liveUnsaved : undefined}
 		>
 			<Row label={l.liveMonitoring}>
 				<StatusDot tone={tone} />

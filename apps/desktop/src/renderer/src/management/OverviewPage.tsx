@@ -56,10 +56,7 @@ export function OverviewPage({
 	);
 	return (
 		<>
-			<PageHeader
-				title="Overview"
-				description="Your QUAKE, its connection, and what its screen is showing."
-			>
+			<PageHeader title="Overview">
 				<button type="button" className="button" onClick={onOpenScreen}>
 					Edit screen…
 				</button>

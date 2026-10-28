@@ -32,10 +32,7 @@ export function WallpaperSettings({
 	if (embedded) return editor;
 	return (
 		<div className="page" aria-busy={wallpaper.busy}>
-			<PageHeader
-				title="Screen"
-				description="Wallpaper for the QUAKE's vivid screen."
-			/>
+			<PageHeader title="Screen" />
 			<Segmented
 				name="wallpaper-preview"
 				labelledBy="wallpaper-preview-label"

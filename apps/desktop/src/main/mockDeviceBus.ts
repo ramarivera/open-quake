@@ -30,6 +30,10 @@ export type MockDeviceBus = DeviceBus & {
 };
 
 /** Disable timed demo input for deterministic native fixtures. */
+// Only exerciser.config.ts defines this build token. No environment variable enables it.
+declare const __OPEN_QUAKE_MANAGEMENT_EXERCISER__: boolean;
+export let managementExerciserBus: MockDeviceBus | undefined;
+
 export function startMockDeviceBus(scripted = true): MockDeviceBus {
 	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
 	let status: DeviceStatusEvent = {
@@ -98,7 +102,7 @@ export function startMockDeviceBus(scripted = true): MockDeviceBus {
 		);
 	}
 
-	return {
+	const bus: MockDeviceBus = {
 		emitTouchReport,
 		emitStatus: (event) => {
 			if (stopped) return;
@@ -118,4 +122,10 @@ export function startMockDeviceBus(scripted = true): MockDeviceBus {
 			emitter.removeAllListeners();
 		},
 	};
+	if (
+		typeof __OPEN_QUAKE_MANAGEMENT_EXERCISER__ !== "undefined" &&
+		__OPEN_QUAKE_MANAGEMENT_EXERCISER__
+	)
+		managementExerciserBus = bus;
+	return bus;
 }

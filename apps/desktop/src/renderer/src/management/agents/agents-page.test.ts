@@ -81,7 +81,7 @@ it("CENTER-019 keeps agent search, model draft and slot edits across all four re
 	);
 	await input(model, "unsaved-model");
 	await click(element("#agents-tab-settings"));
-	const slot = element<HTMLSelectElement>('select[aria-label="DK-Claw 1,5"]');
+	const slot = element<HTMLSelectElement>('select[aria-label="Agent 1,5"]');
 	await input(slot, "researcher");
 	await click(element("#agents-tab-sessions"));
 	// The unconfigured sessions panel offers model configuration. This interaction

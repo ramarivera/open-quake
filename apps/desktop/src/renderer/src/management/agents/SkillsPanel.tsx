@@ -231,7 +231,6 @@ export function SkillsPanel({
 			<header className="aw-section-head">
 				<div>
 					<h3>{t.allSkills}</h3>
-					<p>{t.allSkillsHint}</p>
 				</div>
 				<button
 					type="button"

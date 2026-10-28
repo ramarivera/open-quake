@@ -11,10 +11,10 @@ import {
 import { join, resolve } from "node:path";
 
 /** Build the reviewed source locally; no network or downloaded executable. */
-export function buildNativeMedia(root: string): void {
+export function buildNativeMedia(root: string, outputDirectory?: string): void {
 	if (process.platform !== "darwin") return;
 	const source = resolve(root, "vendor/mediaremote-adapter");
-	const output = resolve(root, "out/native-media");
+	const output = outputDirectory ?? resolve(root, "out/native-media");
 	const framework = join(output, "MediaRemoteAdapter.framework");
 	const files = ["adapter", "private", "utility"].flatMap((directory) =>
 		readdirSync(join(source, "src", directory))
