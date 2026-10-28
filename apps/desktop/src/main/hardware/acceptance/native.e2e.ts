@@ -19,6 +19,7 @@ import {
 	allowedAcceptanceWrite,
 	allowedExtendedWrite,
 } from "./policy.js";
+import { allowedProbeWrite, runQueryProbe } from "./probe.js";
 import { finalizeNativeResult } from "./result.js";
 import { summarize } from "./scenarios.js";
 
@@ -26,8 +27,18 @@ const command = promisify(execFile);
 
 it("runs the explicitly selected native QUAKE control acceptance inventory", async () => {
 	const options = acceptanceOptions(process.env);
-	const extended = process.env.OPEN_QUAKE_HW_E2E_EXTENDED === "1";
-	const allows = extended ? allowedExtendedWrite : allowedAcceptanceWrite;
+	const probe = process.env.OPEN_QUAKE_HW_E2E_PROBE === "1";
+	const extended = process.env.OPEN_QUAKE_HW_E2E_EXTENDED === "1" || probe;
+	assert(
+		!(probe && process.env.OPEN_QUAKE_HW_E2E_EXTENDED === "1"),
+		"Run the query probe and extended checks separately",
+	);
+	assert(!(probe && options.mutations), "The query probe is read-only");
+	const allows = probe
+		? allowedProbeWrite
+		: extended
+			? allowedExtendedWrite
+			: allowedAcceptanceWrite;
 	const owner = await ownNativeDevice(options.directory);
 	const { directory } = owner;
 	try {
@@ -62,17 +73,30 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 		);
 		const runtime = makeDesktopRuntime(layer, diagnostics, "voice.device");
 		try {
-			const extra = extended
+			const extra = probe
 				? await runtime.runPromise(
 						Effect.scoped(
-							runExtendedAcceptance({
+							runQueryProbe({
 								serial: options.serial,
-								mutations: options.mutations,
-								cycles: 12,
+								// Optional bracket for the idle timeout; runQueryProbe bounds it.
+								starvationMs: Number(
+									process.env.OPEN_QUAKE_HW_E2E_STARVATION_MS ?? 40_000,
+								),
+								intervalsMs: [1_000, 3_000],
 							}),
 						),
 					)
-				: undefined;
+				: extended
+					? await runtime.runPromise(
+							Effect.scoped(
+								runExtendedAcceptance({
+									serial: options.serial,
+									mutations: options.mutations,
+									cycles: 12,
+								}),
+							),
+						)
+					: undefined;
 			const results = extended
 				? []
 				: await runtime.runPromise(
@@ -102,6 +126,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 				"extended.ts",
 				"v3-lighting.ts",
 				"restore-lighting.ts",
+				"probe.ts",
 			])
 				sourceHash.update(await readFile(new URL(name, import.meta.url)));
 			const report = {
@@ -125,7 +150,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 							failed: extra.checks.filter((item) => item.status === "failed")
 								.length,
 							total: extra.checks.length,
-							suite: "supplemental-native",
+							suite: probe ? "query-probe" : "supplemental-native",
 							...extra,
 						}
 					: summarize("native", results)),
@@ -140,7 +165,7 @@ it("runs the explicitly selected native QUAKE control acceptance inventory", asy
 			);
 			console.info(
 				extended
-					? `Supplemental native checks: ${report.passed}/${report.total} passed, ${report.failed} failed`
+					? `${probe ? "Query probe" : "Supplemental native"} checks: ${report.passed}/${report.total} passed, ${report.failed} failed`
 					: `Native hardware scenarios: ${report.passed}/${report.total}; see result.json for bounded coverage`,
 			);
 		} finally {
