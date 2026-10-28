@@ -367,8 +367,11 @@ async function textInput(
 	value: string,
 ): Promise<void> {
 	await click(win, selector);
-	key(win, "a", [process.platform === "darwin" ? "meta" : "control"]);
-	key(win, "Backspace");
+	// Replace the existing text; the menu-less window ignores the select-all chord.
+	await evaluate(
+		win,
+		`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el?.focus(); el?.select?.(); })()`,
+	);
 	await win.webContents.insertText(value);
 	key(win, "Tab");
 	await delay(180);
@@ -550,7 +553,20 @@ async function capture(win: BrowserWindow, name: string) {
 		{ mode: 0o600 },
 	);
 }
+/** Dismiss modals left open by exploration so the sidebar stays reachable. */
+async function closeDialogs(win: BrowserWindow): Promise<void> {
+	const open = `document.querySelectorAll('dialog[open], [role=dialog][aria-modal=true]').length`;
+	for (let attempt = 0; attempt < 3 && (await evaluate(win, open)); attempt++) {
+		key(win, "Escape");
+		await delay(200);
+	}
+	await evaluate(
+		win,
+		`document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close())`,
+	);
+}
 async function navigate(win: BrowserWindow, page: string) {
+	await closeDialogs(win);
 	await click(win, `.nav-item[data-nav-page="${page}"]`);
 	await waitFor(
 		win,
@@ -942,6 +958,8 @@ async function run() {
 				`window.managementExerciseInitialRows=Array.from(document.querySelectorAll('.profile-columns ul')).map(list=>list.children.length)`,
 			);
 			const seen = new Set<string>();
+			// Large generated dialogs (e.g. emoji grids) get a bounded sample.
+			let dialogControls = 0;
 			// Re-enumerate after each action to include controls revealed by tabs/details/dialogs.
 			for (let count = 0; count < 600; count++) {
 				const controls = (await evaluate(
@@ -951,9 +969,24 @@ async function run() {
 				const control = controls.find((control) => !seen.has(control.identity));
 				if (!control) break;
 				seen.add(control.identity);
+				if (control.inDialog && ++dialogControls > 40) {
+					await closeDialogs(win);
+					dialogControls = 0;
+					continue;
+				}
 				await exercise(win, page, control);
 				if (control.restoreRadio && !control.selected && !skipReason(control))
 					await click(win, control.restoreRadio);
+				// Toggle filters (aria-pressed) would otherwise hide later controls.
+				if (
+					control.pressed !== null &&
+					!skipReason(control) &&
+					(await evaluate(
+						win,
+						`document.querySelector(${JSON.stringify(selectorFor(control))})?.getAttribute('aria-pressed') ?? null`,
+					)) !== control.pressed
+				)
+					await click(win, selectorFor(control));
 				if (
 					control.tag === "select" &&
 					!control.disabled &&

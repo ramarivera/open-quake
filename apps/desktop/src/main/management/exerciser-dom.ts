@@ -60,6 +60,10 @@ export function installObserver(): void {
 
 export interface Control {
 	id: string;
+	/** aria-pressed before activation, so toggle filters can be restored. */
+	pressed: string | null;
+	/** Rendered inside an open modal dialog. */
+	inDialog: boolean;
 	identity: string;
 	selector: string;
 	generated: boolean;
@@ -145,9 +149,12 @@ export function enumerateControls(): Control[] {
 				identity:
 					node.id ||
 					`${path.join("/")}:${label.trim().replace(/\s+/g, " ").slice(0, 180)}`,
+				// The exercise id also resolves controls inside dialogs outside <main>.
 				selector: node.id
 					? `[id=${JSON.stringify(node.id)}]`
-					: `main > ${path.join(" > ")}`,
+					: `[data-exercise-id=${JSON.stringify(id)}]`,
+				pressed: node.getAttribute("aria-pressed"),
+				inDialog: dialogs.length > 0,
 				generated,
 				label: label.trim().replace(/\s+/g, " ").slice(0, 180),
 				context:
