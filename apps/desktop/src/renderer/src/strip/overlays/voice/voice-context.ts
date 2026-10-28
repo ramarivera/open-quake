@@ -48,7 +48,7 @@ export function voiceTextString(locale: StripLocale, text: VoiceText): string {
 			const copy = errorCopy(text.code);
 			return copy._tag === "string"
 				? stripText(locale, copy.key)
-				: stripText(locale, "aiIconViewTxt.errorCodeLine", { code: copy.code });
+				: stripText(locale, "quakeBotIconView.chatFailed");
 		}
 	}
 }

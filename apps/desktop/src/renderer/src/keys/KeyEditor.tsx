@@ -29,6 +29,7 @@ import { ProfileLocale } from "../../../../../../packages/device/src/profiles/pr
 import { ClockSnapshot } from "../../../shared/clock-contracts";
 import { selectStripPage } from "../../../shared/strip-selection";
 import { GameModeSettings } from "../hardware/GameModeSettings";
+import { useAppLocale, useLocaleText } from "../i18n";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout } from "../strip/geometry";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
@@ -64,6 +65,8 @@ export function KeyEditor({
 	readonly onOpenLibrary?: (page: "shortcuts" | "emoji") => void;
 } = {}): React.JSX.Element {
 	const wallpaperController = useWallpaper();
+	const { locale: appLocale } = useAppLocale();
+	const editorText = useLocaleText("keysEditor", appLocale);
 	const { snapshot: wallpaper } = wallpaperController;
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
@@ -94,6 +97,24 @@ export function KeyEditor({
 		if (reply._tag === "success" && reply.envelope) accept(reply.envelope);
 		else if (reply._tag === "rejected") setStatus(reply.reason);
 	}, [accept, locale]);
+	/** Resolves whether the device accepted the profile. */
+	const activateProfile = async (id: string): Promise<boolean> => {
+		setStatus("");
+		try {
+			const reply = await window.quakeProfileManager.request({
+				type: "manage",
+				command: { type: "select", id },
+			});
+			if (reply._tag === "success") {
+				accept(reply.view.envelope);
+				return true;
+			}
+		} catch {
+			/* Reported below. */
+		}
+		setStatus(editorText("activationFailed"));
+		return false;
+	};
 	useEffect(() => {
 		localStorage.setItem(KEY_LOCALE_STORAGE, locale);
 		window.dispatchEvent(new Event("key-locale"));
@@ -626,15 +647,21 @@ export function KeyEditor({
 			<PageHeader title="Keys" />
 			<fieldset className="keys-save-boundary" disabled={saving}>
 				<Group title="Configuration">
-					<Row label="Profile" htmlFor="keys-profile">
+					<Row label={editorText("active")} htmlFor="keys-profile">
 						<select
 							id="keys-profile"
 							value={profile.id}
+							// One selection: the edited profile is also delivered to the device,
+							// so the editor never shows a profile the device isn't using.
 							onChange={(e) => {
 								const next = envelope.profiles.find(
 									(p) => p.id === e.target.value,
 								);
-								if (next) void selectPage(next.id, next.pages[0].id);
+								if (next)
+									// A rejected activation leaves the editor on the device's profile.
+									void activateProfile(next.id).then((active) =>
+										active ? selectPage(next.id, next.pages[0].id) : undefined,
+									);
 							}}
 						>
 							{envelope.profiles.map((p) => (

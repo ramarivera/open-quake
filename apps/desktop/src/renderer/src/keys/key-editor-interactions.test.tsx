@@ -347,6 +347,17 @@ async function fixture({
 		deviceDelivery: "unverified",
 	});
 	const wallpaperCalls: WallpaperCommand[] = [];
+	const managerCalls: unknown[] = [];
+	// Activation succeeds with the stored envelope unless a test overrides it.
+	let profileManagerReply: unknown;
+	vi.stubGlobal("quakeProfileManager", {
+		request: async (command: unknown) => {
+			managerCalls.push(command);
+			return (
+				profileManagerReply ?? { _tag: "success", view: { envelope: stored } }
+			);
+		},
+	});
 	vi.stubGlobal("quakeWallpaper", {
 		request: async (command: WallpaperCommand) => {
 			wallpaperCalls.push(command);
@@ -388,6 +399,10 @@ async function fixture({
 		runtime,
 		calls,
 		wallpaperCalls,
+		managerCalls,
+		setProfileManagerReply: (reply: unknown) => {
+			profileManagerReply = reply;
+		},
 		device: async (serial: string) => {
 			await act(async () => publishWallpaper?.(wallpaper(serial)));
 		},
@@ -409,6 +424,72 @@ async function fixture({
 		},
 	};
 }
+
+it("switching the profile selector makes that profile active on the device", async () => {
+	const f = await fixture({
+		configure: (value) => ({
+			...value,
+			profiles: [
+				...value.profiles,
+				{ ...value.profiles[0], id: "q", name: "Second profile" },
+			],
+		}),
+	});
+	expect(f.host.textContent).toContain("Active on device");
+	const selected = f.stored();
+	f.setProfileManagerReply({
+		_tag: "success",
+		view: {
+			envelope: {
+				...selected,
+				activeByDevice: {
+					...selected.activeByDevice,
+					"desktop-preview": { profileId: "q", pageId: "one" },
+				},
+			},
+		},
+	});
+	const selector = query(f.host, "#keys-profile", HTMLSelectElement);
+	await act(async () => {
+		selector.value = "q";
+		selector.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await settle(() => expect(selector.value).toBe("q"));
+	expect(
+		f.managerCalls.filter((call) => {
+			const command = call as {
+				readonly type?: string;
+				readonly command?: unknown;
+			};
+			return command.type === "manage";
+		}),
+	).toEqual([{ type: "manage", command: { type: "select", id: "q" } }]);
+});
+
+it("keeps the editor on the device's profile when activation is rejected", async () => {
+	const f = await fixture({
+		configure: (value) => ({
+			...value,
+			profiles: [
+				...value.profiles,
+				{ ...value.profiles[0], id: "q", name: "Second profile" },
+			],
+		}),
+	});
+	const before = query(f.host, "#keys-profile", HTMLSelectElement).value;
+	f.setProfileManagerReply({ _tag: "rejected", reason: "offline" });
+	const selector = query(f.host, "#keys-profile", HTMLSelectElement);
+	await act(async () => {
+		selector.value = "q";
+		selector.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await settle(() =>
+		expect(f.host.textContent).toContain(
+			"This profile could not be made active on the device.",
+		),
+	);
+	expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(before);
+});
 
 it("MGMT-079 / MGMT-083 commits removal of the selected middle operation and retains the other operations", async () => {
 	const f = await fixture();

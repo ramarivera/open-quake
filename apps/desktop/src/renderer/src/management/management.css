@@ -237,7 +237,20 @@
 	margin: 0 -4px;
 	padding: 0 4px var(--oq-space-3);
 	overflow: hidden auto;
-	scrollbar-width: thin;
+}
+.nav::-webkit-scrollbar {
+	width: 4px;
+}
+.nav::-webkit-scrollbar-track {
+	background: transparent;
+}
+.nav::-webkit-scrollbar-thumb {
+	border-radius: 2px;
+	background: transparent;
+	transition: background-color 150ms ease;
+}
+.nav.is-scrolling::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--oq-text-subtle) 70%, transparent);
 }
 .nav-heading {
 	margin: 0 0 4px;

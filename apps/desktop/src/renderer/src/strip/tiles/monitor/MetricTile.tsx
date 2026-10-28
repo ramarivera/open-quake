@@ -30,16 +30,26 @@ export function MetricTile({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element {
-	const live =
+	const panel =
 		context.interactive !== false &&
 		new URLSearchParams(window.location.search).get("surface") === "panel";
+	const monitoringPreview = context.monitoringPreview === true;
+	const live = panel || monitoringPreview;
 	const monitor = useMonitor(live),
 		id = ids[tile.type] ?? "cpu";
+	const sample = sampleOf(live ? monitor.snapshot : previewSnapshot(), id);
 	return (
 		<MetricReadout
-			sample={sampleOf(live ? monitor.snapshot : previewSnapshot(), id)}
+			sample={sample}
 			unit={monitorKeySettings(tile.key).temperatureUnit}
-			preview={!live}
+			preview={!panel}
+			previewLabel={
+				monitoringPreview
+					? sample.state === "available"
+						? "Live"
+						: "Unavailable"
+					: undefined
+			}
 		/>
 	);
 }
@@ -47,10 +57,12 @@ export function MetricReadout({
 	sample,
 	unit,
 	preview = false,
+	previewLabel,
 }: {
 	sample: MetricSample;
 	unit: "celsius" | "fahrenheit";
 	preview?: boolean;
+	previewLabel?: string | undefined;
 }): React.JSX.Element {
 	const { id, values: v } = sample;
 	const value =
@@ -97,7 +109,7 @@ export function MetricReadout({
 			) : null}
 			<span>
 				{preview
-					? "Sample data"
+					? (previewLabel ?? "Sample data")
 					: sample.state === "available"
 						? "Live"
 						: sample.state}

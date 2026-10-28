@@ -10,6 +10,7 @@ import {
 import type { TurnSnapshot } from "../../../../../../../packages/edge/src/chat/chat-contracts";
 import type { PublicModelRow } from "../../../../shared/agents";
 import type { DirectChatBridge } from "../../../../shared/chat";
+import { localizedCatalogError } from "../../i18n";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { ActionDialog } from "../agent-http/ActionDialog";
 import { Composer } from "./Composer";
@@ -27,8 +28,8 @@ import "./workspace.css";
 export type ChatStrings = (typeof strings)["en"];
 export const chatStrings = (locale: string): ChatStrings =>
 	locale === "de" ? strings.de : strings.en;
-export const errorText = (t: ChatStrings, code: string): string =>
-	(t.errors as Readonly<Record<string, string>>)[code] ?? t.errorTitle;
+export const errorText = (code: string, locale = "en"): string =>
+	localizedCatalogError(code, locale);
 
 export interface QuakeRoute {
 	/** Name of the selected runtime connection that receives QUAKE requests. */
@@ -187,9 +188,6 @@ export function DirectChatPanel({
 						data-outcome={terminal.outcome}
 					>
 						<span>{t.outcome[terminal.outcome]}</span>
-						{terminal.errorCode && (
-							<code className="cw-code">{terminal.errorCode}</code>
-						)}
 						{usage && (
 							<span>
 								{fill(t.tokens, {
@@ -201,18 +199,21 @@ export function DirectChatPanel({
 						)}
 					</div>
 				)}
-				{terminal?.errorCode && last && (
+				{terminal?.errorCode && (
 					<div className="cw-turn-error">
-						<p>{errorText(t, terminal.errorCode)}</p>
-						<button
-							type="button"
-							className="mc-button"
-							data-variant="quiet"
-							disabled={state.pending}
-							onClick={() => compose(input)}
-						>
-							{t.reuse}
-						</button>
+						{/* Every failed turn keeps its explanation; only the last can be reused. */}
+						<p>{errorText(terminal.errorCode, locale)}</p>
+						{last && (
+							<button
+								type="button"
+								className="mc-button"
+								data-variant="quiet"
+								disabled={state.pending}
+								onClick={() => compose(input)}
+							>
+								{t.reuse}
+							</button>
+						)}
 					</div>
 				)}
 				{last &&
@@ -462,8 +463,7 @@ export function DirectChatPanel({
 				{state.error && (
 					<div className="cw-banner" role="alert">
 						<p>
-							<strong>{errorText(t, state.error)}</strong>{" "}
-							<code className="cw-code">{state.error}</code>
+							<strong>{errorText(state.error, locale)}</strong>{" "}
 						</p>
 						<div className="cw-banner-actions">
 							<button

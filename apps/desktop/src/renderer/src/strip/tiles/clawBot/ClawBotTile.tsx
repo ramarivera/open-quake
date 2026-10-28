@@ -83,9 +83,7 @@ const chatText = (locale: StripLocale, text: ChatText): string =>
 		? text.text
 		: text.copy._tag === "string"
 			? stripText(locale, text.copy.key)
-			: stripText(locale, "aiIconViewTxt.errorCodeLine", {
-					code: text.copy.code,
-				});
+			: stripText(locale, "quakeBotIconView.chatFailed");
 
 /** Completed message identities survive new deltas in other messages. */
 const MessageContent = memo(function MessageContent({

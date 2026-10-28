@@ -61,7 +61,7 @@ export type ErrorCopy =
 export function errorCopy(code: string): ErrorCopy {
 	const key = COPY.get(code);
 	return key === undefined
-		? { _tag: "errorCode", code }
+		? { _tag: "string", key: "quakeBotIconView.chatFailed" }
 		: { _tag: "string", key };
 }
 export const isHintCopy = (copy: ErrorCopy): boolean =>

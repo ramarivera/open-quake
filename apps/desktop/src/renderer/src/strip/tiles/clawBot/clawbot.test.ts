@@ -261,8 +261,8 @@ describe("conversation", () => {
 			key: "quakeBotIconView.chatFailed",
 		});
 		expect(errorCopy("__proto__")).toEqual({
-			_tag: "errorCode",
-			code: "__proto__",
+			_tag: "string",
+			key: "quakeBotIconView.chatFailed",
 		});
 		expect(isHintCopy(errorCopy("1003"))).toBe(false);
 	});
@@ -642,7 +642,7 @@ describe("AI-167 retained error copy through the conversation renderer", () => {
 		);
 		expect(render(failed("2012", "supplied"))).toContain("supplied");
 		expect(render(failed("unknown", " "))).toContain(
-			stripText("en", "aiIconViewTxt.errorCodeLine", { code: "unknown" }),
+			stripText("en", "quakeBotIconView.chatFailed"),
 		);
 		expect(render(failed())).toContain(stripText("en", "aiAudio.error"));
 	});

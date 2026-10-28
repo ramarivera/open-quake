@@ -139,6 +139,7 @@ function StripGrid({
 	voice,
 	tileOverlay,
 	interactive,
+	monitoringPreview,
 	runtime,
 	clockSelection,
 	currentPage,
@@ -164,6 +165,7 @@ function StripGrid({
 	voice: StripVoiceContext;
 	tileOverlay: ((tile: StripTile) => React.ReactNode) | undefined;
 	interactive: boolean;
+	monitoringPreview: boolean;
 }): React.JSX.Element {
 	return (
 		<div
@@ -228,6 +230,7 @@ function StripGrid({
 								voice,
 								currentPage,
 								interactive,
+								monitoringPreview,
 								hardware,
 								keyTarget: clockSelection,
 								clockTarget: clockSelection
@@ -289,6 +292,7 @@ export function StripScreen({
 	previewSerial,
 	titles = "key-locale",
 	interactive = true,
+	monitoringPreview = false,
 	wallpaperSound = false,
 	pendingProfile = false,
 	rows = 2,
@@ -301,6 +305,8 @@ export function StripScreen({
 	titles?: "key-locale" | "provided";
 	/** Selection previews paint live state but cannot operate nested controls. */
 	interactive?: boolean;
+	/** Overview can show the same collected metrics as the live panel. */
+	monitoringPreview?: boolean;
 	wallpaperSound?: boolean;
 	previewSerial?: string;
 	/** Reports the layout actually painted for the panel input adapter. */
@@ -513,6 +519,7 @@ export function StripScreen({
 					voice={voice}
 					tileOverlay={tileOverlay}
 					interactive={interactive && !pendingProfile}
+					monitoringPreview={monitoringPreview}
 					runtime={runtime}
 					clockSelection={
 						selection

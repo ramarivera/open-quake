@@ -86,7 +86,7 @@ export function AiCopilotTile({
 		onSome: (text: CopilotStatusText) =>
 			text._tag === "string"
 				? stripText(locale, text.key)
-				: stripText(locale, "aiIconViewTxt.errorCodeLine", { code: text.code }),
+				: stripText(locale, "quakeBotIconView.chatFailed"),
 	});
 	const tone = copilotTone(state.status, state.statusText);
 	const scroller = useRef<HTMLDivElement>(null);

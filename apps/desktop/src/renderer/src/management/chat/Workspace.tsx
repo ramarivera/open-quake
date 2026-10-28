@@ -10,6 +10,7 @@ import type { AgentConnectionsBridge } from "../../../../shared/agent-connection
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
 import type { PublicModelRow } from "../../../../shared/agents";
 import type { DirectChatBridge } from "../../../../shared/chat";
+import { localizedCatalogError } from "../../i18n";
 import { ActionDialog } from "../agent-http/ActionDialog";
 import { ConnectionSheet } from "../agent-http/ConnectionSheet";
 import { ConversationPanel } from "../agent-http/ConversationPanel";
@@ -248,8 +249,9 @@ export function ConversationWorkspace({
 			{connections.error && (
 				<div className="cw-banner" role="alert">
 					<p>
-						<strong>{connections.error.message}</strong>{" "}
-						<code className="cw-code">{connections.error.code}</code>
+						<strong>
+							{localizedCatalogError(connections.error.code, locale)}
+						</strong>
 					</p>
 					<div className="cw-banner-actions">
 						<button

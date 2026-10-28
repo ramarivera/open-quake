@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync(new URL("./management.css", import.meta.url), "utf8");
+const shell = readFileSync(
+	new URL("./ManagementShell.tsx", import.meta.url),
+	"utf8",
+);
 const drawerCss = css.slice(
 	css.indexOf("@media (max-width: 759px) {"),
 	css.indexOf("\n}\n", css.indexOf("@media (max-width: 759px) {")),
@@ -34,9 +38,19 @@ describe("Display popover in the sidebar footer", () => {
 	});
 
 	it("keeps sidebar scrolling and truncation on its own rows", () => {
-		expect(rules(css, ".nav")[0]).toMatch(
-			/min-height: 0;[\s\S]*overflow: hidden auto;/,
+		const nav = rules(css, ".nav")[0] ?? "";
+		expect(nav).toMatch(/min-height: 0;[\s\S]*overflow: hidden auto;/);
+		expect(nav).not.toContain("scrollbar-width");
+		expect(rules(css, ".nav::-webkit-scrollbar")[0]).toContain("width: 4px");
+		expect(rules(css, ".nav::-webkit-scrollbar-thumb")[0]).toContain(
+			"background: transparent",
 		);
+		expect(
+			rules(css, ".nav.is-scrolling::-webkit-scrollbar-thumb")[0],
+		).toContain("var(--oq-text-subtle)");
+		expect(shell).toContain('nav.classList.add("is-scrolling")');
+		expect(shell).toContain('nav.classList.remove("is-scrolling")');
+		expect(shell).toMatch(/setTimeout\([\s\S]{0,80}800,/);
 		expect(rules(css, ".mc-product-mark")[0]).toContain("overflow: hidden");
 		expect(rules(css, ".mc-ui-settings-button")[0]).toContain(
 			"overflow: hidden",

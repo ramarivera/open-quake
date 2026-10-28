@@ -104,3 +104,10 @@ Account, cloud catalog, Agent Market, OpenClaw installer and editions remain OUT
 ## PR108 post-round follow-ups
 
 - [x] F.1 Render pinned recorded WhatsApp terminal QR output through the session and setup drawer, preserving split UTF-8 glyphs. CENTER-078, PR108 finding 4380901925; bead `open-quake-lih.17.24`. Agent-runtime tasks F.1-F.3 track the owned process and imported voice-default fixes in the same effort.
+
+## Management window UI fixes
+
+- [x] 10.1 Hide the management navigation scrollbar until scrolling, use a 4 px thumb and fade it after 800 ms. Bead `open-quake-v8l`.
+- [x] 10.2 Label the Keys profile dropdown as the profile being edited and expose the existing profile-manager activation command as an explicit device action. Bead `open-quake-c3q`.
+- [x] 10.3 Localize renderer-reachable AI, chat and runtime catalog errors in all supported locales, replace raw codes with human copy and check locale/catalog coverage in the normal desktop tests. Bead `open-quake-d3e`.
+- [x] 10.4 Use collected system metrics in the Overview screen preview and neutral unavailable values when no metrics are available. Bead `open-quake-lih.17.1.41`.

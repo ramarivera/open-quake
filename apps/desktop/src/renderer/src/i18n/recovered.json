@@ -79,6 +79,10 @@
 			"speech": "语音",
 			"translation": "实时翻译模型",
 			"title": "地区建议"
+		},
+		"keysEditor": {
+			"active": "当前配置",
+			"activationFailed": "无法在设备上激活此配置。"
 		}
 	},
 	"en": {
@@ -142,6 +146,10 @@
 			"speech": "Speech",
 			"translation": "Live translation model",
 			"title": "Regional suggestions"
+		},
+		"keysEditor": {
+			"active": "Active on device",
+			"activationFailed": "This profile could not be made active on the device."
 		}
 	},
 	"es": {
@@ -224,6 +232,10 @@
 			"speech": "Voz",
 			"translation": "Modelo de traducción en directo",
 			"title": "Sugerencias regionales"
+		},
+		"keysEditor": {
+			"active": "Activo en el dispositivo",
+			"activationFailed": "No se pudo activar este perfil en el dispositivo."
 		}
 	},
 	"fr": {
@@ -306,6 +318,10 @@
 			"speech": "Voix",
 			"translation": "Modèle de traduction en direct",
 			"title": "Suggestions régionales"
+		},
+		"keysEditor": {
+			"active": "Actif sur l’appareil",
+			"activationFailed": "Impossible d’activer ce profil sur l’appareil."
 		}
 	},
 	"ko": {
@@ -388,6 +404,10 @@
 			"speech": "음성",
 			"translation": "실시간 번역 모델",
 			"title": "지역별 제안"
+		},
+		"keysEditor": {
+			"active": "장치에서 활성 상태",
+			"activationFailed": "장치에서 이 프로필을 활성화하지 못했습니다."
 		}
 	},
 	"de": {
@@ -451,6 +471,10 @@
 			"speech": "Sprache",
 			"translation": "Modell für Live-Übersetzung",
 			"title": "Regionale Vorschläge"
+		},
+		"keysEditor": {
+			"active": "Auf dem Gerät aktiv",
+			"activationFailed": "Dieses Profil konnte auf dem Gerät nicht aktiviert werden."
 		}
 	},
 	"it": {
@@ -533,6 +557,10 @@
 			"speech": "Voce",
 			"translation": "Modello di traduzione in diretta",
 			"title": "Suggerimenti regionali"
+		},
+		"keysEditor": {
+			"active": "Attivo sul dispositivo",
+			"activationFailed": "Impossibile attivare questo profilo sul dispositivo."
 		}
 	},
 	"ja": {
@@ -615,6 +643,10 @@
 			"speech": "音声",
 			"translation": "リアルタイム翻訳モデル",
 			"title": "地域別の提案"
+		},
+		"keysEditor": {
+			"active": "デバイスで有効",
+			"activationFailed": "このプロファイルをデバイスで有効にできませんでした。"
 		}
 	}
 }

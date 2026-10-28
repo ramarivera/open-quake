@@ -65,6 +65,8 @@ export interface StripTileContext {
 	readonly voice: StripVoiceContext;
 	/** Defaults to live for existing tile consumers outside selection previews. */
 	readonly interactive?: boolean;
+	/** Management Overview previews subscribe to the same metrics as the panel. */
+	readonly monitoringPreview?: boolean;
 	readonly clockMode?: "passive" | "edit" | "panel";
 }
 export interface StripTileProps {
@@ -209,10 +211,12 @@ function PlayerSlot({
 	) : null;
 }
 
-function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
-	const live =
+function MonitorSlot({ tile, context }: StripTileProps): React.JSX.Element {
+	const panel =
 		new URLSearchParams(window.location.search).get("surface") === "panel";
-	const monitor = useMonitor(live);
+	const live = panel;
+	const monitoringPreview = context.monitoringPreview === true;
+	const monitor = useMonitor(live || monitoringPreview);
 	const settings = monitorKeySettings(tile.key, monitor.settings);
 	const media = useMonitorKeyMedia(
 		settings.background === "custom"
@@ -238,9 +242,20 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 			>
 				<MonitorPanel
 					settings={settings}
-					snapshot={live ? monitor.snapshot : previewSnapshot()}
+					snapshot={
+						live || monitoringPreview ? monitor.snapshot : previewSnapshot()
+					}
 					media={media}
 					preview={!live}
+					previewLabel={
+						monitoringPreview
+							? monitor.snapshot.samples.some(
+									(sample) => sample.state === "available",
+								)
+								? "Preview · Live system data"
+								: "Preview · System data unavailable"
+							: undefined
+					}
 				/>
 			</div>
 		</div>
