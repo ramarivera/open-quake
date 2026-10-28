@@ -675,8 +675,8 @@ async function targeted(win: BrowserWindow) {
 		assert(picker, "Icon Library did not open from native input");
 		await waitFor(
 			picker,
-			"!!document.querySelector('.icon-library-body')",
-			"icon library content",
+			"document.querySelector('.icon-library-body[aria-busy=false]') && document.querySelectorAll('.icon-library-cell').length > 0",
+			"loaded icon library cells",
 		);
 		await capture(picker, "keys-icon-library");
 		picker.close();
