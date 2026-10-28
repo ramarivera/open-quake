@@ -660,15 +660,23 @@ async function targeted(win: BrowserWindow) {
 		);
 		assert.equal(typeof selector, "string");
 		await click(win, String(selector));
-		await delay(650);
-		const picker = BrowserWindow.getAllWindows().find((window) =>
-			window.webContents.getURL().includes("surface=icon-picker"),
-		);
+		// The Icon Library is an owned child window at surface=icons (icon-picker.ts).
+		let picker: BrowserWindow | undefined;
+		for (let waited = 0; !picker && waited < 5000; waited += 100) {
+			picker = BrowserWindow.getAllWindows().find(
+				(window) =>
+					window.getParentWindow() === win &&
+					new URL(
+						window.webContents.getURL() || "about:blank",
+					).searchParams.get("surface") === "icons",
+			);
+			if (!picker) await delay(100);
+		}
 		assert(picker, "Icon Library did not open from native input");
 		await waitFor(
 			picker,
-			"!!document.querySelector('.icon-library')",
-			"icon library content",
+			"document.querySelector('.icon-library-body[aria-busy=false]') && document.querySelectorAll('.icon-library-cell').length > 0",
+			"loaded icon library cells",
 		);
 		await capture(picker, "keys-icon-library");
 		picker.close();
