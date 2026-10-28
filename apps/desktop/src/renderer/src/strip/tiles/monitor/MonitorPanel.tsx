@@ -643,11 +643,13 @@ function PanelWithMedia({
 	snapshot,
 	media,
 	preview = false,
+	previewLabel,
 }: {
 	settings: MonitorSettings;
 	snapshot: MonitorSnapshot;
 	media?: MediaView | undefined;
 	preview?: boolean;
+	previewLabel?: string | undefined;
 }): React.JSX.Element {
 	const [failed, setFailed] = useState(false);
 	const [playing, setPlaying] = useState(false);
@@ -737,7 +739,9 @@ function PanelWithMedia({
 				</div>
 			) : null}
 			{preview ? (
-				<span className="monitor-preview-label">Preview · Sample data</span>
+				<span className="monitor-preview-label">
+					{previewLabel ?? "Preview · Sample data"}
+				</span>
 			) : null}
 		</section>
 	);

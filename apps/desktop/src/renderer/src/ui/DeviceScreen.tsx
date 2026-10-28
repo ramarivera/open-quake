@@ -26,6 +26,7 @@ export function DeviceScreen({
 					<StripViewport>
 						<StripScreen
 							interactive={false}
+							monitoringPreview
 							profiles={profiles}
 							wallpaper={snapshot}
 							view={view}

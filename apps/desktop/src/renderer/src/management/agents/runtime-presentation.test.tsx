@@ -59,7 +59,7 @@ it.each(["ready", "starting", "stopping", "stopped", "error"] as const)(
 		);
 		if (status === "error")
 			expect(element("[role=alert]").textContent).toContain(
-				"AGENT.RUNTIME.FAILED",
+				"couldn't be started from open-quake",
 			);
 	},
 );

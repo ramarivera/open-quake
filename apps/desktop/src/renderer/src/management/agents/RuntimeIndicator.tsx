@@ -88,7 +88,6 @@ export function RuntimeIndicator({
 						: runtime.operation === "restart"
 							? s.restartFailed
 							: s.startFailed}{" "}
-					<code className="cw-code aw-runtime-code">{runtime.code}</code>
 				</span>
 			)}
 		</div>

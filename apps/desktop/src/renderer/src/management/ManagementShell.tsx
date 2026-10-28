@@ -109,6 +109,8 @@ export function ManagementShell({
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const sidebar = useRef<HTMLElement>(null);
+	const navScrollHide = useRef<number | undefined>(undefined);
+	useEffect(() => () => window.clearTimeout(navScrollHide.current), []);
 	const location =
 		page === "setup"
 			? { section: null, label: setupLabel }
@@ -223,7 +225,19 @@ export function ManagementShell({
 							</span>
 						</span>
 					</div>
-					<nav className="nav" aria-label="Sections">
+					<nav
+						className="nav"
+						aria-label="Sections"
+						onScroll={(event) => {
+							const nav = event.currentTarget;
+							nav.classList.add("is-scrolling");
+							window.clearTimeout(navScrollHide.current);
+							navScrollHide.current = window.setTimeout(
+								() => nav.classList.remove("is-scrolling"),
+								800,
+							);
+						}}
+					>
 						{navSections.map((section) => (
 							<div
 								key={section.id}

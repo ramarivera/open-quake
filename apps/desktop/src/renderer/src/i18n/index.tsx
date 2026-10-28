@@ -19,6 +19,7 @@ import agents from "../management/agents/strings.json";
 import chat from "../management/chat/strings.json";
 import settings from "../settings/strings.json";
 import wallpaper from "../wallpaper/strings.json";
+import catalogErrors from "./catalog-errors.json";
 import { localeFailureCode } from "./locale-error";
 import recovered from "./recovered.json";
 
@@ -83,7 +84,12 @@ export const useAppLocale = () => useContext(Context);
 export const useAppTranslations = useTranslations;
 /** Small strip/native-style dictionaries also render in independent profile captures. */
 export function useLocaleText(
-	scope: "clock" | "picker" | "regionSuggestions" | "translationLanguages",
+	scope:
+		| "clock"
+		| "picker"
+		| "regionSuggestions"
+		| "translationLanguages"
+		| "keysEditor",
 	requestedLocale?: string,
 ): (key: string) => string {
 	const appLocale = useAppLocale().locale;
@@ -91,6 +97,16 @@ export function useLocaleText(
 	const copy: Readonly<Record<string, string>> = recovered[locale][scope];
 	const fallback: Readonly<Record<string, string>> = recovered.en[scope];
 	return (key) => copy[key] ?? fallback[key] ?? key;
+}
+
+/** Catalog errors always resolve to localized human copy, including unknown codes. */
+export function localizedCatalogError(
+	code: string,
+	requestedLocale: string,
+): string {
+	const locale = resolveAppLocale(requestedLocale);
+	const messages = catalogErrors[locale] as Readonly<Record<string, string>>;
+	return messages[code] ?? messages.generic ?? "The operation failed.";
 }
 
 /** Locale updates preserve the mounted app and all in-flight conversation state. */

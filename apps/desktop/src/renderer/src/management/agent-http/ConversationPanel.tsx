@@ -12,6 +12,7 @@ import type {
 } from "../../../../../../../packages/edge/src/agent-http/runtime-contracts";
 import type { AgentConnectionDiscovery } from "../../../../shared/agent-connections";
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
+import { localizedCatalogError, useAppLocale } from "../../i18n";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { Composer } from "../chat/Composer";
 import { pinEndOnResize, revealEnd } from "../chat/follow";
@@ -51,6 +52,7 @@ export function ConversationPanel({
 	readonly onRunningChange: (running: boolean) => void;
 }) {
 	const t = useRuntimeCopy();
+	const { locale } = useAppLocale();
 	const [modelDraft, setModelDraft] = useState("");
 	const models =
 		connection.kind === "hermes" &&
@@ -390,8 +392,9 @@ export function ConversationPanel({
 				{conversation.error && (
 					<div role="alert" className="cw-banner agent-http-error">
 						<p>
-							<strong>{conversation.error.message}</strong>{" "}
-							<code className="cw-code">{conversation.error.code}</code>
+							<strong>
+								{localizedCatalogError(conversation.error.code, locale)}
+							</strong>
 						</p>
 						<div className="cw-banner-actions">
 							<button

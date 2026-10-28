@@ -51,4 +51,18 @@ describe("individual monitor readouts", () => {
 		expect(html).toContain("Sample data");
 		expect(html).not.toContain("100");
 	});
+	it("renders neutral unavailable values for a live-data preview without sample hardware names", () => {
+		const html = renderToStaticMarkup(
+			createElement(MetricReadout, {
+				sample: { id: "gpu", state: "unavailable", collectedAt: 0, values: {} },
+				unit: "celsius",
+				preview: true,
+				previewLabel: "Unavailable",
+			}),
+		);
+		expect(html).toContain(">--<");
+		expect(html).toContain("Unavailable");
+		expect(html).not.toContain("NVIDIA");
+		expect(html).not.toContain("Sample data");
+	});
 });

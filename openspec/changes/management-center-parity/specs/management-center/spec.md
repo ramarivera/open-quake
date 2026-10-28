@@ -22,6 +22,13 @@ Dragging the resizer SHALL set the sidebar width, clamped to 120–360 px, with 
 - **WHEN** the window is 900 px wide
 - **THEN** the sidebar is an 82 px icon rail, every item keeps an accessible name, and the resizer is not shown
 
+### Requirement: Scrollbar appears only during navigation
+The navigation scrollbar SHALL use a 4 px thumb that stays transparent except while the user scrolls, then fades after approximately 800 ms.
+
+#### Scenario: Scroll the management navigation
+- **WHEN** the user scrolls the sidebar navigation
+- **THEN** a thin thumb appears during scrolling and hides shortly after scrolling stops
+
 ### Requirement: Themes and font scales
 The window SHALL offer three themes, Dark, Light and Grey (DK's "mainscreen"), and three font scales, Small, Medium and Large, plus the existing imported custom theme. A first run SHALL default to Grey and Small, matching DK. Dark SHALL use the 0.4.95 renderer's inline `--mc-*` fallback values, Grey SHALL use the 0.4.69 build's `--dk-*` main-screen tokens, and Light SHALL use the warm text hints from the 0.4.95 renderer. Each font scale SHALL define the ten `--mc-font-*` roles. The selection SHALL be validated, persisted with a version, synchronised between renderer windows and applied before first paint. A stored version-1 appearance SHALL migrate with its theme preserved. Management motion SHALL stay within 160 ms and 4 px (decision 3). Source: CENTER-003, CENTER-004, MGMT-434; theming-animation-contract "Shared theme tokens".
 
@@ -97,3 +104,17 @@ Management navigation SHALL expose Emoji and AI Shortcuts as direct replacements
 #### Scenario: Navigate to creation
 - **WHEN** the user activates Emoji or AI Shortcuts from Keys
 - **THEN** the corresponding mounted page permits creating an emoji package or adding a shortcut without losing the existing selected profile
+
+### Requirement: Clear profile editing and activation
+The Keys page SHALL label its profile selector as the profile being edited and SHALL show which profile is active on the device. When another profile is being edited, the page SHALL provide an explicit action that activates that profile through the profile manager's existing selection command.
+
+#### Scenario: Activate the profile being edited
+- **WHEN** the user edits a profile that is not active on the device and chooses "Make active on device"
+- **THEN** the profile manager selects and delivers that profile, and the Keys page reflects the committed active selection
+
+### Requirement: Honest Overview system monitor preview
+The Overview screen preview SHALL use the monitor's collected snapshot when available. When no metrics are available, it SHALL show neutral unavailable values and SHALL NOT invent host or hardware names. Explicit sample previews in editors may continue to use labeled fixtures.
+
+#### Scenario: Overview has no collected metrics
+- **WHEN** the Overview screen preview has no live monitor sample
+- **THEN** metric values remain unavailable and the preview contains no fabricated hardware or drive names
