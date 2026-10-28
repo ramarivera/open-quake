@@ -367,12 +367,12 @@ async function select(
 		win,
 		`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'});document.querySelector(${JSON.stringify(selector)}).focus()`,
 	);
-	if (
+	const changing =
 		(await evaluate(
 			win,
 			`document.querySelector(${JSON.stringify(selector)}).value`,
-		)) !== value
-	) {
+		)) !== value;
+	if (changing) {
 		const labels = Schema.decodeUnknownSync(Schema.Array(Schema.String))(
 			await evaluate(
 				win,
@@ -399,6 +399,12 @@ async function select(
 	}
 	key(win, "Tab");
 	await delay(180);
+	if (changing && (selector === "#keys-profile" || selector === "#keys-page"))
+		await waitFor(
+			win,
+			`document.querySelector(${JSON.stringify(selector)})?.value===${JSON.stringify(value)} && !document.querySelector('#key-title')`,
+			"selected profile/page has cleared the previous key editor",
+		);
 	if (verify)
 		assert.equal(
 			await evaluate(
@@ -500,7 +506,9 @@ async function exercise(
 					? "1"
 					: page === "profiles" && /^Rename /.test(control.label)
 						? `Edit${++profileRenameSample}`
-						: "exercise",
+						: control.value === "exercise"
+							? "exercise-2"
+							: "exercise",
 			);
 		} else if (control.type === "range") {
 			await evaluate(
@@ -920,6 +928,43 @@ async function targeted(win: BrowserWindow) {
 			);
 		},
 	);
+	await scenario(
+		"Function library Emojis receives native clicks [open-quake-dbf]",
+		async () => {
+			await navigate(win, "keys");
+			await click(win, ".function-library-add > summary");
+			await click(win, ".function-library-add button:last-child");
+			await waitFor(
+				win,
+				"!!document.querySelector('.emoji-page')",
+				"Emoji page from library",
+			);
+		},
+	);
+	await scenario(
+		"JSON input and restore receive native clicks [open-quake-ayj]",
+		async () => {
+			await navigate(win, "keys");
+			await click(win, ".keys-import > summary");
+			await textInput(win, "#keys-import-json", "[]");
+			assert.equal(
+				await evaluate(
+					win,
+					"document.querySelector('#keys-import-json').value",
+				),
+				"[]",
+			);
+			await textInput(win, "#keys-import-json", "");
+			assert.equal(
+				await evaluate(
+					win,
+					"document.querySelector('#keys-import-json').value",
+				),
+				"",
+			);
+		},
+	);
+
 	await select(win, "#keys-profile", "exercise-keys");
 	await capture(win, "keys-targeted");
 	await scenario(

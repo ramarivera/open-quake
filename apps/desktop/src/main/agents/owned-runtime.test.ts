@@ -1,4 +1,5 @@
 import {
+	chmod,
 	mkdir,
 	mkdtemp,
 	readdir,
@@ -319,5 +320,41 @@ it("CENTER-047 retains the owned runtime after failed cleanup so Stop can retry"
 		expect(f.starts).toHaveLength(1);
 	} finally {
 		await f.close();
+	}
+});
+
+it("open-quake-ffm: only an existing executable file configures the local runtime", async () => {
+	const root = await mkdtemp(join(tmpdir(), "owned-command-"));
+	try {
+		const command = join(
+			root,
+			process.platform === "win32" ? "openclaw.cmd" : "openclaw",
+		);
+		expect(createOwnedAgentRuntime({ root, command })).toBeUndefined();
+		expect(createOwnedAgentRuntime({ root, command: root })).toBeUndefined();
+		expect(
+			createOwnedAgentRuntime({ root, command: "openclaw" }),
+		).toBeUndefined();
+		await writeFile(command, "fixture, never launched");
+		if (process.platform !== "win32") {
+			await chmod(command, 0o600);
+			expect(createOwnedAgentRuntime({ root, command })).toBeUndefined();
+		}
+		if (process.platform === "win32") {
+			const document = join(root, "openclaw.txt");
+			await writeFile(document, "not executable");
+			expect(
+				createOwnedAgentRuntime({ root, command: document }),
+			).toBeUndefined();
+		}
+		await chmod(command, 0o700);
+		const runtime = createOwnedAgentRuntime({ root, command });
+		expect(runtime).toBeDefined();
+		expect(runtime?.initial).toMatchObject({
+			available: true,
+			status: "stopped",
+		});
+	} finally {
+		await rm(root, { recursive: true, force: true });
 	}
 });

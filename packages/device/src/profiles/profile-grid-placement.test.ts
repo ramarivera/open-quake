@@ -150,3 +150,26 @@ it("a hidden structural swap target cannot be displaced", () => {
 		editKeyLayout([source, hidden], source, { destination: "1,2" }),
 	).toEqual({ _tag: "rejected", reason: "locked" });
 });
+
+it("rejects a hidden source's move into a displayed wide tile's covered cell", () => {
+	const base = tile("1,1");
+	const hidden = { ...base, config: { ...base.config, display: false } };
+	expect(
+		editKeyLayout([hidden, tile("1,4", [2, 1])], hidden, {
+			destination: "1,5",
+		}),
+	).toEqual({ _tag: "rejected", reason: "spaceNotEnough" });
+});
+
+it("reports structural protection when a resized swap displaces a target onto a protected tile", () => {
+	const source = tile("1,1");
+	const target = tile("1,4", [2, 2]);
+	const protectedTile = tile("1,2", [1, 1], true);
+	expect(
+		editKeyLayout(
+			[source, target, protectedTile],
+			{ ...source, config: { ...source.config, size: [2, 2] } },
+			{ destination: "1,4" },
+		),
+	).toEqual({ _tag: "rejected", reason: "locked" });
+});

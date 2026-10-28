@@ -28,6 +28,7 @@ import {
 import {
 	createEmptyProfileKey,
 	encodeProfileEnvelope,
+	Profile,
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
@@ -73,6 +74,7 @@ import { StripScreen } from "../strip/StripScreen";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import { IconPickerSurface } from "./IconPicker";
 import { KeyEditor } from "./KeyEditor";
+import { knobDraftRevision } from "./knob-draft";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -303,6 +305,10 @@ async function fixture({
 					break;
 				case "delete":
 					yield* editing.remove(command.target);
+					break;
+				case "add-page":
+				case "delete-page":
+					yield* ProfileService.editPages(command);
 					break;
 				case "save-knob":
 					yield* saveProfileKnob(
@@ -3083,6 +3089,9 @@ it("a structural swap destination explains rejection and preserves the committed
 		"This tile has structural protection and cannot be replaced or swapped.",
 	);
 	await click(button(f.host, "Save"));
+	expect(f.host.textContent).toContain(
+		"This tile has structural protection and cannot be replaced or swapped.",
+	);
 	expect(f.stored().profiles[0].revision).toBe(0);
 });
 it("Vivid retains configuration access and exposes editable title/icon/move with protected resize/delete", async () => {
@@ -3094,4 +3103,157 @@ it("Vivid retains configuration access and exposes editable title/icon/move with
 	);
 	expect(query(f.host, "#key-span", HTMLSelectElement).disabled).toBe(true);
 	expect(button(f.host, "Delete").disabled).toBe(true);
+});
+
+it("keeps the knob revision current across repeated saves and a subsequent key save", async () => {
+	const f = await gridFixture([gridKey("1,1")]);
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "nextPage");
+	await click(button(f.host, "Save knob"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	await input(
+		query(f.host, "#knob-function", HTMLSelectElement),
+		"previousPage",
+	);
+	await click(button(f.host, "Save knob"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(2));
+	const beforeKeySave = f.stored().profiles[0];
+	const knobBeforeKeySave = beforeKeySave.knob;
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-title", HTMLInputElement), "Edited");
+	await click(button(f.host, "Save"));
+	expect(f.stored().profiles[0].knob).toEqual(knobBeforeKeySave);
+	expect(
+		knobDraftRevision(
+			Schema.decodeUnknownSync(Profile)(beforeKeySave),
+			Schema.decodeUnknownSync(Profile)(f.stored().profiles[0]),
+		),
+	).toBe(3);
+	await click(
+		button(query(f.host, ".group:has(#key-title)", HTMLElement), "Cancel"),
+	);
+	await click(button(f.host, "Save knob"));
+	expect(
+		f.calls.filter((call) => call.type === "save-knob").at(-1),
+	).toMatchObject({ revision: 3 });
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(4));
+});
+
+it("edits a legacy empty force flag as a number and saves the generic action", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "close", {
+			actions: [
+				{ type: "path", value: "/Applications/Example.app" },
+				{ type: "force", value: "" },
+			],
+		}),
+	]);
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-action-1", HTMLInputElement), "1");
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(f.stored().profiles[0].pages[0]?.keys[0]?.config.actions?.[1]).toEqual(
+		{
+			type: "force",
+			value: 1,
+		},
+	);
+});
+
+it("rejects moving a hidden key into a displayed wide tile and keeps the original selection", async () => {
+	const hidden = gridKey("1,1", "hotkey", { display: false });
+	const wide = gridKey("1,4", "hotkey", { size: [2, 1] });
+	const f = await gridFixture([hidden, wide]);
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-destination", HTMLSelectElement), "1,5");
+	await click(button(f.host, "Save"));
+	expect(f.stored().profiles[0].revision).toBe(0);
+	expect(button(f.host, "1,1").getAttribute("aria-pressed")).toBe("true");
+	expect(f.stored().profiles[0].pages[0].keys).toEqual([hidden, wide]);
+});
+
+it("keeps a hidden moved key selected for subsequent saves", async () => {
+	const hidden = gridKey("1,1", "hotkey", { display: false });
+	const f = await gridFixture([hidden]);
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-destination", HTMLSelectElement), "1,5");
+	await click(button(f.host, "Save"));
+	expect(button(f.host, "1,5").getAttribute("aria-pressed")).toBe("true");
+	await input(query(f.host, "#key-title", HTMLInputElement), "Still hidden");
+	await click(button(f.host, "Save"));
+	expect(f.stored().profiles[0].pages[0].keys).toEqual([
+		{
+			...hidden,
+			keyCode: "1,5",
+			config: {
+				...hidden.config,
+				title: {
+					...hidden.config.title,
+					text: "Still hidden",
+					pos: "top",
+					style: "",
+				},
+				userModifiedTitle: true,
+			},
+		},
+	]);
+});
+
+it("moves the existing Vivid tile from an enabled cell button", async () => {
+	const vivid = gridKey("1,1", "colorfulScreen");
+	const f = await gridFixture([vivid]);
+	await pointerMove(f.host, button(f.host, "1,1"), "2,8");
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(f.stored().profiles[0].pages[0].keys).toEqual([
+		{ ...vivid, keyCode: "2,8" },
+	]);
+});
+
+it("saves the visible action's original index when hidden actions precede it", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "text", {
+			actions: [
+				{ type: "musicSource", value: "legacy" },
+				{ type: "text", value: "Before" },
+			],
+		}),
+	]);
+	await click(button(f.host, "1,1"));
+	await input(query(f.host, "#key-action-1", HTMLInputElement), "After");
+	expect(
+		f.calls.filter((call) => call.type === "preview").at(-1),
+	).toMatchObject({
+		key: {
+			config: {
+				actions: [
+					{ type: "musicSource", value: "legacy" },
+					{ type: "text", value: "After" },
+				],
+			},
+		},
+	});
+});
+
+it("refreshes a clean knob draft when adding a page materializes the inherited knob", async () => {
+	const f = await gridFixture([gridKey("1,1")]);
+	await click(button(f.host, "Add page"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "nextPage");
+	await click(button(f.host, "Save knob"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(2));
+	expect(
+		f.calls.filter((call) => call.type === "save-knob").at(-1),
+	).toMatchObject({ revision: 1 });
+});
+
+it("keeps an unsaved knob draft conflict-protected when page creation introduces a different knob", async () => {
+	const f = await gridFixture([gridKey("1,1")]);
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "nextPage");
+	await click(button(f.host, "Add page"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	await click(button(f.host, "Save knob"));
+	expect(f.stored().profiles[0].revision).toBe(1);
+	expect(f.host.textContent).toContain("QUAKE.PROFILE.REVISION_CONFLICT");
+	expect(query(f.host, "#knob-function", HTMLSelectElement).value).toBe(
+		"nextPage",
+	);
 });

@@ -36,6 +36,7 @@ export type Selection = {
 	readonly key: ProfileKey;
 	readonly geometry: KeyGeometry;
 	readonly savedKey: ProfileKey;
+	readonly pageKeys: readonly ProfileKey[];
 };
 type GridDrag = {
 	readonly library?: string | undefined;
@@ -238,7 +239,9 @@ export function GridEditor({
 				: `shortcutGrid.${draft.result._tag === "rejected" ? (draft.result.reason ?? "spaceNotEnough") : "spaceNotEnough"}`,
 		);
 		setDropAllowed(
-			!stripLayout(profile, page).vivid && draft.result._tag !== "rejected",
+			(!layout.vivid ||
+				(!source.library && source.key.config.type === "colorfulScreen")) &&
+				draft.result._tag !== "rejected",
 		);
 	};
 	const place = async (
@@ -254,7 +257,8 @@ export function GridEditor({
 			!profile ||
 			!page ||
 			epoch.current !== source.epoch ||
-			stripLayout(profile, page).vivid
+			(layout.vivid &&
+				(source.library || source.key.config.type !== "colorfulScreen"))
 		)
 			return;
 		placementPending.current = true;
@@ -318,6 +322,7 @@ export function GridEditor({
 			const next: Selection = {
 				key: draft.key,
 				savedKey: draft.key,
+				pageKeys: pg.keys,
 				geometry: { ...draft.geometry, replaceOverlaps: confirmed },
 				target: {
 					token: crypto.randomUUID(),

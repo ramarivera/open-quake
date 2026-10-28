@@ -76,9 +76,11 @@ export function ClockWeatherCard({
 			? state.reason === "city-not-found"
 				? strings.weatherCityNotFound
 				: strings.weatherUnavailable
-			: state.kind === "loading"
-				? strings.weatherLoading
-				: ready?.description || "—";
+			: state.kind === "unconfigured"
+				? strings.weatherSetCity
+				: state.kind === "loading"
+					? strings.weatherLoading
+					: ready?.description || "—";
 	return (
 		<div
 			className="oq-weather-card"
@@ -230,19 +232,23 @@ export function ClockWeatherSlot({
 		side,
 	);
 	if (!enabled || !settings) return null;
-	const state: ClockWeatherCardProps["state"] =
-		result._tag === "ready"
+	const unconfigured = !settings.city.trim() && !settings.ipLookup;
+	const state: ClockWeatherCardProps["state"] = unconfigured
+		? { kind: "unconfigured" }
+		: result._tag === "ready"
 			? { kind: "ready", ...result.data }
 			: result._tag === "error"
 				? { kind: "error", reason: result.reason }
-				: { kind: "loading" };
+				: loading
+					? { kind: "loading" }
+					: { kind: "error", reason: "unavailable" };
 	return (
 		<ClockWeatherCard
 			city={result._tag === "ready" ? result.data.city : settings.city}
 			unit={settings.unit}
 			state={state}
 			locale={locale}
-			loading={loading}
+			loading={!unconfigured && loading}
 		/>
 	);
 }

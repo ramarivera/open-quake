@@ -7,6 +7,10 @@ import { promisify } from "node:util";
 import appleSigning from "../build/apple-signing.cjs";
 import { downloadName, electronEnvironment } from "./release.mjs";
 import { verifyAppleApp } from "./verify-apple-signing.mjs";
+import {
+	installWindowsPackage,
+	waitForWindowsPackage,
+} from "./windows-package-install.mjs";
 
 const command = promisify(execFile);
 const directory = resolve(process.argv[2] || "dist");
@@ -87,58 +91,15 @@ try {
 	} else if (process.platform === "win32") {
 		const installed = join(scratch, "installed");
 		console.info(`Installing Windows ${process.arch} download`);
-		const diagnostics = setTimeout(async () => {
-			try {
-				const { stdout } = await command("tasklist.exe", ["/V", "/FO", "CSV"], {
-					timeout: 15_000,
-				});
-				console.info(
-					"Installer still running after 60 seconds",
-					stdout
-						.split(/\r?\n/)
-						.filter((line) => /open-quake|powershell|pwsh|conhost/i.test(line))
-						.join("\n"),
-				);
-				// Use the native runner PowerShell, separate from NSIS's emulated
-				// helper, to expose child processes and blocked thread states.
-				const { stdout: processes } = await command(
-					"pwsh.exe",
-					[
-						"-NoLogo",
-						"-NoProfile",
-						"-NonInteractive",
-						"-Command",
-						`$rows = Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'open-quake|powershell|pwsh|conhost' }; $rows | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath | ConvertTo-Json -Compress; foreach ($row in $rows) { $p = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue; if ($p) { $p.Threads | Select-Object Id, ThreadState, WaitReason | ConvertTo-Json -Compress } }`,
-					],
-					{ timeout: 15_000 },
-				);
-				console.info("Installer process tree and thread states", processes);
-				console.info(
-					"Installed directory entries",
-					await readdir(installed).catch(() => []),
-				);
-			} catch (error) {
-				console.error("Installer diagnostics failed", error.message);
-			}
-		}, 60_000);
-		try {
-			await command(
-				download("exe"),
-				["/S", "/currentuser", `/D=${installed}`],
-				{
-					timeout: 120_000,
-				},
-			);
-		} finally {
-			clearTimeout(diagnostics);
-		}
+		await installWindowsPackage({ installer: download("exe"), installed });
 		console.info("Windows installer completed");
 		try {
 			await smoke(join(installed, "open-quake.exe"));
 		} finally {
 			await command(join(installed, "Uninstall open-quake.exe"), ["/S"], {
-				timeout: 60_000,
+				timeout: 120_000,
 			});
+			await waitForWindowsPackage(download("exe"), installed);
 		}
 	} else if (process.platform === "linux") {
 		// Installing the DEB also establishes the shipped sandbox helper's owner
