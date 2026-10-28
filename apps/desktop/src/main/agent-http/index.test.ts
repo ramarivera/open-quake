@@ -58,7 +58,10 @@ it("recognizes saved HTTP configuration before connectivity and after restart wi
 		);
 		runtime = await registerAgentHttp(options);
 		expect(await runtime.configured()).toBe(true);
-		expect(runtime.backend.initial.status).toBe("error");
+		expect(runtime.backend.initial).toMatchObject({
+			status: "stopped",
+			code: "AGENT.RUNTIME.UNAVAILABLE",
+		});
 		expect(fetch).not.toHaveBeenCalled();
 	} finally {
 		await runtime.dispose();

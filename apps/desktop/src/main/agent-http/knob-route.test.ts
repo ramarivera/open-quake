@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { expect, it } from "vitest";
-import { pinAgentKnob } from "./knob-route";
+import { knobAgentState, pinAgentKnob } from "./knob-route";
 import type { RuntimeDiscovery } from "./resources";
 
 const snapshot = {
@@ -86,4 +86,32 @@ it("KNOB-041 refuses stopped, starting, disconnected and missing identities befo
 		).pipe(Effect.either),
 	);
 	expect(missing._tag).toBe("Left");
+});
+
+it("routes DK-Claw to a connected HTTP server when no OpenClaw process is owned", async () => {
+	const state = knobAgentState(false, "stopped", ["writer"]);
+	const result = await Effect.runPromise(
+		pinAgentKnob(
+			snapshot,
+			state,
+			{ connectionId: "gateway" },
+			{ generation: 1, status: "connected", connectionId: "gateway" },
+			() => Effect.succeed(catalog),
+			1,
+		),
+	);
+	expect(result.agentId).toBe("writer");
+	// The registry still gates readiness, and an owned process keeps its own status.
+	const rejected = await Effect.runPromiseExit(
+		pinAgentKnob(
+			snapshot,
+			state,
+			{ connectionId: "gateway" },
+			{ generation: 1, status: "disconnected" },
+			() => Effect.succeed(catalog),
+			1,
+		),
+	);
+	expect(rejected._tag).toBe("Failure");
+	expect(knobAgentState(true, "stopped", []).status).toBe("stopped");
 });

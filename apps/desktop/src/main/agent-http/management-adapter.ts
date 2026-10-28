@@ -1,10 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Effect, Schema, Stream } from "effect";
 import type { RuntimeConversationRequest } from "../../../../../packages/edge/src/agent-http/runtime-contracts.js";
-import {
-	RuntimeCapabilityUnsupported,
-	type RuntimeError,
-} from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
+import type { RuntimeError } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import {
 	type Agent,
 	Content,
@@ -13,46 +10,29 @@ import {
 	AgentDraftFailed,
 	AgentDraftUnavailable,
 	type AgentError,
-	AgentRuntimeFailed,
+	AgentRuntimeUnavailable,
 } from "../../../../../packages/edge/src/agents/agents-errors.js";
 import type {
 	AgentDraftAdapter,
 	AgentRuntimeAdapter,
 } from "../../../../../packages/edge/src/agents/agents-ports.js";
-import type { RuntimeRegistry, RuntimeResolver } from "./runtime-registry.js";
+import type { RuntimeResolver } from "./runtime-registry.js";
 
-/** available gates legacy process buttons. It doesn't describe HTTP connectivity.
- * The connection UI consumes registry.read/subscribe and connect/disconnect/refresh.
- */
-export function createAgentRuntimeAdapter(
-	registry: RuntimeRegistry,
-): AgentRuntimeAdapter {
+/** HTTP connections don't own a local process. Keep lifecycle controls unavailable. */
+export function createAgentRuntimeAdapter(): AgentRuntimeAdapter {
 	const initial = {
 		available: false,
-		status: "error" as const,
-		code: new RuntimeCapabilityUnsupported().code,
+		status: "stopped" as const,
+		code: new AgentRuntimeUnavailable().code,
 		operation: "none" as const,
 	};
 	return {
 		available: false,
 		initial,
-		start: Effect.fail(
-			new AgentRuntimeFailed(new RuntimeCapabilityUnsupported()),
-		),
-		stop: Effect.fail(
-			new AgentRuntimeFailed(new RuntimeCapabilityUnsupported()),
-		),
-		restart: Effect.fail(
-			new AgentRuntimeFailed(new RuntimeCapabilityUnsupported()),
-		),
-		subscribe: (listener) =>
-			registry.subscribe((snapshot) =>
-				listener({
-					...initial,
-					status: snapshot.status === "connected" ? "ready" : "error",
-					code: snapshot.code ?? initial.code,
-				}),
-			),
+		start: Effect.fail(new AgentRuntimeUnavailable()),
+		stop: Effect.fail(new AgentRuntimeUnavailable()),
+		restart: Effect.fail(new AgentRuntimeUnavailable()),
+		subscribe: () => () => {},
 	};
 }
 export interface RuntimeDraftSelection {

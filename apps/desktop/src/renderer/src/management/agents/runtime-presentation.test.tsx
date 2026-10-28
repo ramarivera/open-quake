@@ -13,7 +13,8 @@ import { AgentId } from "../../../../shared/agents";
 import { AppLocaleProvider } from "../../i18n";
 import { button, click, element, mount } from "../dom-test";
 import { AgentsPage } from "./AgentsPage";
-import { RuntimeIndicator } from "./RuntimeIndicator";
+import { agentsCopy } from "./copy";
+import { RuntimeIndicator, runtimeStatusLabel } from "./RuntimeIndicator";
 import type { AgentRequest } from "./useAgents";
 
 const snapshot = (
@@ -76,6 +77,11 @@ it("CENTER-020 unavailable controls remain visible and never dispatch", async ()
 		await click(action);
 	}
 	expect(request).not.toHaveBeenCalled();
+	expect(element(".aw-runtime-hint").textContent).toContain("Install OpenClaw");
+	expect(element(".aw-runtime-hint").textContent).toContain(
+		"OPEN_QUAKE_OPENCLAW_COMMAND",
+	);
+	expect(element(".aw-runtime-hint").textContent).toContain("Hermes");
 });
 it("CENTER-012/022/024/025/026/028 keeps the latest runtime event over a delayed equal-revision read and unsubscribes", async () => {
 	let resolveRead: (reply: AgentReply) => void = () => {};
@@ -184,3 +190,13 @@ it.each(["en", "de"] as const)(
 		expect(document.querySelectorAll(".aw-skeleton")).toHaveLength(4);
 	},
 );
+
+it("localizes the shell runtime label", () => {
+	const missing = snapshot("stopped", false).runtime;
+	expect(
+		runtimeStatusLabel(missing, agentsCopy("de").openclawRuntimeIndicator),
+	).toBe("OpenClaw-Laufzeit nicht konfiguriert");
+	expect(
+		runtimeStatusLabel(missing, agentsCopy("en").openclawRuntimeIndicator),
+	).toBe("OpenClaw runtime not configured");
+});
