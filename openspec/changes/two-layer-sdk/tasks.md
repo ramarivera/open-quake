@@ -241,3 +241,11 @@ across all three runs. Assigned beads retain delivery/merge notes for the lead.
 - [x] 3.8 Keep overlong emoji names intact, focus rename on opening only and associate validation feedback with the field.
 - [x] 3.9 Count actual emoji command invocations, share operation parsing, log finalization exceptions and record selector restoration failures while continuing exploration.
 - [ ] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
+
+## Typed probe evidence privacy, open-quake-l86.18
+
+- [x] Reject serial bytes in Uint8Array and Buffer views, including nested evidence, without reading bytes outside a view. Verify with fake-only probe regressions and owning types/lint, then deliver.
+
+- [x] Review current input/diagnostic seams and propose bounded agent testability improvements without implementing a new recorder or observer. Proposal: `design.md` section Agent testability proposal; bead `open-quake-l86.20`.
+
+Typed-byte verification: the new regression fails against the prior guard and passes after the fix. All six fake-only probe tests, desktop typecheck and root lint pass. No native HID is loaded and no actual device serial is used. PR delivery remains tracked on `open-quake-l86.18`.

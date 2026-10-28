@@ -401,3 +401,11 @@ The opt-in management exerciser SHALL reset targeted scenarios through the fixtu
 - **THEN** the exerciser records that restoration failure and continues exploring the page
 - **WHEN** report finalization throws
 - **THEN** it logs the exception before exiting with failure
+
+### Requirement: Probe serial-byte rejection
+The hardware query probe SHALL reject evidence containing the selected device serial as text, numeric arrays or Uint8Array views including Buffer. It SHALL inspect only the bytes belonging to a view.
+
+#### Scenario: Typed evidence bytes
+- **WHEN** serial bytes occur in a nested typed byte view
+- **THEN** the probe rejects the evidence before writing it
+- **AND** bytes outside the view do not become evidence

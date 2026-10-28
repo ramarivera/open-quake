@@ -95,6 +95,7 @@ export function assertNoSerial(evidence: unknown, serial: string) {
 	const texts: string[] = [];
 	const visit = (value: unknown): void => {
 		if (typeof value === "string") texts.push(value);
+		else if (value instanceof Uint8Array) visit(Array.from(value));
 		else if (Array.isArray(value)) {
 			if (value.every((item) => typeof item === "number"))
 				texts.push(String.fromCharCode(...value.map((item) => item & 255)));
