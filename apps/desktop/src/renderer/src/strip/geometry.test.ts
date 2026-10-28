@@ -162,6 +162,12 @@ describe("strip layout", () => {
 		([keys, x, y]) => {
 			const layout = layoutOf(keys);
 			const hit = tileAt({ x, y }, layout);
+			if (layout.vivid) {
+				// Vivid now participates in the shared full-screen footprint table.
+				// Its wallpaper canvas deliberately has no runtime key hit target.
+				expect(hit).toBeUndefined();
+				return;
+			}
 			const holders = layout.tiles.filter(
 				({ slot }) =>
 					x >= slot.x &&

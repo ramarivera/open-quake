@@ -209,17 +209,21 @@
 	position: absolute;
 	right: 0;
 	top: 0;
-	height: 320px;
+	height: 480px;
 	z-index: 99999;
-	background: linear-gradient(90deg, transparent, rgb(8 10 18 / 42%));
+	/* Opaque so tile text underneath can't show through the labels. */
+	background: rgb(10 12 20);
+	box-shadow:
+		inset 1px 0 0 var(--strip-hairline),
+		-24px 0 48px rgb(0 0 0 / 45%);
 	pointer-events: none;
 }
 .knob-wheel {
 	position: absolute;
-	top: 40px;
+	top: 0;
 	right: 0;
-	width: 320px;
-	height: 300px;
+	width: 440px;
+	height: 480px;
 	z-index: 100000;
 	overflow: visible;
 	pointer-events: none;
@@ -233,22 +237,21 @@
 	right: 72px;
 	overflow: hidden;
 	color: var(--strip-muted);
-	font-size: 25px;
-	line-height: 32px;
+	font-size: 34px;
+	line-height: 44px;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	text-align: right;
-	text-shadow: 0 1px 4px rgb(0 0 0 / 90%);
 	transform-origin: right center;
 	transform: translateY(-50%);
 }
 .knob-wheel-label[data-slot="2"] {
 	right: 72px;
-	border-right: 3px solid var(--strip-accent);
-	padding-right: 8px;
+	border-right: 4px solid var(--strip-accent);
+	padding-right: 12px;
 	color: var(--strip-text);
-	font-weight: 500;
-	transform: translateY(-50%) scale(1.1);
+	font-weight: 600;
+	transform: translateY(-50%) scale(1.2);
 }
 .knob-wheel-label[data-slot="0"] {
 	right: 56px;

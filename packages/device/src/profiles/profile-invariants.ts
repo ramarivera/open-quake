@@ -1,4 +1,5 @@
 import { Option, Predicate } from "effect";
+import { keyStructurallyLocked } from "./key-edit-policy.js";
 import type {
 	Profile,
 	ProfileEnvelope,
@@ -170,14 +171,20 @@ export const moveOrSwapProfileKeys = (
 	const source = keys.find((key) => key.keyCode === from);
 	const target = keys.find((key) => key.keyCode === to);
 	if (!source) return { _tag: "Rejected", reason: "missing-anchor" };
+	const cells = new Set(occupiedCells({ ...source, keyCode: to }));
 	if (
-		[source, ...(target ? [target] : [])].some(
+		keys.some(
 			(key) =>
-				Option.isSome(key.config.basicEditableItems) &&
-				!key.config.basicEditableItems.value.allowDrag,
+				key !== source &&
+				!isEmptyCell(key) &&
+				keyStructurallyLocked(key) &&
+				(key === target ||
+					(key.config.display &&
+						occupiedCells(key).some((cell) => cells.has(cell)))),
 		)
 	)
 		return { _tag: "Rejected", reason: "locked" };
+
 	const moved = keys.map((key) =>
 		key === source
 			? { ...key, keyCode: to }

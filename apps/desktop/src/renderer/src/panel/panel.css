@@ -15,8 +15,10 @@
 }
 .panel-knob-body {
 	fill: var(--strip-surface);
+	fill-opacity: 1;
 	stroke: var(--strip-hairline);
 	stroke-width: 2;
+	filter: drop-shadow(0 6px 18px rgb(0 0 0 / 55%));
 }
 .panel-knob[data-pressed="true"] .panel-knob-body {
 	fill: var(--strip-raised);
@@ -27,6 +29,12 @@
 	fill: none;
 	stroke: var(--strip-line);
 	stroke-width: 6;
+}
+.panel-knob-arc {
+	fill: none;
+	stroke: var(--strip-accent);
+	stroke-width: 6;
+	stroke-linecap: round;
 }
 .panel-knob-home {
 	stroke: var(--strip-muted);

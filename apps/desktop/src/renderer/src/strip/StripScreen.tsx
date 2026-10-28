@@ -195,20 +195,14 @@ function StripGrid({
 					tileRadius: deviceRadius(painted.tileRadius),
 				};
 				const Tile = stripTileFor(tile.type);
-				const locked =
-					!interactive &&
-					Option.isSome(tile.key.config.basicEditableItems) &&
-					!tile.key.config.basicEditableItems.value.allowDrag;
 				return (
 					<div
 						key={tile.keyCode}
 						className="strip-slot"
 						data-key-code={tile.keyCode}
 						data-state="tile"
-						data-edit-locked={locked || undefined}
-						draggable={locked ? false : undefined}
 						data-pressed={
-							!locked && pressedKeyCode === tile.keyCode && tile.pressFeedback
+							pressedKeyCode === tile.keyCode && tile.pressFeedback
 								? "true"
 								: undefined
 						}

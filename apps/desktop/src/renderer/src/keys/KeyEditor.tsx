@@ -289,11 +289,15 @@ export function KeyEditor({
 			setStatus(
 				reply.keyCodes
 					? ""
-					: locale === "de" && reply.reason === "layout-locked-or-invalid"
-						? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
-						: reply.reason === "layout-locked-or-invalid"
-							? "This edit is locked or overlaps other keys."
-							: reply.reason,
+					: reply.reason === "structural-key-locked"
+						? locale === "de"
+							? "Diese Taste ist strukturell geschützt und kann nicht ersetzt oder getauscht werden."
+							: "This tile has structural protection and cannot be replaced or swapped."
+						: locale === "de" && reply.reason === "layout-locked-or-invalid"
+							? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
+							: reply.reason === "layout-locked-or-invalid"
+								? "This edit is locked or overlaps other keys."
+								: reply.reason,
 			);
 	};
 	const selectPage = async (
@@ -407,7 +411,7 @@ export function KeyEditor({
 		};
 		current.current = next;
 		setSelection(next);
-		if (pickerOpen && keyEditable(key, "icon")) setIcons(true);
+		if (pickerOpen) setIcons(true);
 	};
 	const choose = (keyCode: string): Promise<void> =>
 		selectKey(keyCode, "click");
@@ -452,10 +456,19 @@ export function KeyEditor({
 			}
 			if (reply.envelope) {
 				accept(reply.envelope);
-				const p = reply.envelope.profiles.find(
-					(p) => p.id === old.target.profileId,
-				);
-				const destination = old.geometry.destination ?? old.target.keyCode;
+				const p = Schema.decodeUnknownSync(ProfileEnvelope)(
+					reply.envelope,
+				).profiles.find((p) => p.id === old.target.profileId);
+				const requested = old.geometry.destination ?? old.target.keyCode;
+				const destination =
+					p?.pages
+						.find((page) => page.id === old.target.pageId)
+						?.keys.find(
+							(key) =>
+								key.config.type &&
+								key.config.display &&
+								occupiedCells(key).includes(requested),
+						)?.keyCode ?? requested;
 				const savedKey = { ...old.key, keyCode: destination };
 				const next = {
 					...old,
@@ -715,6 +728,7 @@ export function KeyEditor({
 					profile={profile}
 					accept={accept}
 					keyEditOpen={selection !== undefined || saving}
+					keysLocale={locale}
 				/>
 				<GridEditor
 					onActivate={onOpenLibrary}
@@ -830,7 +844,6 @@ export function KeyEditor({
 						<Row label={keyText("title", locale)} htmlFor="key-title">
 							<input
 								id="key-title"
-								disabled={!keyEditable(key, "title")}
 								value={keyTitle(key, locale, alternate)}
 								onChange={(e) =>
 									void update(editKeyTitle(key, e.target.value, alternate))
@@ -917,14 +930,7 @@ export function KeyEditor({
 								</button>
 							</Row>
 						)}
-						<Row
-							label={keyText("selectDecoKeeIcon", locale)}
-							hint={
-								!keyEditable(key, "icon")
-									? "This key's icon is locked. You can browse the library."
-									: undefined
-							}
-						>
+						<Row label={keyText("selectDecoKeeIcon", locale)}>
 							<button
 								type="button"
 								aria-haspopup="dialog"
@@ -934,7 +940,6 @@ export function KeyEditor({
 							</button>
 							<button
 								type="button"
-								disabled={!keyEditable(key, "icon")}
 								aria-label="Reset icon to default"
 								onClick={resetIcon}
 							>

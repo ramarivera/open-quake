@@ -12,6 +12,7 @@ import {
 	editKeyTitle,
 	editKeyTitleStyle,
 	iconInUse,
+	keyEditable,
 	keyText,
 	keyTitle,
 	resetKeyIcons,
@@ -491,7 +492,7 @@ it("MGMT-100 keeps a localized generic label when a custom agent has no catalog 
 });
 // AI-318: go through the editor owner with the decoded shipped profile.
 it.effect(
-	"AI-318 enforces every MeetAI action-key lock through preview/remove",
+	"AI-318 permits MeetAI title/icon/move while retaining structural resize/delete locks",
 	() => {
 		const envelope = {
 			...seed(),
@@ -518,24 +519,33 @@ it.effect(
 						title: { ...encoded.config.title, text: "Changed" },
 					},
 					{ ...encoded.config, icon: "changed-icon" },
-					{ ...encoded.config, type: "hotkey" },
 				]) {
 					const result = yield* Effect.either(
 						editor.preview(t, { ...encoded, config }),
 					);
-					expect(result._tag === "Left" && result.left._tag).toBe(
-						"ProfileValidationFailed",
-					);
+					expect(result).toMatchObject({
+						_tag: "Right",
+						right: { _tag: "ready" },
+					});
 				}
 				expect(
 					yield* editor.preview(t, {
 						...encoded,
 						config: { ...encoded.config, size: [2, 1] },
 					}),
-				).toEqual({ _tag: "rejected" });
+				).toMatchObject({
+					_tag: "rejected",
+				});
 				expect(
 					yield* editor.preview(t, encoded, { destination: "1,2" }),
-				).toEqual({ _tag: "rejected" });
+				).toMatchObject({ _tag: "rejected" });
+				// The occupied display cannot be displaced; every source still allows movement.
+				expect(keyEditable(source, "allowDrag")).toBe(true);
+				if (source.config.type === "mic") {
+					expect(keyEditable(source, "grid")).toBe(true);
+					expect(keyEditable(source, "allowDelete")).toBe(true);
+					continue;
+				}
 				const removed = yield* Effect.either(editor.remove(t));
 				expect(removed._tag === "Left" && removed.left._tag).toBe(
 					"ProfileValidationFailed",
@@ -649,5 +659,37 @@ it("MGMT-259 preserves unmarked English-default text and explicit edits after re
 			expect(keyTitle(restarted, "de", alternate)).toBe(text);
 			expect(keyTitle(restarted, "ja", alternate)).toBe(text);
 		}
+	}
+});
+
+it("localizes old generic agent key names while preserving user titles and bindings", () => {
+	for (const text of [
+		"ClawBot Agent",
+		"龙虾代理",
+		"ClawBot-Agent",
+		"Agente ClawBot",
+		"Agent ClawBot",
+		"ClawBotエージェント",
+		"ClawBot 에이전트",
+	]) {
+		const saved = {
+			...key,
+			config: {
+				...key.config,
+				type: "clawbot",
+				title: { ...key.config.title, text },
+				actions: [{ type: "agentId", value: "my-local-agent" }],
+			},
+		};
+		expect(keyTitle(saved, "ja")).toBe("エージェント");
+		expect(
+			keyTitle(
+				{ ...saved, config: { ...saved.config, userModifiedTitle: true } },
+				"ja",
+			),
+		).toBe(text);
+		expect(saved.config.actions).toEqual([
+			{ type: "agentId", value: "my-local-agent" },
+		]);
 	}
 });

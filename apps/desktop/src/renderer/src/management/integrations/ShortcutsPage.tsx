@@ -202,7 +202,7 @@ export function ShortcutsPage() {
 	};
 	return (
 		<section className="mc-panel" aria-label={s.ariaLabel}>
-			<PageHeader title={s.title} description={s.aiHint}>
+			<PageHeader title={s.title}>
 				<button
 					className="mc-button"
 					type="button"

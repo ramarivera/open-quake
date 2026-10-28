@@ -224,11 +224,7 @@ export function ClockSettings({
 						}
 					/>
 				</Row>
-				<Row
-					label={t("seconds")}
-					labelId={`${ids}-seconds`}
-					hint={t("secondsHint")}
-				>
+				<Row label={t("seconds")} labelId={`${ids}-seconds`}>
 					<Segmented
 						name={`${ids}-seconds`}
 						labelledBy={`${ids}-seconds`}

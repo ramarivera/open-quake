@@ -2,7 +2,7 @@
 	"en": {
 		"setup": {
 			"title": "Set up open-quake",
-			"description": "A few local choices so the controller works the way you expect. Nothing is installed or sent anywhere.",
+			"description": "Nothing is installed or sent anywhere.",
 			"finishLater": "Finish later",
 			"stepOf": "Step {current} of {total}",
 			"stepsLabel": "Setup steps",
@@ -87,7 +87,6 @@
 			},
 			"review": {
 				"heading": "Review",
-				"body": "Check your choices, then finish setup.",
 				"language": "Language",
 				"region": "Region",
 				"display": "Display",
@@ -156,7 +155,6 @@
 			"language": "Language",
 			"languageHint": "Applies to every open-quake window.",
 			"login": "Open at login",
-			"loginHint": "Start open-quake when you sign in to this computer.",
 			"loginChecking": "Checking the system setting…",
 			"loginUnknown": "The system setting couldn’t be read. Saved preference: {value}.",
 			"on": "on",
@@ -314,7 +312,7 @@
 	"de": {
 		"setup": {
 			"title": "open-quake einrichten",
-			"description": "Ein paar lokale Entscheidungen, damit der Controller so arbeitet, wie du es erwartest. Nichts wird installiert oder übertragen.",
+			"description": "Nichts wird installiert oder übertragen.",
 			"finishLater": "Später fortsetzen",
 			"stepOf": "Schritt {current} von {total}",
 			"stepsLabel": "Einrichtungsschritte",
@@ -399,7 +397,6 @@
 			},
 			"review": {
 				"heading": "Überprüfen",
-				"body": "Prüfe deine Auswahl und schließe dann die Einrichtung ab.",
 				"language": "Sprache",
 				"region": "Region",
 				"display": "Anzeige",
@@ -468,7 +465,6 @@
 			"language": "Sprache",
 			"languageHint": "Gilt für alle open-quake-Fenster.",
 			"login": "Bei Anmeldung öffnen",
-			"loginHint": "open-quake starten, wenn du dich an diesem Computer anmeldest.",
 			"loginChecking": "Systemeinstellung wird geprüft…",
 			"loginUnknown": "Die Systemeinstellung konnte nicht gelesen werden. Gespeicherte Einstellung: {value}.",
 			"on": "ein",

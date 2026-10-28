@@ -2,7 +2,6 @@ import { Option } from "effect";
 import {
 	DEFAULT_KEY_TITLE_STYLE,
 	editKeyTitleStyle,
-	keyEditable,
 	keyText,
 } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type {
@@ -31,7 +30,7 @@ export function KeyTitleSettings({
 	return (
 		<details className="key-title-settings">
 			<summary>{keyText("editor.titleStyle", locale)}</summary>
-			<fieldset disabled={!keyEditable(keyValue, "title")}>
+			<fieldset>
 				<Row label={keyText("showHeading", locale)} htmlFor="key-title-display">
 					<input
 						id="key-title-display"

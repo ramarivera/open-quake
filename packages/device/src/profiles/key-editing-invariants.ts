@@ -51,6 +51,21 @@ const legacyAi: Readonly<Record<string, string>> = {
 	Search: "search",
 	Compliance: "compliance",
 };
+const renamedAgentTitles: Readonly<
+	Record<string, { readonly from: string; readonly to: string }>
+> = {
+	quakeBot: { from: "ClawBotView", to: "Agent" },
+	quakeBotInput: { from: "ClawBotInput", to: "Agent input" },
+};
+const legacyAgentKeyNames = new Set([
+	"ClawBot Agent",
+	"龙虾代理",
+	"ClawBot-Agent",
+	"Agente ClawBot",
+	"Agent ClawBot",
+	"ClawBotエージェント",
+	"ClawBot 에이전트",
+]);
 export function keyTitle(
 	key: ProfileKey,
 	locale: ProfileLocale,
@@ -71,6 +86,9 @@ export function keyTitle(
 		);
 	if (key.config.userModifiedTitle === true) return key.config.title.text;
 	const text = key.config.title.text;
+	// Profiles installed before the Agent rename keep the old template titles.
+	const renamed = renamedAgentTitles[key.config.type];
+	if (renamed && text === renamed.from) return renamed.to;
 	const isLegacyLabel = (name: string): boolean =>
 		ProfileLocale.literals.some((language) => text === keyText(name, language));
 	if (
@@ -79,7 +97,10 @@ export function keyTitle(
 		isLegacyLabel("hotkey")
 	)
 		return keyText("hotkey", locale);
-	if (key.config.type === "clawbot" && (!text || isLegacyLabel("clawbot"))) {
+	if (
+		key.config.type === "clawbot" &&
+		(!text || isLegacyLabel("clawbot") || legacyAgentKeyNames.has(text))
+	) {
 		const agent = key.config.actions.find(
 			(action) => action.type === "agentId",
 		);
@@ -230,18 +251,7 @@ export const resetKeyIcons = (
 		},
 	};
 };
-export const keyEditable = (
-	key: ProfileKey,
-	field: "title" | "icon" | "allowDelete" | "grid" | "allowDrag",
-): boolean =>
-	Option.match(key.config.basicEditableItems, {
-		onNone: () => true,
-		onSome: (policy) => policy[field],
-	}) &&
-	(field !== "allowDelete" ||
-		!["back", "emojiBack", "functionwheel", "colorfulScreenSettings"].includes(
-			key.config.type,
-		));
+export { keyEditable, keyStructurallyLocked } from "./key-edit-policy.js";
 
 export interface KeyTarget {
 	readonly token: string;

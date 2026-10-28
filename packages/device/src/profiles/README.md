@@ -26,9 +26,8 @@ spans per tile type override `[width,height]`, and spans that would run past
 column 8 or row 2 grow inward (strip-key-grid, parity decision 2). It rejects
 duplicate anchors, invalid anchors, visible overlaps, and executable empty
 placeholders. Covered placeholders do not claim a second occupied
-cell. `moveOrSwapProfileKeys` preserves configuration objects, rejects drag
-locks, and returns a result without changing its input. The editor and the
-other four edit-lock operations remain task 2.2.
+cell. `moveOrSwapProfileKeys` preserves configuration objects and rejects
+displacement of structurally protected targets without changing its input.
 
 `ProfileRepository` is an Effect service over the `ProfileStorage` port.
 `ProfileService` declares the repository dependency; the repository declares
@@ -98,7 +97,7 @@ The Keys editor imports one canonical profile object or one legacy flat key arra
 
 Inspection and dispatch share `profileKeyFunctionIssues` and the caller-provided function contracts, including `childrenName` and alternate-visual validation. The desktop supplies `managementProfileContracts` to both inspection and import so supported Home Assistant and agent keys remain dispatchable. Device-only callers default to the action contracts. A mismatch reports its field path as `invalid-action` and marks the retained key unsupported. Raw action validation also runs before schema normalization so unsupported action fields cannot disappear before inspection.
 
-The typed Keys boundary adds `preview.geometry` for move/swap and confirmed span replacement, `add-page`/`delete-page` with expected revision, and `inspect-import`/`import-profile`. Preview does not persist. Save commits the complete page once; failed or unconfirmed edits cannot save a stale preview. Both swap participants honor drag locks, covered keys honor delete/drag locks, forced spans cannot be resized, and the existing title/icon/delete locks remain enforced in main. Page creation selects the new page for the requesting device; deletion repairs all affected selections atomically while retaining the profile knob. Previous/next wrap and explicit go-to clamps, as specified in `key-library-parity`.
+The typed Keys boundary adds `preview.geometry` for move/swap and confirmed span replacement, `add-page`/`delete-page` with expected revision, and `inspect-import`/`import-profile`. Preview does not persist. Save commits the complete page once; failed or unconfirmed edits cannot save a stale preview. Title, icon and move edits ignore saved DK-Suite locks. Structural targets cannot be replaced or displaced, including through covered cells. Page creation selects the new page for the requesting device; deletion repairs all affected selections atomically while retaining the profile knob. Previous/next wrap and explicit go-to clamps, as specified in `key-library-parity`.
 
 Verification lives beside the implementation:
 
@@ -121,6 +120,41 @@ Verification lives beside the implementation:
 - The desktop adapter tests use real temporary directories and inject primary
   and backup write/rename failures, corruption, and permission failures.
 
-`profile-editor-scenarios.test.ts` covers geometry, all five locks, replacement confirmation, page repair, diagnosed imports and dispatch exclusion. Desktop `key-library/registration.test.ts` drives typed IPC authority and mutation paths. `key-library/smoke-geometry.ts` drives mounted editor controls through preload/main with hidden mock windows and records English/German screenshots. Run its existing smoke entry with `OPEN_QUAKE_KEY_REVIEW_PROBE=geometry-pages-import`.
+`profile-editor-scenarios.test.ts` covers geometry, saved-lock overrides, structural protection, replacement confirmation, page repair, diagnosed imports and dispatch exclusion. Desktop `key-library/registration.test.ts` drives typed IPC authority and mutation paths. `key-library/smoke-geometry.ts` drives mounted editor controls through preload/main with hidden mock windows and records English/German screenshots. Run its existing smoke entry with `OPEN_QUAKE_KEY_REVIEW_PROBE=geometry-pages-import`.
 
 Physical mapping, device delivery, folders and broader profile/knob/display integration remain separate acceptance work.
+
+## Editing policy
+
+`key-edit-policy.ts` owns the policy consumed by the real editing service,
+geometry and renderer. Every key permits title, icon and move/swap edits.
+Stored `basicEditableItems.title`, `icon` and `allowDrag` flags are ignored,
+including after reload. Flags remain in the file as compatibility data;
+there's no migration. Ordinary keys, including every Quick control and the
+shared microphone action, also ignore stored resize/delete restrictions.
+
+The remaining restrictions protect structure:
+
+- Vivid's `colorfulScreen` draws the entire panel. Its footprint is always
+  8 by 2, and resize, removal and replacement are forbidden. Moving its anchor
+  is allowed and preserves the full-screen display.
+- Fixed-span widgets in `FORCED_TILE_SPANS` cannot resize. Their renderers and
+  nested touch controls use those dimensions. This includes the full-screen
+  `dkDesktopClock`, player, system monitor and composite AI/camera/OBS tiles.
+  Stored deletion locks still apply to these composite widgets. The shipped
+  clock's delete lock preserves its full-screen settings and media host.
+- Dedicated MeetAI controls `meetingMinutes`, `tempMeetingMinutes`,
+  `meetingRecordMark` and `liveAudioTranslate` retain stored grid/delete locks.
+  `MeetingKey.tsx` renders the Start timer/status and workflow controls as a
+  composed meeting panel. `liveAudioTranslateDisplay` also retains structural
+  flags for its nested transcript controls. The shared `mic` action is a
+  standalone action and doesn't retain these locks.
+- `back`, `emojiBack`, `functionwheel` and `colorfulScreenSettings` remain
+  undeletable even when a stored policy permits deletion. They own navigation
+  or settings entry points. Moving and customizing them is allowed.
+
+A key is a protected destination when resize or delete is structurally locked.
+Its owner can move it to free space, but another key cannot swap it out,
+replace it or remove it through a resized footprint, even after confirmation.
+The main process returns `structural-key-locked`; the editor explains the
+protection. Normal bounds, equal-span swap and overlap checks still apply.

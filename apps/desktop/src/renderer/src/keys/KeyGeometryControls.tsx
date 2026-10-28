@@ -34,9 +34,7 @@ export function KeyGeometryControls({
 				<select
 					id="key-destination"
 					value={geometry.destination ?? keyValue.keyCode}
-					disabled={
-						!keyValue.config.type || !keyEditable(keyValue, "allowDrag")
-					}
+					disabled={!keyValue.config.type}
 					onChange={(event) =>
 						onChange(keyValue, { destination: event.target.value })
 					}
@@ -54,8 +52,8 @@ export function KeyGeometryControls({
 				</select>
 				<small>
 					{de
-						? "Belegte Felder werden getauscht. Speichern zum Anwenden."
-						: "Occupied cells swap. Save to apply."}
+						? "Belegte Felder werden getauscht, sofern das Ziel nicht strukturell geschützt ist. Speichern zum Anwenden."
+						: "Occupied cells swap unless the target has structural protection. Save to apply."}
 				</small>
 			</Row>
 			<Row

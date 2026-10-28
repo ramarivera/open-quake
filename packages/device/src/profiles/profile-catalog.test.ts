@@ -4,6 +4,7 @@ import {
 	Layer,
 	ManagedRuntime,
 	Option,
+	Schema,
 } from "effect";
 import { describe, expect, it } from "vitest";
 import {
@@ -20,6 +21,7 @@ import { keyEditable, resetKeyIcons } from "./key-editing-invariants";
 import { editKeyLayout } from "./key-geometry";
 import {
 	builtinProfiles,
+	profileLabel,
 	profileText,
 	translateProfile,
 } from "./profile-catalog.js";
@@ -27,7 +29,7 @@ import {
 	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
-	type ProfileEnvelope,
+	ProfileEnvelope,
 } from "./profile-contracts.js";
 import {
 	applyManagerCommand,
@@ -231,8 +233,8 @@ it("MGMT-351 / MGMT-357 use exact catalog footprints and hit-test covered and hi
 					(key) => key.keyCode === code,
 				);
 				if (!placeholder) throw new Error("Missing locked placeholder");
-				expect(keyEditable(placeholder, "grid")).toBe(false);
-				expect(keyEditable(placeholder, "icon")).toBe(false);
+				expect(keyEditable(placeholder, "grid")).toBe(true);
+				expect(keyEditable(placeholder, "icon")).toBe(true);
 			}
 		}
 		const view = layout.tiles[0];
@@ -254,7 +256,9 @@ it("MGMT-351 / MGMT-357 use exact catalog footprints and hit-test covered and hi
 				"allowDrag",
 				"allowDelete",
 			] as const)
-				expect(keyEditable(view.key, field)).toBe(false);
+				expect(keyEditable(view.key, field)).toBe(
+					field !== "grid" && field !== "allowDelete",
+				);
 		}
 	}
 });
@@ -328,7 +332,7 @@ it("AI-147 retains all six saved Copilot roles and independent thinking/search c
 	]);
 });
 
-it("MGMT-353 prevents moving or overwriting the vivid preset while retaining its type-zero profile", () => {
+it("MGMT-353 permits Vivid move/title/icon while protecting full-screen resize/delete/overwrite", () => {
 	const vivid = builtinProfiles("linux").find((p) => p.id === "1-4");
 	if (!vivid) throw new Error("Missing Vivid");
 	const key = vivid.pages[0].keys[0];
@@ -339,10 +343,12 @@ it("MGMT-353 prevents moving or overwriting the vivid preset while retaining its
 		icon: "",
 		actions: [],
 	});
-	expect(keyEditable(key, "allowDrag")).toBe(false);
+	expect(keyEditable(key, "allowDrag")).toBe(true);
+	expect(keyEditable(key, "grid")).toBe(false);
+	expect(keyEditable(key, "allowDelete")).toBe(false);
 	expect(
 		editKeyLayout(vivid.pages[0].keys, key, { destination: "1,2" })._tag,
-	).toBe("rejected");
+	).toBe("ready");
 	expect(
 		editKeyLayout(vivid.pages[0].keys, createEmptyProfileKey("1,1"), {
 			replaceOverlaps: true,
@@ -415,7 +421,7 @@ for (const platform of ["win32", "darwin", "linux"] as const) {
 					"allowDelete",
 					"allowDrag",
 				] as const)
-					expect(keyEditable(key, field)).toBe(false);
+					expect(keyEditable(key, field)).toBe(true);
 				await runtime.runPromise(
 					KeyRuntime.activate("test", code ?? "", "press", {
 						profileId: p.id,
@@ -435,7 +441,7 @@ for (const platform of ["win32", "darwin", "linux"] as const) {
 			await runtime.dispose();
 		}
 	});
-	it(`MGMT-381 / MGMT-382 encodes immutable Clipboard and Mac Expose presets on ${platform}`, async () => {
+	it(`MGMT-381 / MGMT-382 encodes editable Clipboard and Mac Expose presets with retained legacy flags on ${platform}`, async () => {
 		const p = builtinProfiles(platform).find((p) => p.id === "1-2");
 		if (!p) throw new Error("Missing Quick");
 		await Effect.runPromise(
@@ -506,7 +512,7 @@ for (const platform of ["win32", "darwin", "linux"] as const) {
 						"allowDelete",
 						"allowDrag",
 					] as const)
-						expect(keyEditable(clipboard, field)).toBe(false);
+						expect(keyEditable(clipboard, field)).toBe(true);
 					yield* runtime.activate("test", "2,7", "press");
 					yield* runtime.activate("test", "2,7", "release");
 					const mask =
@@ -636,7 +642,11 @@ describe("MeetAI recovered control contract", () => {
 					"allowDelete",
 					"allowDrag",
 				] as const)
-					expect(keyEditable(key, field)).toBe(key.keyCode === "1,1");
+					expect(keyEditable(key, field)).toBe(
+						key.keyCode === "1,1" ||
+							key.config.type === "mic" ||
+							(field !== "grid" && field !== "allowDelete"),
+					);
 				expect(key.config.supportKnob).toBe(false);
 			}
 		},
@@ -717,4 +727,103 @@ it("MGMT-384: SysView ships one full-strip glass Celsius panel with exact input 
 		allowDelete: false,
 		allowDrag: false,
 	});
+});
+
+describe("Agent profile display compatibility", () => {
+	it("localizes persisted legacy and current defaults without changing stored data", () => {
+		const source = builtinProfiles("darwin").find((p) => p.id === "1-8");
+		if (!source) throw new Error("Missing Agent profile");
+		const names = {
+			en: "Agent",
+			zh: "智能体",
+			de: "Agent",
+			es: "Agente",
+			fr: "Agent",
+			it: "Agente",
+			ja: "エージェント",
+			ko: "에이전트",
+		} as const;
+		for (const storedName of [
+			"DK Claw",
+			"DK-Claw",
+			"DK龙虾",
+			...Object.values(names),
+		]) {
+			const encoded = encodeProfileEnvelope({
+				...createInitialProfileEnvelope(),
+				profiles: [{ ...source, name: storedName }],
+			});
+			const saved = Schema.decodeUnknownSync(ProfileEnvelope)(
+				JSON.parse(JSON.stringify(encoded)),
+			);
+			const profile = saved.profiles[0];
+			for (const [locale, name] of Object.entries(names)) {
+				expect(profileLabel(profile, locale as keyof typeof names)).toBe(name);
+				const translated = translateProfile(
+					profile,
+					locale as keyof typeof names,
+				);
+				expect(translated.name).toBe(name);
+				expect(translated.id).toBe("1-8");
+				expect(translated.knob).toEqual(profile.knob);
+				expect(
+					translated.pages.flatMap((page) =>
+						page.keys.map((key) => ({
+							type: key.config.type,
+							actions: key.config.actions,
+						})),
+					),
+				).toEqual(
+					profile.pages.flatMap((page) =>
+						page.keys.map((key) => ({
+							type: key.config.type,
+							actions: key.config.actions,
+						})),
+					),
+				);
+			}
+			expect(encodeProfileEnvelope(saved)).toEqual(encoded);
+		}
+	});
+	it("preserves explicit renames and duplicate names across locale changes", () => {
+		const source = builtinProfiles("darwin").find((p) => p.id === "1-8");
+		if (!source) throw new Error("Missing Agent profile");
+		for (const profile of [
+			{ ...source, name: "My helper" },
+			{ ...source, id: "custom-agent", name: "DK Claw" },
+		]) {
+			expect(profileLabel(profile, "ja")).toBe(profile.name);
+			expect(translateProfile(profile, "de").name).toBe(profile.name);
+		}
+	});
+});
+
+it("shows the Agent titles for agent tiles saved before the rename", async () => {
+	const { keyTitle } = await import("./key-editing-invariants.js");
+	const profile = builtinProfiles("darwin").find((p) =>
+		p.pages.some((page) => page.keys.some((k) => k.config.type === "quakeBot")),
+	);
+	const keys = profile?.pages.flatMap((page) => page.keys) ?? [];
+	for (const [type, legacy, current] of [
+		["quakeBot", "ClawBotView", "Agent"],
+		["quakeBotInput", "ClawBotInput", "Agent input"],
+	] as const) {
+		const key = keys.find((k) => k.config.type === type);
+		if (!key) throw new Error(`Missing ${type}`);
+		const saved = {
+			...key,
+			config: {
+				...key.config,
+				title: { ...key.config.title, text: legacy },
+				userModifiedTitle: false,
+			},
+		};
+		expect(keyTitle(saved, "en")).toBe(current);
+		expect(
+			keyTitle(
+				{ ...saved, config: { ...saved.config, userModifiedTitle: true } },
+				"en",
+			),
+		).toBe(legacy);
+	}
 });

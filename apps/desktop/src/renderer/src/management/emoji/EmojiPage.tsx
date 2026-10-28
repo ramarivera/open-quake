@@ -216,10 +216,7 @@ export function EmojiPage(): React.JSX.Element {
 	};
 	return (
 		<div className="page emoji-page">
-			<PageHeader
-				title="AI Emoji"
-				description="Turn one image into your own animated Emoji"
-			>
+			<PageHeader title="AI Emoji">
 				<button
 					className="mc-button"
 					type="button"
