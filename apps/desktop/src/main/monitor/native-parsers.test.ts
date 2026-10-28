@@ -315,10 +315,16 @@ describe("qualified platform fixtures", () => {
 		expect(run).toHaveBeenCalledTimes(3);
 	});
 	it("qualifies macOS optional GPU and Bluetooth without inventing temperature", async () => {
-		const c = nativeCollector("darwin", async (file) =>
-			file.endsWith("ioreg")
-				? '"Device Utilization %"=0'
-				: '{"SPBluetoothDataType":[{"devices_connected":[{}]}]}',
+		const c = nativeCollector(
+			"darwin",
+			async (file) =>
+				file.endsWith("ioreg")
+					? '"Device Utilization %"=0'
+					: '{"SPBluetoothDataType":[{"devices_connected":[{}]}]}',
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
 		);
 		expect((await Effect.runPromise(c.collect("gpu"))).values).toEqual({
 			load: 0,
@@ -336,7 +342,14 @@ describe("qualified platform fixtures", () => {
 			if (file.endsWith("pmset")) return "Now drawing from 'AC Power'\n";
 			throw new Error(`Unexpected command: ${file}`);
 		});
-		const collector = nativeCollector("darwin", run);
+		const collector = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
+		);
 		expect(await Effect.runPromise(collector.collect("power"))).toEqual({
 			state: "available",
 			values: { hasBattery: false, source: "ac" },
@@ -367,13 +380,30 @@ describe("qualified platform fixtures", () => {
 			}
 			throw new Error("ioreg failed");
 		});
-		const collector = nativeCollector("darwin", run);
-		const first = await Effect.runPromise(collector.collect("gpu"));
+		const appleSilicon = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
+		);
+		const first = await Effect.runPromise(appleSilicon.collect("gpu"));
 		expect(first.state).toBe("unavailable");
-		const second = await Effect.runPromise(collector.collect("gpu"));
-		if (process.arch === "arm64")
-			expect(second.values.model).toBe(`${cpus()[0]?.model.trim()} · Mac15,12`);
-		else expect(second.values.model).toBeUndefined();
+		const second = await Effect.runPromise(appleSilicon.collect("gpu"));
+		expect(second.values.model).toBe(`${cpus()[0]?.model.trim()} · Mac15,12`);
+		// Intel Macs omit the CPU identifier rather than mislabel a discrete GPU.
+		const intel = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"x64",
+		);
+		expect(
+			(await Effect.runPromise(intel.collect("gpu"))).values.model,
+		).toBeUndefined();
 	});
 	it("keeps real battery percentage and charging state from mocked pmset output", async () => {
 		const collector = nativeCollector(

@@ -53,6 +53,7 @@ export function nativeCollector(
 	interfaces: typeof networkInterfaces = networkInterfaces,
 	files: LinuxFiles = linuxFiles,
 	now: () => number = Date.now,
+	arch: NodeJS.Architecture = process.arch,
 ): MetricCollector {
 	let previousCpu: { idle: number; total: number } | undefined;
 	let previousNetwork:
@@ -76,7 +77,7 @@ export function nativeCollector(
 		const chip = cpus()[0]?.model.trim();
 		const identifier =
 			[chip, model].filter(Boolean).join(" · ") ||
-			(process.arch === "arm64" ? "Apple Silicon" : "Mac");
+			(arch === "arm64" ? "Apple Silicon" : "Mac");
 		if (model) hardwareIdentifier = identifier;
 		return identifier;
 	};
@@ -287,7 +288,7 @@ export function nativeCollector(
 					...(load !== undefined ? { load } : {}),
 					// Apple silicon graphics are part of the chip; on Intel Macs the CPU
 					// identifier would mislabel a discrete GPU, so it is omitted there.
-					...(process.arch === "arm64"
+					...(arch === "arm64"
 						? { model: await macHardwareIdentifier(signal) }
 						: {}),
 					temperatureAvailability: "unsupported-on-mac",
