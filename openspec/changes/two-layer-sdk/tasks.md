@@ -240,7 +240,9 @@ across all three runs. Assigned beads retain delivery/merge notes for the lead.
 
 - [x] 3.8 Keep overlong emoji names intact, focus rename on opening only and associate validation feedback with the field.
 - [x] 3.9 Count actual emoji command invocations, share operation parsing, log finalization exceptions and record selector restoration failures while continuing exploration.
-- [ ] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
+- [x] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
+
+PR157 delivery: squash merge `ebc68640398932a49230ce1ec4f98f928af7367a`, exact-head completed Devin review with no findings and all package/download checks passed. Owner app includes the correction. Native management sweep passed all 12 targeted scenarios; five existing speech configuration failures remain tracked separately in `open-quake-l86.31`.
 
 ## Typed probe evidence privacy, open-quake-l86.18
 
