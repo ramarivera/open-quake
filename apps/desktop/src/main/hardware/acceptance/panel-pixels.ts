@@ -10,8 +10,8 @@ export interface PanelPixelEvidence {
 	readonly panelDifference: number;
 	/** Mean absolute RGB difference between the display and its pre-launch content. */
 	readonly desktopDifference: number;
-	/** Standard deviation of display luminance; near zero is a blank frame. */
-	readonly luminanceDeviation: number;
+	/** Largest per-channel standard deviation of the display; near zero is a flat frame. */
+	readonly colorDeviation: number;
 	/** Share of opaque rendered-panel pixels compared. */
 	readonly coverage: number;
 	readonly passed: boolean;
@@ -45,23 +45,27 @@ export function comparePanelPixels(
 	let compared = 0;
 	let panelSum = 0;
 	let desktopSum = 0;
-	let luminance = 0;
-	let luminanceSquares = 0;
+	const sums = [0, 0, 0];
+	const squares = [0, 0, 0];
 	for (let offset = 0; offset < display.data.length; offset += 4) {
-		const d0 = display.data[offset] ?? 0;
-		const d1 = display.data[offset + 1] ?? 0;
-		const d2 = display.data[offset + 2] ?? 0;
-		const value = (d0 + d1 + d2) / 3;
-		luminance += value;
-		luminanceSquares += value * value;
+		for (let channel = 0; channel < 3; channel++) {
+			const value = display.data[offset + channel] ?? 0;
+			sums[channel] = (sums[channel] ?? 0) + value;
+			squares[channel] = (squares[channel] ?? 0) + value * value;
+		}
 		desktopSum += channelDifference(display.data, desktop.data, offset);
 		if ((panel.data[offset + 3] ?? 0) < OPAQUE) continue;
 		compared++;
 		panelSum += channelDifference(display.data, panel.data, offset);
 	}
-	const mean = luminance / pixels;
-	const luminanceDeviation = Math.sqrt(
-		Math.max(0, luminanceSquares / pixels - mean * mean),
+	// Per channel, so equal-brightness colors don't read as flat.
+	const colorDeviation = Math.max(
+		...sums.map((sum, channel) => {
+			const mean = sum / pixels;
+			return Math.sqrt(
+				Math.max(0, (squares[channel] ?? 0) / pixels - mean * mean),
+			);
+		}),
 	);
 	const coverage = compared / pixels;
 	const panelDifference = compared ? panelSum / compared : 255;
@@ -69,13 +73,13 @@ export function comparePanelPixels(
 	return {
 		panelDifference,
 		desktopDifference,
-		luminanceDeviation,
+		colorDeviation,
 		coverage,
 		passed:
 			coverage >= COVERAGE_MINIMUM &&
 			panelDifference <= PANEL_MATCH_LIMIT &&
 			desktopDifference >= DESKTOP_CHANGE_MINIMUM &&
-			luminanceDeviation > BLANK_DEVIATION_LIMIT,
+			colorDeviation > BLANK_DEVIATION_LIMIT,
 	};
 }
 

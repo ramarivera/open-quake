@@ -174,7 +174,13 @@ it("detects actual application owners without treating unrelated Electron applic
 	).toEqual([]);
 	expect(
 		competingOwners(
-			"20 1 octocode mcp --path /Users/me/dev/open-quake\n21 1 rg TODO /dev/open-quake",
+			"14 1 /Volumes/External Drive/open-quake.app/Contents/MacOS/open-quake",
+			99,
+		),
+	).toEqual([14]);
+	expect(
+		competingOwners(
+			"20 1 octocode mcp --path /Users/me/dev/open-quake\n21 1 rg TODO /dev/open-quake\n22 1 rg TODO /Applications/open-quake.app/Contents",
 			99,
 		),
 	).toEqual([]);
