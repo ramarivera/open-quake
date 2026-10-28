@@ -76,6 +76,11 @@ it("CENTER-020 unavailable controls remain visible and never dispatch", async ()
 		await click(action);
 	}
 	expect(request).not.toHaveBeenCalled();
+	expect(element(".aw-runtime-hint").textContent).toContain("Install OpenClaw");
+	expect(element(".aw-runtime-hint").textContent).toContain(
+		"OPEN_QUAKE_OPENCLAW_COMMAND",
+	);
+	expect(element(".aw-runtime-hint").textContent).toContain("Hermes");
 });
 it("CENTER-012/022/024/025/026/028 keeps the latest runtime event over a delayed equal-revision read and unsubscribes", async () => {
 	let resolveRead: (reply: AgentReply) => void = () => {};

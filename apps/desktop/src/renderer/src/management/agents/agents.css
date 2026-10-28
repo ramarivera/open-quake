@@ -60,6 +60,10 @@
 	flex-basis: 100%;
 	color: var(--cw-danger);
 }
+.aw-runtime-hint {
+	flex-basis: 100%;
+	color: var(--cw-muted);
+}
 .aw-runtime-code {
 	color: var(--cw-muted);
 	font-size: var(--mc-font-meta);

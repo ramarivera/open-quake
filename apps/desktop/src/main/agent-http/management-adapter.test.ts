@@ -133,7 +133,12 @@ describe("management HTTP adapters through existing consumers", () => {
 					const f = fixture();
 					const registry = yield* createRuntimeRegistry({ resolve: f.resolve });
 					yield* registry.connect("external");
-					const backend = createAgentRuntimeAdapter(registry);
+					const backend = createAgentRuntimeAdapter();
+					expect(backend.initial).toMatchObject({
+						available: false,
+						status: "stopped",
+						code: "AGENT.RUNTIME.UNAVAILABLE",
+					});
 					yield* Effect.gen(function* () {
 						const service = yield* AgentsRuntime;
 						for (const action of ["start", "stop", "restart"] as const) {
@@ -155,7 +160,7 @@ describe("management HTTP adapters through existing consumers", () => {
 					for (const action of ["start", "stop", "restart"] as const) {
 						const result = yield* backend[action].pipe(Effect.either);
 						expect(result._tag === "Left" && result.left.code).toBe(
-							"AGENT.RUNTIME.FAILED",
+							"AGENT.RUNTIME.UNAVAILABLE",
 						);
 					}
 				}),
@@ -167,7 +172,6 @@ describe("management HTTP adapters through existing consumers", () => {
 			Effect.scoped(
 				Effect.gen(function* () {
 					const f = fixture();
-					const registry = yield* createRuntimeRegistry({ resolve: f.resolve });
 					let stored: AgentState = initialAgentState();
 					yield* Effect.gen(function* () {
 						const service = yield* AgentsService;
@@ -214,7 +218,7 @@ describe("management HTTP adapters through existing consumers", () => {
 									Layer.mergeAll(
 										Layer.succeed(
 											AgentRuntimePort,
-											createAgentRuntimeAdapter(registry),
+											createAgentRuntimeAdapter(),
 										),
 										Layer.succeed(AgentDraftPort, f.drafting),
 										Layer.succeed(AgentStorage, {

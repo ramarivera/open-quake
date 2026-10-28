@@ -269,27 +269,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 			service ? service.clear(...args) : Effect.fail(new RuntimeUnavailable()),
 		generation: () => generation,
 	};
-	const backend = createAgentRuntimeAdapter({
-		resolve,
-		read: () =>
-			Effect.suspend(() =>
-				registry
-					? registry.read()
-					: Effect.succeed({ generation: 0, status: "unavailable" as const }),
-			),
-		subscribe: (listener) =>
-			registry ? registry.subscribe(listener) : () => {},
-		connect: (id) =>
-			Effect.suspend(() =>
-				registry ? registry.connect(id) : Effect.fail(new RuntimeUnavailable()),
-			),
-		disconnect: () =>
-			Effect.suspend(() => (registry ? registry.disconnect() : Effect.void)),
-		refresh: () =>
-			Effect.suspend(() =>
-				registry ? registry.refresh() : Effect.fail(new RuntimeUnavailable()),
-			),
-	});
+	const backend = createAgentRuntimeAdapter();
 	const draftAdapter = createAgentDraftAdapter({
 		resolve,
 		selected: () =>

@@ -21,7 +21,7 @@ const tones = {
 export function runtimeStatusLabel(runtime: RuntimeState): string {
 	return runtime.available
 		? labels[runtime.status]
-		: "No agent runtime is installed";
+		: "OpenClaw runtime not configured";
 }
 /** The local OpenClaw runtime: status as dot plus text, labelled lifecycle actions. */
 export function RuntimeIndicator({
@@ -50,8 +50,11 @@ export function RuntimeIndicator({
 					data-tone={runtime.available ? tones[runtime.status] : "neutral"}
 					aria-hidden="true"
 				/>
-				{runtime.available ? labels[runtime.status] : s.notInstalled}
+				{runtime.available ? labels[runtime.status] : s.notConfigured}
 			</span>
+			{!runtime.available && (
+				<span className="aw-runtime-hint">{s.setupHint}</span>
+			)}
 			<span className="aw-runtime-actions">
 				{(["start", "stop", "restart"] as const).map((action) => {
 					const disabled =

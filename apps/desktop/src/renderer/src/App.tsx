@@ -219,11 +219,6 @@ function ManagementSurface({
 						: "unknown"
 				}
 				runtimeLabel={runtimeLabel}
-				runtimeSummary={
-					runtime && !runtime.available
-						? "Local runtime not installed"
-						: runtimeLabel
-				}
 				appearance={appearance}
 				contentRef={content}
 				deviceReady={deviceReady}
