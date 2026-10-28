@@ -92,12 +92,15 @@ export function enumerateControls(): Control[] {
 
 	return Array.from(nodes)
 		.filter((node) => {
-			const closed = node.closest("details:not([open])");
-			return (
-				node.getClientRects().length > 0 &&
-				!node.closest("[inert]") &&
-				(!closed || !!closed.querySelector(":scope > summary")?.contains(node))
-			);
+			if (node.getClientRects().length === 0 || node.closest("[inert]"))
+				return false;
+			let closed = node.closest("details:not([open])");
+			while (closed) {
+				if (!closed.querySelector(":scope > summary")?.contains(node))
+					return false;
+				closed = closed.parentElement?.closest("details:not([open])") ?? null;
+			}
+			return true;
 		})
 		.sort((left, right) => {
 			if (!dialogs.length) return 0;

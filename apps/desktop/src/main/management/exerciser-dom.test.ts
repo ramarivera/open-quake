@@ -82,3 +82,22 @@ it("ignores descendants of collapsed details even when Chromium retains their re
 		"input",
 	]);
 });
+
+it("checks every closed disclosure before including a nested summary", () => {
+	vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue(
+		Object.assign([new DOMRect()], {
+			item: (index: number) => (index === 0 ? new DOMRect() : null),
+		}),
+	);
+	document.body.innerHTML =
+		"<main><details><summary>Outer</summary><details><summary>Inner</summary><button>Action</button></details></details></main>";
+	expect(enumerateControls().map((c) => c.label)).toEqual(["Outer"]);
+	document.querySelector("details")?.setAttribute("open", "");
+	expect(enumerateControls().map((c) => c.label)).toEqual(["Outer", "Inner"]);
+	document.querySelector("details details")?.setAttribute("open", "");
+	expect(enumerateControls().map((c) => c.label)).toEqual([
+		"Outer",
+		"Inner",
+		"Action",
+	]);
+});
