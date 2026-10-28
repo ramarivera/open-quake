@@ -244,6 +244,7 @@ export function mountStripTouch(
 	let ignoreContact = false;
 	let nativeActive = false;
 	let nativeDuplicatesDom = false;
+	let vendorConnected = false;
 	const reset = (): void => {
 		controller.event({
 			source: "mock",
@@ -260,6 +261,7 @@ export function mountStripTouch(
 	const off = bridge.onQuakeEvent((event) => {
 		if (disposed) return;
 		if (event.kind === "touch") {
+			vendorConnected = true;
 			if (domActive || nativeDuplicatesDom) {
 				nativeDuplicatesDom = event.points[0]?.action !== 0;
 				return;
@@ -271,8 +273,10 @@ export function mountStripTouch(
 				if (event.points[0]?.action === 0) ignoreContact = false;
 				return;
 			}
-		} else if (event.kind === "status" && event.state !== "connected")
-			onCancel?.();
+		} else if (event.kind === "status") {
+			vendorConnected = event.state === "connected";
+			if (!vendorConnected) onCancel?.();
+		}
 		controller.event(event);
 	});
 	const domPoint = (x: number, y: number, action: 0 | 1): void => {
@@ -299,7 +303,15 @@ export function mountStripTouch(
 		);
 	};
 	const pointer = (event: PointerEvent): void => {
-		if (disposed || performance.now() < nativeUntil) return;
+		if (disposed) return;
+		const panelTarget =
+			event.target instanceof Node && root.contains(event.target);
+		if (vendorConnected && (panelTarget || domActive)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			return;
+		}
+		if (performance.now() < nativeUntil) return;
 		if (event.type === "pointerdown") {
 			if (
 				domActive ||
@@ -339,6 +351,12 @@ export function mountStripTouch(
 		pointer(event);
 	};
 	const touch = (event: TouchEvent): void => {
+		if (disposed) return;
+		if (vendorConnected) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			return;
+		}
 		if (
 			performance.now() - lastPointer < 600 ||
 			performance.now() < nativeUntil
@@ -379,6 +397,11 @@ export function mountStripTouch(
 		}
 	};
 	const click = (event: MouseEvent): void => {
+		if (vendorConnected) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			return;
+		}
 		if (isEditableTouchTarget(event.target)) return;
 		if (event.type === "dblclick" || performance.now() < clickUntil) {
 			event.preventDefault();

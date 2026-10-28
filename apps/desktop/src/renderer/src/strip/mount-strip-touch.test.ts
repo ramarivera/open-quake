@@ -13,6 +13,81 @@ beforeEach(() => {
 	vi.stubGlobal("ResizeObserver", TestResizeObserver);
 	TestResizeObserver.instances = [];
 });
+
+it("ignores mirrored DOM pointer input while the vendor touch connection is healthy", async () => {
+	const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+	if (!profile) throw new Error("Missing SysView");
+	const layout = stripLayout(profile, profile.pages[0]);
+	const view = await mount(
+		createElement("div", { className: "strip-slot" }, "Tile"),
+	);
+	const slot = required(view.container, ".strip-slot", HTMLDivElement);
+	vi.spyOn(view.container, "getBoundingClientRect").mockReturnValue(
+		new DOMRect(0, 0, 1920, 480),
+	);
+	const slotRect = layout.tiles[0]?.slot;
+	if (!slotRect) throw new Error("Missing test tile");
+	const x = slotRect.x + slotRect.width / 2;
+	const y = slotRect.y + slotRect.height / 2;
+	let event: (value: QuakeEvent) => void = () => {};
+	const key = vi.fn();
+	const taps = vi.fn();
+	let now = performance.now();
+	vi.spyOn(performance, "now").mockImplementation(() => now);
+	view.container.addEventListener("quake-strip-tile-tap", taps);
+	const dispose = mountStripTouch(
+		view.container,
+		{
+			version: "test",
+			onQuakeEvent: (callback) => {
+				event = callback;
+				return () => {};
+			},
+		},
+		0,
+		() => layout,
+		key,
+	);
+	const pointer = (type: string) => {
+		const input = new Event(type, { bubbles: true, cancelable: true });
+		Object.assign(input, {
+			button: 0,
+			pointerId: 1,
+			clientX: x,
+			clientY: 480 - y,
+		});
+		slot.dispatchEvent(input);
+	};
+	try {
+		event({ source: "mock", kind: "status", state: "connected" });
+		pointer("pointerdown");
+		pointer("pointerup");
+		expect(key).not.toHaveBeenCalled();
+		expect(taps).not.toHaveBeenCalled();
+		for (const action of [1, 0] as const)
+			event({
+				source: "mock",
+				kind: "touch",
+				points: [{ x, y: 480 - y, action }],
+			});
+		expect(key).toHaveBeenCalledWith(expect.objectContaining({ keyAction: 0 }));
+		expect(key).toHaveBeenCalledTimes(1);
+		expect(taps).toHaveBeenCalledOnce();
+		event({
+			source: "mock",
+			kind: "status",
+			state: "disconnected",
+			reason: "scope-closed",
+		});
+		expect(key).toHaveBeenCalledTimes(2);
+		now += 601;
+		pointer("pointerdown");
+		expect(key).toHaveBeenCalledTimes(3);
+	} finally {
+		dispose();
+		await view.unmount();
+	}
+});
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();

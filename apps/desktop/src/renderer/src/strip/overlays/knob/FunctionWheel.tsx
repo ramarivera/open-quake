@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { MenuProfile } from "../../../../../shared/knob-contracts";
+import {
+	KNOB_TIMING,
+	type MenuProfile,
+} from "../../../../../shared/knob-contracts";
 
-const ROW_OFFSETS = [-166.81, -88.37, 0, 88.37, 166.81] as const;
+const ROW_OFFSETS = [-108, -57, 0, 57, 108] as const;
 
 /** Recovered geometry and deadlines, using the independent flat list drawing. */
 export function FunctionWheel({
@@ -14,10 +17,11 @@ export function FunctionWheel({
 	index: number;
 	direction: -1 | 1;
 	motion?: "full" | "reduce";
-}): React.JSX.Element {
+}): React.JSX.Element | null {
 	const [nudge, setNudge] = useState(0);
 	const [indicator, setIndicator] = useState(false);
-	const [width, setWidth] = useState(480);
+	const [feedbackVisible, setFeedbackVisible] = useState(true);
+	const [width, setWidth] = useState(320);
 	const labels = useRef<HTMLDivElement>(null);
 	const entryId = entries[index]?.id;
 	useLayoutEffect(() => {
@@ -40,17 +44,22 @@ export function FunctionWheel({
 				Math.min(600, measured) * (slot === 2 ? 1 : 0.7),
 			);
 		}
-		setWidth(widest > 240 ? Math.min(1920, widest + 400) : 480);
+		setWidth(widest > 240 ? Math.min(360, widest + 96) : 320);
 	}, [entries, index]);
 	useEffect(() => {
 		setNudge(0);
 		setIndicator(false);
+		setFeedbackVisible(true);
+		const feedbackTimer = setTimeout(
+			() => setFeedbackVisible(false),
+			KNOB_TIMING.ringHide,
+		);
 		if (
 			!entryId ||
 			motion === "reduce" ||
 			window.matchMedia("(prefers-reduced-motion: reduce)").matches
 		)
-			return;
+			return () => clearTimeout(feedbackTimer);
 		setIndicator(true);
 		const indicatorTimer = setTimeout(() => setIndicator(false), 300);
 		const started = performance.now();
@@ -64,10 +73,12 @@ export function FunctionWheel({
 		};
 		frame = requestAnimationFrame(tick);
 		return () => {
+			clearTimeout(feedbackTimer);
 			cancelAnimationFrame(frame);
 			clearTimeout(indicatorTimer);
 		};
 	}, [entryId, direction, motion]);
+	if (!feedbackVisible) return null;
 	return (
 		<>
 			<span role="status" aria-live="polite" className="visually-hidden">
@@ -97,7 +108,7 @@ export function FunctionWheel({
 								className="knob-wheel-label"
 								data-slot={delta + 2}
 								style={{
-									top: 235 + (ROW_OFFSETS[delta + 2] ?? 0),
+									top: 160 + (ROW_OFFSETS[delta + 2] ?? 0),
 									width: Math.min(
 										600,
 										(width - 160) / (delta === 0 ? 1.404 : 1),

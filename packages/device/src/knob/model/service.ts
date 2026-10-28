@@ -20,10 +20,9 @@ import {
 	type KnobModelSnapshot,
 	type VolumeReading,
 } from "./contracts.js";
+
 import {
 	canFocus,
-	pickerProfiles,
-	readyProfiles,
 	selectorProfiles,
 	volumeStep,
 	wrapIndex,
@@ -236,11 +235,14 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 				Effect.gen(function* () {
 					const ring = state.selector;
 					const switched = profileId !== state.context.session.profileId;
-					yield* stopSelection;
+					yield* stop("commit");
+					yield* stop("hide");
 					yield* emit({
 						selector: {
 							...closed,
-							...(keepRing ? { ...ring, mode: "ring" as const } : {}),
+							...(keepRing
+								? { ...ring, mode: "closed" as const, ringVisible: true }
+								: {}),
 						},
 					});
 					if (switched) {
@@ -276,9 +278,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 					if (keepRing)
 						yield* schedule(
 							"hide",
-							switched
-								? KNOB_TIMING.pickerRingHide
-								: KNOB_TIMING.ringHide - KNOB_TIMING.ringCommit,
+							KNOB_TIMING.pickerRingHide,
 							emit({ selector: closed }),
 						);
 				});
@@ -344,10 +344,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						mutex.withPermits(1)(
 							Effect.gen(function* () {
 								// Never open/replay the cold detent or change an already-open selector's entries.
-								if (
-									contextGeneration === generation &&
-									state.selector.mode !== "picker"
-								)
+								if (contextGeneration === generation)
 									yield* emit({
 										context: {
 											...state.context,
@@ -421,18 +418,10 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							return;
 						}
 					}
-					const picker =
-						state.selector.mode === "picker" ||
-						readyProfiles(state.context.profiles).length > 0;
-					const entries = picker
-						? pickerProfiles(
-								state.context.profiles,
-								state.context.session.profileId,
-							)
-						: state.context.profiles;
+					const entries = state.context.profiles;
 					if (!entries.length) return;
 					const base =
-						state.selector.mode === (picker ? "picker" : "ring")
+						state.selector.mode === "ring"
 							? state.selector.index
 							: entries.findIndex(
 									(p) => p.id === state.context.session.profileId,
@@ -443,17 +432,17 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 					);
 					yield* emit({
 						selector: {
-							mode: picker ? "picker" : "ring",
+							mode: "ring",
 							index,
 							page: Math.floor(index / 15),
 							progress: 0,
-							ringVisible: !picker,
+							ringVisible: true,
 							direction: delta,
 						},
 						notice: "",
 					});
-					yield* arm(picker);
-					if (!picker) yield* warm;
+					yield* arm(false);
+					yield* warm;
 				});
 			let focusGeneration = 0;
 			const handle = (event: KnobModelInput): Effect.Effect<void, KnobError> =>
@@ -554,7 +543,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						}
 						case "Select":
 							if (
-								state.selector.mode === "picker" &&
+								state.selector.mode !== "closed" &&
 								selectorProfiles(state).some((p) => p.id === event.profileId)
 							)
 								yield* commit(event.profileId);
@@ -575,7 +564,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							});
 							return yield* cancelVoice;
 						case "Key": {
-							if (state.selector.mode === "picker" && event.code !== 255) {
+							if (state.selector.mode !== "closed" && event.code !== 255) {
 								if (event.code === 1) return yield* confirm();
 								yield* stopSelection;
 								yield* emit({ selector: closed });
@@ -729,7 +718,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 												yield* emit({
 													selector: {
 														...closed,
-														mode: "ring",
+														mode: "closed",
 														ringVisible: true,
 														index,
 														page: Math.floor(index / 15),
@@ -745,15 +734,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 												previous.selector.mode !== "closed"
 											) {
 												// Source reinitializes the open selector to the active ID after menu edits.
-												const picker =
-													previous.selector.mode === "picker" &&
-													readyProfiles(merged.profiles).length > 0;
-												const entries = picker
-													? pickerProfiles(
-															merged.profiles,
-															merged.session.profileId,
-														)
-													: merged.profiles;
+												const entries = merged.profiles;
 												const index = Math.max(
 													0,
 													entries.findIndex(
@@ -764,14 +745,14 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 												yield* emit({
 													selector: {
 														...previous.selector,
-														mode: picker ? "picker" : "ring",
-														ringVisible: !picker,
+														mode: "ring",
+														ringVisible: true,
 														index,
 														page: Math.floor(index / 15),
 														progress: 0,
 													},
 												});
-												yield* arm(picker);
+												yield* arm(false);
 											}
 										});
 									}),

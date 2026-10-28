@@ -10,21 +10,21 @@ Make physical knob gestures select profiles and control the focused tile or play
 
 ### Requirement: Firmware gestures and voice arbitration
 
-The system SHALL consume source-confirmed press codes 1 short, 2 double, 5 hold start, 255 hold release, and rotation byte 1 as increase. Short SHALL interrupt the current voice turn. Double SHALL select the first Colorful Screen profile unless already there. While the thumbnail picker is open, short SHALL confirm its focused profile; double and hold SHALL dismiss without committing the focused profile. Double SHALL then jump to Colorful Screen and hold SHALL continue to the existing push-to-talk contract. Release SHALL be correlated to the matching hold generation; no host hold or double timer SHALL classify firmware events. Audit KNOB-001..007, SCREEN-071/082/083/092, MAIN-029..033.
+The system SHALL consume source-confirmed press codes 1 short, 2 double, 5 hold start, 255 hold release, and rotation byte 1 as increase. Short SHALL confirm a pending profile selection or interrupt the current voice turn when no selection is pending. Double SHALL dismiss pending selection and select the first Colorful Screen profile unless already there. Hold SHALL dismiss pending selection and continue to the existing push-to-talk contract. Release SHALL be correlated to the matching hold generation; no host hold or double timer SHALL classify firmware events. Audit KNOB-001..007, SCREEN-071/082/083/092, MAIN-029..033.
 
-#### Scenario: Picker owns short press
+#### Scenario: Profile selection owns short press
 
-- **WHEN** the picker is open and firmware sends 1
+- **WHEN** profile selection is pending and firmware sends 1
 - **THEN** the focused profile is committed once and no voice interruption or center assignment runs
 
-#### Scenario: Dismiss before voice
+#### Scenario: Dismiss before hold-to-talk
 
-- **WHEN** the picker is open and firmware sends 5 then 255
+- **WHEN** profile selection is pending and firmware sends 5 then 255
 - **THEN** it closes without committing its selection and one correlated hold-start/release pair reaches push-to-talk
 
 ### Requirement: Idle profile selectors
 
-Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL list profiles with ready thumbnails plus the committed active profile, using a placeholder when its thumbnail is missing, in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent; unchanged selection SHALL hide after 3000 ms from input, and successful commits SHALL keep feedback for 1200 ms after commit; the ring SHALL NOT render while the picker is open. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
+Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, then profile selection. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. Every profile detent SHALL update one ordered profile list and commit 200 ms after the last detent, regardless of thumbnail readiness. Focus equal to current SHALL close without a write. Thumbnail warming SHALL remain asynchronous and SHALL NOT change the selection or replay a detent. One FunctionWheel SHALL show the current index for warm and cold caches and hide 1200 ms after a committed selection or external profile change. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
 
 #### Scenario: Deadline restarts
 
@@ -38,7 +38,7 @@ Each detent SHALL route once, in order: visible knob-capable tile, available arm
 
 ### Requirement: Strip selector presentation and touch
 
-Selectors SHALL render within the strip logical 1920 by 480 canvas. The ring SHALL have height H minus 10, width 0.9 times height, five circular labels, a right arc with cyan radius 357.5 stroke 7, a 200 ms eased angular nudge, and a radial black vignette sized from the center and adjacent labels. The client template SHALL retain the cyan arc and directional glow without resurrecting its removed halo layer. Labels SHALL use 40/48 Inter with recovered offsets 166.81/88.37/0/88.37/166.81, center scale 1.404 and cyan emphasis. Picker SHALL use the recovered 4:1 cards, 16 px gaps, 40 px radius, count-based columns 2/3/3/4/3/4/5, fixed 3 by 5 pages above 15 items, 58 px header, 38 px footer, single 3 px focus ring and bottom settle bar. Strings SHALL match locale-en.json. Touch down/up on the same card SHALL commit; leaving SHALL cancel; blank tap SHALL dismiss; visible page arrows SHALL select the target page's first card and restart the deadline. Reduced motion SHALL remove motion without altering deadlines. Audit SCREEN-075..080/087..089/093, KNOB-011/012.
+Selectors SHALL render within the strip logical 1920 by 480 canvas. The FunctionWheel SHALL fit inside a 320 px right-side panel region, use translucent backing, and keep tile labels legible underneath. The client template SHALL retain the cyan arc and directional glow without resurrecting its removed halo layer. Labels SHALL ellipsize to available width and emphasize the current profile. A selector SHALL NOT render a second full-screen profile picker. Reduced motion SHALL remove motion without altering deadlines. Audit SCREEN-075..080/087..089/093, KNOB-011/012.
 
 #### Scenario: Page arrow
 
@@ -50,10 +50,10 @@ Selectors SHALL render within the strip logical 1920 by 480 canvas. The ring SHA
 - **WHEN** the panel uses rotation 90 and the user taps a card or page arrow
 - **THEN** pointer coordinates are transformed into the logical canvas and normalized physical touch uses the shared strip overlay route; both select the same target without activating a grid tile
 
-#### Scenario: One selector at a time
+#### Scenario: One profile selector presentation
 
-- **WHEN** ready thumbnails open the picker
-- **THEN** no FunctionWheel arc or label renders over it; a cold cache still renders the FunctionWheel alone
+- **WHEN** profile rotation begins with ready or missing thumbnails
+- **THEN** the same compact FunctionWheel shows the selected profile and no full-screen picker appears
 
 ### Requirement: Tile focus and dial
 
@@ -90,7 +90,7 @@ Focused screen luminance SHALL use the hardware session's typed Luminance comman
 
 ### Requirement: Source-aware wheel visibility and menu reconciliation
 
-SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative committed context containing the ordered menu and active profile. Boot synchronization SHALL remain closed. A real external profile ID change SHALL show ring feedback at its new index for 1200 ms without selecting again. An own-commit publication SHALL NOT reopen or extend feedback. Added, edited or deleted entries SHALL retain the active ID when present; deletion of the active ID SHALL use the repository's first visible profile. An open selector SHALL rescan to the committed active ID and restart its settle deadline on a catalog edit, without opening a closed selector. The committed active profile SHALL remain a picker entry with a placeholder when its thumbnail is missing. Catalog edits SHALL NOT invoke persistence for a different profile. Ready thumbnails with matching content keys SHALL survive unrelated edits. Active page/content changes SHALL clear focus and disarm volume; inactive-only edits SHALL preserve them. A committed snapshot received before the initial read SHALL take precedence over that late read. Canonical model revisions and 16 ms renderer coalescing SHALL replace repeated nextTick/150 ms index resynchronization.
+SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative committed context containing the ordered menu and active profile. Boot synchronization SHALL remain closed. A real external profile ID change SHALL show ring feedback at its new index for 1200 ms without selecting again. An own-commit publication SHALL NOT reopen or extend feedback. Added, edited or deleted entries SHALL retain the active ID when present; deletion of the active ID SHALL use the repository's first visible profile. An open selector SHALL rescan to the committed active ID and restart its 200 ms settle deadline on a catalog edit, without opening a closed selector. Missing thumbnails SHALL use the profile label and SHALL NOT select a different profile. Catalog edits SHALL NOT invoke persistence for a different profile. Ready thumbnails with matching content keys SHALL survive unrelated edits. Active page/content changes SHALL clear focus and disarm volume; inactive-only edits SHALL preserve them. A committed snapshot received before the initial read SHALL take precedence over that late read. Canonical model revisions and 16 ms renderer coalescing SHALL replace repeated nextTick/150 ms index resynchronization.
 
 #### Scenario: External change versus boot and own commit
 
@@ -105,7 +105,7 @@ SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative co
 #### Scenario: Missing active thumbnail during a catalog edit
 
 - **WHEN** the active thumbnail is missing or invalidated while another ready profile is highlighted, then a catalog edit publishes
-- **THEN** the picker rescans to the active profile's placeholder, expiry retains the committed profile without persistence, and a subsequent deliberate detent can select another ready profile
+- **THEN** the FunctionWheel rescans to the active profile's label, expiry retains the committed profile without persistence, and a subsequent deliberate detent can select another profile
 
 #### Scenario: Coalesced multi-page movement
 

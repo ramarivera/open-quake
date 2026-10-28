@@ -204,22 +204,22 @@
 	transition: width 0.2s linear;
 }
 
-/* Recovered footprint and timing, drawn with the independent flat palette. */
+/* Compact feedback stays translucent so panel labels remain visible beneath it. */
 .knob-wheel-backdrop {
 	position: absolute;
 	right: 0;
 	top: 0;
-	height: 480px;
+	height: 320px;
 	z-index: 99999;
-	background: var(--strip-surface);
+	background: linear-gradient(90deg, transparent, rgb(8 10 18 / 42%));
 	pointer-events: none;
 }
 .knob-wheel {
 	position: absolute;
-	top: 5px;
+	top: 40px;
 	right: 0;
-	width: 423px;
-	height: 470px;
+	width: 320px;
+	height: 300px;
 	z-index: 100000;
 	overflow: visible;
 	pointer-events: none;
@@ -230,30 +230,31 @@
 }
 .knob-wheel-label {
 	position: absolute;
-	right: 137px;
+	right: 72px;
 	overflow: hidden;
 	color: var(--strip-muted);
-	font-size: 40px;
-	line-height: 48px;
+	font-size: 25px;
+	line-height: 32px;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	text-align: right;
+	text-shadow: 0 1px 4px rgb(0 0 0 / 90%);
 	transform-origin: right center;
 	transform: translateY(-50%);
 }
 .knob-wheel-label[data-slot="2"] {
-	right: 153px;
-	border-right: 4px solid var(--strip-accent);
-	padding-right: 12px;
+	right: 72px;
+	border-right: 3px solid var(--strip-accent);
+	padding-right: 8px;
 	color: var(--strip-text);
 	font-weight: 500;
-	transform: translateY(-50%) scale(1.404);
+	transform: translateY(-50%) scale(1.1);
 }
 .knob-wheel-label[data-slot="0"] {
-	right: 102px;
+	right: 56px;
 }
 .knob-wheel-label[data-slot="4"] {
-	right: 110px;
+	right: 60px;
 }
 .knob-wheel-direction {
 	position: absolute;

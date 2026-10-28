@@ -103,23 +103,26 @@ const send = (input: object) =>
 	KnobModel.dispatch({ sessionId: "s1", ...input });
 
 describe("knob model uses the real domain ports", () => {
-	it.effect("uses exactly one selector for warm and cold thumbnails", () => {
-		const h = harness();
-		return Effect.gen(function* () {
-			yield* KnobModel.configure(modelContext());
-			yield* send({ _tag: "Rotate", delta: 1 });
-			expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-				mode: "picker",
-				ringVisible: false,
-			});
-			yield* KnobModel.configure(modelContext(false));
-			yield* send({ _tag: "Rotate", delta: 1 });
-			expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-				mode: "ring",
-				ringVisible: true,
-			});
-		}).pipe(Effect.provide(h.layer));
-	});
+	it.effect(
+		"uses the same profile selector for warm and cold thumbnails",
+		() => {
+			const h = harness();
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(modelContext());
+				yield* send({ _tag: "Rotate", delta: 1 });
+				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+					mode: "ring",
+					ringVisible: true,
+				});
+				yield* KnobModel.configure(modelContext(false));
+				yield* send({ _tag: "Rotate", delta: 1 });
+				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+					mode: "ring",
+					ringVisible: true,
+				});
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
 	it.effect(
 		"publishes catalog-only failures for focused controls and voice, preserving the original failure even when alerting fails",
 		() => {
@@ -161,20 +164,23 @@ describe("knob model uses the real domain ports", () => {
 		},
 	);
 	it.effect(
-		"picker commits exactly 5 seconds after the last input and keeps every delta",
+		"profile rotation commits 200ms after the last detent and keeps every delta",
 		() => {
 			const h = harness();
 			return Effect.gen(function* () {
 				yield* KnobModel.configure(modelContext());
 				yield* send({ _tag: "Rotate", delta: 1 });
-				yield* TestClock.adjust(4999);
+				yield* TestClock.adjust(199);
 				expect(h.selections).toEqual([]);
 				yield* send({ _tag: "Rotate", delta: 1 });
 				yield* send({ _tag: "Rotate", delta: 1 });
-				yield* TestClock.adjust(4999);
+				yield* TestClock.adjust(199);
 				expect(h.selections).toEqual([]);
 				yield* TestClock.adjust(1);
 				expect(h.selections).toEqual(["p3"]);
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+				expect((yield* KnobModel.snapshot()).selector.ringVisible).toBe(true);
+				yield* TestClock.adjust(1200);
 				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
 			}).pipe(Effect.provide(h.layer));
 		},
@@ -199,8 +205,10 @@ describe("knob model uses the real domain ports", () => {
 					expect(h.selections).toEqual([]);
 					yield* TestClock.adjust(1);
 					expect(h.selections).toEqual(["p1"]);
+					expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+					expect((yield* KnobModel.snapshot()).selector.ringVisible).toBe(true);
 					yield* Deferred.succeed(warmed, modelContext().profiles);
-					yield* TestClock.adjust(2800);
+					yield* TestClock.adjust(1200);
 					expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
 					expect(h.selections).toEqual(["p1"]);
 					expect(
@@ -210,7 +218,7 @@ describe("knob model uses the real domain ports", () => {
 			}),
 	);
 	it.effect(
-		"page arrows follow focus and restart the deadline, confirming current does no write",
+		"one-turn selection settles on idle and ignores picker-only page commands",
 		() => {
 			const context = modelContext(true, 17);
 			const h = harness(context);
@@ -220,21 +228,20 @@ describe("knob model uses the real domain ports", () => {
 				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
 					index: 16,
 					page: 1,
+					mode: "ring",
 				});
-				yield* TestClock.adjust(4000);
 				yield* send({ _tag: "Page", delta: -1 });
-				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-					index: 0,
-					page: 0,
-				});
-				yield* TestClock.adjust(5000);
-				expect(h.selections).toEqual([]);
+				yield* TestClock.adjust(200);
+				expect(h.selections).toEqual(["p16"]);
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+				expect((yield* KnobModel.snapshot()).selector.ringVisible).toBe(true);
+				yield* TestClock.adjust(1200);
 				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
 			}).pipe(Effect.provide(h.layer));
 		},
 	);
 	it.effect(
-		"short confirms the picker, otherwise interrupts; double dismisses then selects Colorful",
+		"short press confirms the selector, otherwise interrupts; double selects Colorful",
 		() => {
 			const h = harness();
 			return Effect.gen(function* () {
@@ -257,7 +264,7 @@ describe("knob model uses the real domain ports", () => {
 		},
 	);
 	it.effect(
-		"firmware hold dismisses picker and forwards one generation, release never invents a press",
+		"firmware hold dismisses selection and forwards one generation, release never invents a press",
 		() => {
 			const h = harness();
 			return Effect.gen(function* () {
@@ -372,7 +379,7 @@ describe("knob model uses the real domain ports", () => {
 					sessionId: "s2",
 					delta: 1,
 				});
-				expect((yield* KnobModel.snapshot()).selector.mode).toBe("picker");
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("ring");
 			}).pipe(Effect.provide(h.layer));
 		},
 	);
@@ -422,7 +429,7 @@ describe("knob model uses the real domain ports", () => {
 				expect(snapshot.notice).toBe("QUAKE.KNOB.DISPATCH_FAILED");
 				expect(JSON.stringify(snapshot)).not.toContain("private driver cause");
 				yield* send({ _tag: "Rotate", delta: 1 });
-				expect((yield* KnobModel.snapshot()).selector.mode).toBe("picker");
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("ring");
 			}).pipe(Effect.provide(h.layer));
 		},
 	);
@@ -437,7 +444,7 @@ describe("knob model uses the real domain ports", () => {
 				yield* send({ _tag: "ToggleVolume" });
 				expect((yield* KnobModel.snapshot()).volume.phase).toBe("unavailable");
 				yield* send({ _tag: "Rotate", delta: 1 });
-				expect((yield* KnobModel.snapshot()).selector.mode).toBe("picker");
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("ring");
 				expect(h.writes).toEqual([]);
 			}).pipe(Effect.provide(h.layer));
 		},
@@ -561,21 +568,14 @@ describe("wheel-selector committed state and menu mutations", () => {
 				};
 				yield* KnobModel.synchronize(changed);
 				const snapshot = yield* KnobModel.snapshot();
-				expect(snapshot.selector.mode).toBe("picker");
+				expect(snapshot.selector.mode).toBe("ring");
 				expect(
 					selectorProfiles(snapshot)[snapshot.selector.index],
-				).toMatchObject({
-					id: "p0",
-					thumbnail: { _tag: "missing" },
-				});
-				yield* TestClock.adjust(5000);
+				).toMatchObject({ id: "p0", thumbnail: { _tag: "missing" } });
+				yield* TestClock.adjust(200);
 				expect(h.selections).toEqual([]);
-				expect((yield* KnobModel.snapshot()).context.session.profileId).toBe(
-					"p0",
-				);
-				// A subsequent deliberate detent can still commit a ready profile.
 				yield* send({ _tag: "Rotate", delta: 1 });
-				yield* TestClock.adjust(5000);
+				yield* TestClock.adjust(200);
 				expect(h.selections).toEqual(["p1"]);
 			}).pipe(Effect.provide(h.layer));
 		},
@@ -621,7 +621,7 @@ describe("wheel-selector committed state and menu mutations", () => {
 				};
 				yield* KnobModel.synchronize(external);
 				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-					mode: "ring",
+					mode: "closed",
 					index: 2,
 					ringVisible: true,
 				});
@@ -700,7 +700,7 @@ describe("wheel-selector committed state and menu mutations", () => {
 					index: 31,
 					page: 2,
 				});
-				yield* TestClock.adjust(4999);
+				yield* TestClock.adjust(199);
 				expect(h.selections).toEqual([]);
 				yield* TestClock.adjust(1);
 				expect(h.selections).toEqual(["p31"]);
@@ -727,7 +727,7 @@ describe("wheel-selector committed state and menu mutations", () => {
 					};
 					yield* KnobModel.synchronize(changed);
 					expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-						mode: ready ? "picker" : "ring",
+						mode: "ring",
 						index: 1,
 						page: 0,
 						progress: 0,
@@ -744,7 +744,7 @@ describe("wheel-selector committed state and menu mutations", () => {
 						18,
 					);
 					expect((yield* KnobModel.snapshot()).selector.index).toBe(1);
-					yield* TestClock.adjust(ready ? 5000 : 200);
+					yield* TestClock.adjust(200);
 					expect(h.selections).toEqual([]);
 					yield* send({ _tag: "Dismiss" });
 					yield* KnobModel.synchronize({
@@ -759,13 +759,29 @@ describe("wheel-selector committed state and menu mutations", () => {
 					};
 					yield* KnobModel.synchronize(deleted);
 					expect((yield* KnobModel.snapshot()).selector).toMatchObject({
-						mode: "ring",
+						mode: "closed",
 						index: 0,
 					});
 					expect(h.selections).toEqual([]);
 				}).pipe(Effect.provide(h.layer));
 			},
 		);
+});
+
+it.effect("post-commit feedback does not swallow a later short press", () => {
+	const h = harness();
+	return Effect.gen(function* () {
+		yield* KnobModel.configure(modelContext());
+		yield* send({ _tag: "Rotate", delta: 1 });
+		yield* TestClock.adjust(200);
+		expect(h.selections).toEqual(["p1"]);
+		expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+			mode: "closed",
+			ringVisible: true,
+		});
+		yield* KnobModel.dispatch({ _tag: "Key", sessionId: "s2", code: 1 });
+		expect(h.voice.map((event) => event.action)).toEqual(["interrupt"]);
+	}).pipe(Effect.provide(h.layer));
 });
 
 it.effect(
