@@ -243,3 +243,10 @@ across all three runs. Assigned beads retain delivery/merge notes for the lead.
 - [x] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
 
 PR157 delivery: squash merge `ebc68640398932a49230ce1ec4f98f928af7367a`, exact-head completed Devin review with no findings and all package/download checks passed. Owner app includes the correction. Native management sweep passed all 12 targeted scenarios; five existing speech configuration failures remain tracked separately in `open-quake-l86.31`.
+
+## Guided production-panel input capture, open-quake-l86.19
+
+- [x] Prepare an opt-in single-owner capture entry around the production app with fresh scratch data, inert touch tiles and no physical-key instructions. Observe the existing renderer event bridge, record bounded timing/coordinates and guide touch, knob and cable reconnect.
+- [ ] Verify guide progression, privacy/bounds, safe fixture configuration and a hidden mock run of the real renderer. Commit/push and retain physical acceptance as a separate human session.
+
+Guided fixture verification: three focused model/privacy/profile tests pass; desktop types and lint pass. The production renderer/preload plus opt-in entry built and completed all twelve synthetic steps in a hidden mock run, with native HID imports blocked. Captured fixture panel inspected; report status observed, selfTest true, physicalAccepted false. Evidence: SSD hardware scratch `guided-run-jsLiHV/`. No physical session, real HID handle, microphone, provider call, foreground input or lighting mutation occurred. Physical acceptance remains unverified.
