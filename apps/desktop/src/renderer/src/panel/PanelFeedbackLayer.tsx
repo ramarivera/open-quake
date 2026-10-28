@@ -6,10 +6,11 @@ import {
 } from "./panelFeedback";
 import "./panel.css";
 
-/** Compact dial sits in the row gap so its value doesn't cover tile labels. */
-const KNOB = { cx: 1672, cy: 240, body: 30 } as const;
-const TRACK = 23;
-const HOME = { inner: 18, outer: 22 } as const;
+/** Readable dial: an opaque disc that briefly covers the tiles behind it. */
+const KNOB = { cx: 1672, cy: 240, body: 76 } as const;
+const TRACK = 62;
+const POINTER = 8;
+const HOME = { inner: 54, outer: 70 } as const;
 /** Labels synthetic input; an opaque chip keeps it legible over any image. */
 const SOURCE_CHIP = {
 	x: KNOB.cx - KNOB.body - 28 - 236,
@@ -21,12 +22,24 @@ const PLATE = { x: 1192, y: 128, width: 648, height: 224 } as const;
 
 function valueSize(text: string): number {
 	return text.length <= 2
-		? 32
+		? 52
 		: text.length === 3
-			? 27
+			? 44
 			: text.length === 4
-				? 22
-				: 20;
+				? 36
+				: 28;
+}
+
+/** Accent arc from the home mark to the current angle, capped below a full turn. */
+function arcPath(angle: number): string | undefined {
+	const a = Math.max(-359, Math.min(359, angle));
+	if (a === 0) return undefined;
+	const rad = (a * Math.PI) / 180;
+	const x = KNOB.cx + TRACK * Math.sin(rad);
+	const y = KNOB.cy - TRACK * Math.cos(rad);
+	const large = Math.abs(a) > 180 ? 1 : 0;
+	const sweep = a > 0 ? 1 : 0;
+	return `M ${KNOB.cx} ${KNOB.cy - TRACK} A ${TRACK} ${TRACK} 0 ${large} ${sweep} ${x} ${y}`;
 }
 
 function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {
@@ -52,6 +65,9 @@ function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {
 					r={TRACK}
 					className="panel-knob-track"
 				/>
+				{arcPath(angle) ? (
+					<path d={arcPath(angle)} className="panel-knob-arc" />
+				) : null}
 				<line
 					x1={KNOB.cx}
 					y1={KNOB.cy - HOME.inner}
@@ -66,7 +82,7 @@ function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {
 						transformOrigin: `${KNOB.cx}px ${KNOB.cy}px`,
 					}}
 				>
-					<circle cx={KNOB.cx} cy={KNOB.cy - TRACK} r="16" />
+					<circle cx={KNOB.cx} cy={KNOB.cy - TRACK} r={POINTER} />
 				</g>
 				<text
 					x={KNOB.cx}
