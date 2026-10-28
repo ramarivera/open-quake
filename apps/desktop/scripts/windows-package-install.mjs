@@ -97,13 +97,12 @@ export async function installWindowsPackage({
 		const timer = setTimeout(() => {
 			diagnosticRun = diagnostics();
 		}, 60_000);
+		let installedOk = false;
 		try {
 			await command(installer, ["/S", "/currentuser", `/D=${installed}`], {
 				timeout: 300_000,
 			});
-			// NSIS may return before a helper exits. Don't smoke or remove files yet.
-			await waitForWindowsPackage(installer, installed, command);
-			return;
+			installedOk = true;
 		} catch (error) {
 			log.error(`Windows install attempt ${attempt}/3 failed`, {
 				code: error.code,
@@ -119,6 +118,12 @@ export async function installWindowsPackage({
 		} finally {
 			clearTimeout(timer);
 			await diagnosticRun;
+		}
+		if (installedOk) {
+			// NSIS may return before a helper exits. A failed wait is not retried:
+			// rerunning a successful install would hide the real problem.
+			await waitForWindowsPackage(installer, installed, command);
+			return;
 		}
 	}
 }

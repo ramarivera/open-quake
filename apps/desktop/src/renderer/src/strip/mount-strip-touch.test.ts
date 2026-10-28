@@ -130,10 +130,19 @@ const setup = async (child: ReactNode) => {
 		target.dispatchEvent(input);
 		return input;
 	};
+	// A DOM TouchEvent contact, which mount-strip-touch tracks by identifier.
+	const touchContact = (type: string, target: Element = slot) => {
+		const input = new Event(type, { bubbles: true, cancelable: true });
+		const touch = { identifier: 7, clientX: x, clientY: 480 - y };
+		Object.assign(input, { changedTouches: [touch], touches: [touch] });
+		target.dispatchEvent(input);
+		return input;
+	};
 	return {
 		view,
 		key,
 		pointer,
+		touchContact,
 		emit: (value: QuakeEvent) => event(value),
 		close: async () => {
 			dispose();
@@ -391,4 +400,39 @@ it("SCREEN-061: real DOM adapter refreshes element/parent/gadget bounds, discove
 	const count = ends.mock.calls.length;
 	tap(680);
 	expect(ends).toHaveBeenCalledTimes(count);
+});
+
+it("open-quake-l86.22: vendor takeover cancels a DOM touchstart contact without a confirmed tap", async () => {
+	const panel = await setup("Tile");
+	try {
+		panel.touchContact("touchstart");
+		expect(panel.key).toHaveBeenCalledWith(
+			expect.objectContaining({ keyAction: 0 }),
+		);
+		const taps = vi.fn();
+		panel.view.container.addEventListener("quake-strip-tile-tap", taps);
+		const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+		const rect =
+			profile && stripLayout(profile, profile.pages[0]).tiles[0]?.slot;
+		if (!rect) throw new Error("Missing tile");
+		const x = rect.x + rect.width / 2,
+			y = 480 - rect.y - rect.height / 2;
+		panel.emit({
+			source: "mock",
+			kind: "touch",
+			points: [{ x, y, action: 1 }],
+		});
+		expect(taps).not.toHaveBeenCalled();
+		panel.emit({
+			source: "mock",
+			kind: "touch",
+			points: [{ x, y, action: 0 }],
+		});
+		panel.touchContact("touchend");
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		// Only the vendor gesture taps; the superseded DOM contact never confirms.
+		expect(taps).toHaveBeenCalledOnce();
+	} finally {
+		await panel.close();
+	}
 });

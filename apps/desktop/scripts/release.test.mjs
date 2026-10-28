@@ -324,3 +324,28 @@ test("open-quake-eeu: install cannot start until the prior process wait complete
 	await operation;
 	assert.equal(installs, 1);
 });
+
+test("open-quake-eeu: a failed completion wait after a successful install is not retried", async () => {
+	const { installWindowsPackage } = await import(
+		"./windows-package-install.mjs"
+	);
+	const timeout = new Error("helper still running");
+	let installs = 0,
+		waits = 0;
+	await assert.rejects(
+		installWindowsPackage({
+			installer: "installer.exe",
+			installed: "installed",
+			command: async (file) => {
+				if (file === "installer.exe") installs++;
+				// The first wait precedes the install; the second follows it.
+				if (file === "pwsh.exe" && ++waits === 2) throw timeout;
+				return { stdout: "", stderr: "" };
+			},
+			pause: async () => {},
+			log: { info() {}, error() {} },
+		}),
+		(error) => error === timeout,
+	);
+	assert.equal(installs, 1);
+});
