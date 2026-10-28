@@ -195,7 +195,7 @@ export const runQueryProbe = Effect.fn("HardwareAcceptance.probe")(
 							onSome: (value) =>
 								cmdId === 0x1f ? redactName(value, options.serial) : value,
 						});
-						valid(reply, name);
+						return valid(reply, name);
 					}),
 				),
 			);
