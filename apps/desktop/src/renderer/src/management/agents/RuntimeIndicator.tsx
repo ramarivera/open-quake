@@ -1,15 +1,7 @@
 import type { RuntimeState } from "../../../../shared/agents";
-import { agentsStrings as strings, useAgentsCopy } from "./copy";
+import { type AgentsCopy, useAgentsCopy } from "./copy";
 import type { AgentRequest } from "./useAgents";
 
-const s = strings.openclawRuntimeIndicator;
-const labels = {
-	ready: s.statusReady,
-	starting: s.statusStarting,
-	stopping: s.statusStopping,
-	error: s.statusError,
-	stopped: s.statusStopped,
-};
 const tones = {
 	ready: "success",
 	starting: "warning",
@@ -17,11 +9,21 @@ const tones = {
 	error: "danger",
 	stopped: "neutral",
 } as const;
+const statusLabels = (s: AgentsCopy["openclawRuntimeIndicator"]) => ({
+	ready: s.statusReady,
+	starting: s.statusStarting,
+	stopping: s.statusStopping,
+	error: s.statusError,
+	stopped: s.statusStopped,
+});
 /** Shell-wide label (sidebar status dot); keeps its full sentence. */
-export function runtimeStatusLabel(runtime: RuntimeState): string {
+export function runtimeStatusLabel(
+	runtime: RuntimeState,
+	s: AgentsCopy["openclawRuntimeIndicator"],
+): string {
 	return runtime.available
-		? labels[runtime.status]
-		: "OpenClaw runtime not configured";
+		? statusLabels(s)[runtime.status]
+		: s.shellNotConfigured;
 }
 /** The local OpenClaw runtime: status as dot plus text, labelled lifecycle actions. */
 export function RuntimeIndicator({
@@ -32,13 +34,7 @@ export function RuntimeIndicator({
 	readonly request: AgentRequest;
 }) {
 	const s = useAgentsCopy().openclawRuntimeIndicator;
-	const labels = {
-		ready: s.statusReady,
-		starting: s.statusStarting,
-		stopping: s.statusStopping,
-		error: s.statusError,
-		stopped: s.statusStopped,
-	};
+	const labels = statusLabels(s);
 	const transitioning =
 		runtime.status === "starting" || runtime.status === "stopping";
 	return (

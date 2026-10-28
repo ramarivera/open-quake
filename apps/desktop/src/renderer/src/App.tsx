@@ -9,6 +9,7 @@ import {
 } from "./maintenance/SettingsPage";
 import { useMaintenance } from "./maintenance/useMaintenance";
 import { AgentsPage } from "./management/agents";
+import { useAgentsCopy } from "./management/agents/copy";
 import { runtimeStatusLabel } from "./management/agents/RuntimeIndicator";
 import { useAgents } from "./management/agents/useAgents";
 import { describeConnection } from "./management/connection";
@@ -77,11 +78,12 @@ function ManagementSurface({
 	const quake = useQuakeEvents();
 	const { view: agentView, error: agentError } = useAgents(window.quakeAgents);
 	const runtime = agentView?.runtime;
+	const runtimeCopy = useAgentsCopy().openclawRuntimeIndicator;
 	const runtimeLabel = runtime
-		? runtimeStatusLabel(runtime)
+		? runtimeStatusLabel(runtime, runtimeCopy)
 		: agentError
-			? "Agent runtime status unavailable"
-			: "Checking agent runtime";
+			? runtimeCopy.shellUnavailable
+			: runtimeCopy.shellChecking;
 	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
