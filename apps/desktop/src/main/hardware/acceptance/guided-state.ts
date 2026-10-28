@@ -20,6 +20,10 @@ export const GuidedInput = Schema.Union(
 		state: Schema.Literal("connected", "disconnected"),
 	}),
 );
+export const GuidedArrival = Schema.Struct({
+	event: GuidedInput,
+	at: Schema.Number.pipe(Schema.finite(), Schema.nonNegative()),
+});
 type Input = typeof GuidedInput.Type;
 type Event = Input & { readonly t: number; readonly step: string };
 export const GUIDED_STEPS = [
@@ -78,7 +82,6 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 	let index = 0;
 	let from = 0;
 	let stepBegan = began;
-	let left = 0;
 	let stopped = "";
 	const tapped = (mine: readonly Event[]) => {
 		const phases = mine.flatMap((e) =>
@@ -108,10 +111,11 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 		stop(reason: "aborted" | "buffer-overflow") {
 			stopped = reason;
 		},
-		accept(raw: unknown) {
+		accept(raw: unknown, at = now()) {
 			tick();
 			const step = current();
 			if (!step || stopped) return;
+			if (!Number.isFinite(at) || at < began || at > now()) return;
 			const parsed = Schema.decodeUnknownOption(GuidedInput)(raw);
 			if (Option.isNone(parsed)) return;
 			if (events.length >= Math.min(10000, Math.max(1, limit))) {
@@ -120,7 +124,7 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 			}
 			events.push({
 				...parsed.value,
-				t: Math.round(now() - began),
+				t: Math.round(at - began),
 				step: step.id,
 			});
 			const mine = events.slice(from);
@@ -143,9 +147,9 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 				step.goal === "tap"
 					? tapped(mine)
 					: step.goal === "left"
-						? Math.abs(turns) >= 5
+						? turns <= -5
 						: step.goal === "right"
-							? Math.abs(turns) >= 5 && Math.sign(turns) !== Math.sign(left)
+							? turns >= 5
 							: step.goal === "press"
 								? presses.filter(
 										(state, i) => i > 0 && state === 0 && presses[i - 1] === 1,
@@ -158,7 +162,6 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 											(e) => e.kind === "status" && e.state === step.goal,
 										);
 			if (done) {
-				if (step.goal === "left") left = turns;
 				steps.push({
 					id: step.id,
 					status: "observed",
@@ -168,6 +171,13 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 				from = events.length;
 				stepBegan = now();
 			}
+		},
+		acceptBatch(
+			batch: readonly { event: unknown; at: number }[],
+			dropped: number,
+		) {
+			for (const arrival of batch) this.accept(arrival.event, arrival.at);
+			if (dropped > 0) this.stop("buffer-overflow");
 		},
 		snapshot() {
 			tick();

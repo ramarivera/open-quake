@@ -62,6 +62,44 @@ it("bounds evidence and fails incomplete on timeout instead of skipping a missin
 	expect(bounded.snapshot().events).toHaveLength(2);
 	expect(bounded.snapshot().status).toBe("incomplete");
 });
+it("keeps each direction checkpoint pending for opposite turns", () => {
+	const c = createGuidedCapture(() => 0);
+	c.accept(touch(1));
+	c.accept(touch(0));
+	const turn = (direction: -1 | 1, count: number) => {
+		for (let i = 0; i < count; i++) c.accept({ kind: "rotate", direction });
+	};
+	turn(1, 5);
+	expect(c.current()?.id).toBe("left");
+	turn(-1, 10);
+	expect(c.current()?.id).toBe("right");
+	turn(-1, 5);
+	expect(c.current()?.id).toBe("right");
+	turn(1, 10);
+	expect(c.current()?.id).toBe("press");
+});
+it("preserves arrival intervals and queued observations when the renderer overflows", () => {
+	let now = 1000;
+	const c = createGuidedCapture(() => now);
+	now = 1100;
+	c.acceptBatch(
+		[
+			{ event: touch(1), at: 1010 },
+			{ event: touch(0), at: 1070 },
+		],
+		1,
+	);
+	expect(c.snapshot().events.map((e) => e.t)).toEqual([10, 70]);
+	expect(c.snapshot().status).toBe("incomplete");
+	expect(c.snapshot().reason).toBe("buffer-overflow");
+});
+it("rejects invalid arrival clocks before retaining an event", () => {
+	let now = 100;
+	const c = createGuidedCapture(() => now);
+	now = 200;
+	for (const at of [NaN, Infinity, 99, 201]) c.accept(touch(1), at);
+	expect(c.snapshot().events).toHaveLength(0);
+});
 it("seeds one fresh inert touch profile with no provider or host actions", async () => {
 	const envelope = guidedProfileEnvelope();
 	const encoded = Schema.encodeSync(ProfileEnvelope)(envelope);

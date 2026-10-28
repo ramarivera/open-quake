@@ -8,7 +8,7 @@ import { app, BrowserWindow, dialog, globalShortcut, shell } from "electron";
 import { encodeProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type { OpenQuakeBridge } from "../../../preload/quake";
 import { guidedProfileEnvelope } from "./guided-profile";
-import { createGuidedCapture, GuidedInput } from "./guided-state";
+import { createGuidedCapture, GuidedArrival } from "./guided-state";
 import { acceptanceScratch, ownNativeDevice } from "./native-owner";
 
 interface Recorder {
@@ -25,6 +25,8 @@ function installRecorder() {
 	host.__guidedCapture?.close();
 	const events: unknown[] = [];
 	let dropped = 0;
+	const record = (event: unknown) =>
+		events.push({ event, at: performance.timeOrigin + performance.now() });
 	const label = document.createElement("div");
 	label.setAttribute("role", "status");
 	label.id = "guided-input-prompt";
@@ -38,18 +40,18 @@ function installRecorder() {
 			return;
 		}
 		if (event.kind === "touch")
-			events.push({
+			record({
 				kind: "touch",
 				points: event.points
 					.slice(0, 5)
 					.map((p) => ({ x: p.x, y: p.y, action: p.action })),
 			});
 		else if (event.kind === "rotate")
-			events.push({ kind: "rotate", direction: event.direction });
+			record({ kind: "rotate", direction: event.direction });
 		else if (event.kind === "press")
-			events.push({ kind: "press", state: event.state });
+			record({ kind: "press", state: event.state });
 		else if (event.kind === "status" && event.state !== "error")
-			events.push({ kind: "status", state: event.state });
+			record({ kind: "status", state: event.state });
 	});
 	host.__guidedCapture = {
 		drain: () => ({ events: events.splice(0), dropped }),
@@ -182,10 +184,12 @@ await writeFile(
 await import("../../index");
 
 const Drain = Schema.Struct({
-	events: Schema.Array(GuidedInput).pipe(Schema.maxItems(512)),
+	events: Schema.Array(GuidedArrival).pipe(Schema.maxItems(512)),
 	dropped: Schema.Int.pipe(Schema.nonNegative()),
 });
-const capture = createGuidedCapture(() => performance.now());
+const capture = createGuidedCapture(
+	() => performance.timeOrigin + performance.now(),
+);
 let aborted = false;
 process.once("SIGTERM", () => {
 	aborted = true;
@@ -228,8 +232,7 @@ async function run() {
 					"window.__guidedCapture.drain()",
 				),
 			);
-			if (snapshot.dropped) capture.stop("buffer-overflow");
-			for (const event of snapshot.events) capture.accept(event);
+			capture.acceptBatch(snapshot.events, snapshot.dropped);
 			const step = capture.current();
 			if (step && step.id !== currentPrompt) {
 				currentPrompt = step.id;

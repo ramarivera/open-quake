@@ -195,7 +195,10 @@ observations require a human; an event sequence cannot establish them.
 
 The script prints its fresh `guided-run-*` directory under hardware E2E scratch.
 `capture.json` stores at most 10,000 projected decoded events with monotonic timing,
-raw vendor coordinates and step IDs. It excludes serials, raw HID bytes, text,
+raw vendor coordinates and step IDs. Timing measures arrival at the renderer
+event bridge, converted to session-relative milliseconds, rather than physical
+contact time or queue-drain time. Left and right use the app's decoded -1/+1
+directions; physical direction mapping still needs confirmation. It excludes serials, raw HID bytes, text,
 credentials and audio. A checkpoint remains incomplete until the sequence finishes.
 A timeout, interruption or buffer overflow leaves an incomplete report and exits
 unsuccessfully. `panel.png` captures only the isolated fixture panel. A mock run
