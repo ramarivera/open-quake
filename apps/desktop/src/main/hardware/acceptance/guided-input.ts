@@ -168,9 +168,8 @@ app.setPath("userData", userData);
 app.setPath("sessionData", userData);
 let code = 1;
 app.once("will-quit", (event) => {
-	if (!owner) return;
 	event.preventDefault();
-	void owner.close().finally(() => app.exit(code));
+	void (owner?.close() ?? Promise.resolve()).finally(() => app.exit(code));
 });
 await writeFile(
 	join(directory, "capture.json"),
@@ -200,7 +199,7 @@ process.once("SIGINT", () => {
 async function run() {
 	let panel: BrowserWindow | undefined;
 	let currentPrompt = "";
-	let injectionId: number | undefined;
+	let reloaded = false;
 	try {
 		await app.whenReady();
 		const startupDeadline = Date.now() + 30000;
@@ -220,11 +219,14 @@ async function run() {
 				continue;
 			}
 			panel = candidate;
-			if (injectionId !== panel.webContents.id) {
+			if (
+				!(await panel.webContents.executeJavaScript(
+					"Boolean(window.__guidedCapture)",
+				))
+			) {
 				await panel.webContents.executeJavaScript(
 					`(${installRecorder.toString()})()`,
 				);
-				injectionId = panel.webContents.id;
 				currentPrompt = "";
 			}
 			const snapshot = Schema.decodeUnknownSync(Drain)(
@@ -251,6 +253,13 @@ async function run() {
 				console.info(`GUIDED INPUT: ${step.prompt}`);
 			}
 			if (selfTest && step) {
+				// Rehearse a new document in the same WebContents before more input.
+				if (!reloaded && step.id === "left") {
+					reloaded = true;
+					panel.reload();
+					await delay(100);
+					continue;
+				}
 				const touch = (action: number, x = 100) => ({
 					source: "mock",
 					kind: "touch",
