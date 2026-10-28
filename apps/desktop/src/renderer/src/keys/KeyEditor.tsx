@@ -97,18 +97,23 @@ export function KeyEditor({
 		if (reply._tag === "success" && reply.envelope) accept(reply.envelope);
 		else if (reply._tag === "rejected") setStatus(reply.reason);
 	}, [accept, locale]);
-	const activateProfile = async (id: string): Promise<void> => {
+	/** Resolves whether the device accepted the profile. */
+	const activateProfile = async (id: string): Promise<boolean> => {
 		setStatus("");
 		try {
 			const reply = await window.quakeProfileManager.request({
 				type: "manage",
 				command: { type: "select", id },
 			});
-			if (reply._tag === "success") accept(reply.view.envelope);
-			else setStatus(editorText("activationFailed"));
+			if (reply._tag === "success") {
+				accept(reply.view.envelope);
+				return true;
+			}
 		} catch {
-			setStatus(editorText("activationFailed"));
+			/* Reported below. */
 		}
+		setStatus(editorText("activationFailed"));
+		return false;
 	};
 	useEffect(() => {
 		localStorage.setItem(KEY_LOCALE_STORAGE, locale);
@@ -653,8 +658,9 @@ export function KeyEditor({
 									(p) => p.id === e.target.value,
 								);
 								if (next)
-									void activateProfile(next.id).then(() =>
-										selectPage(next.id, next.pages[0].id),
+									// A rejected activation leaves the editor on the device's profile.
+									void activateProfile(next.id).then((active) =>
+										active ? selectPage(next.id, next.pages[0].id) : undefined,
 									);
 							}}
 						>
