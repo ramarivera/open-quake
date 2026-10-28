@@ -63,3 +63,10 @@ Review verification: protocol 63, edge 729 with 3 existing skips, device 492, de
 - [x] 7.1 Ignore DOM pointer/touch input while the vendor device is connected, retain DOM fallback after disconnect, and regress pointerdown-before-native-report ordering. Bead open-quake-l86.21.
 
 Verification, 2026-10-28: desktop typecheck passed; full desktop suite passed with two workers (3,685 passed, 1 skipped); root lint passed with existing warnings and infos; both changed OpenSpec specs validate. The mounted race regression is included in the full suite. The initial default-worker full-suite run had 40 unrelated timeouts; the two-worker run passed without test changes.
+
+## macOS pointer ownership, open-quake-l86.23
+
+- [x] Open only the exact QUAKE vendor-touch identity exclusively on macOS, preserving non-exclusive control/other opens and existing Windows/Linux behavior. Reuse the connection scope for close/reconnect.
+- [ ] Verify exact-identity/platform cases, touch lifecycle and owning types/lint; confirm a bounded native open/close without input and update the owner app. Physical touch/pointer acceptance remains open.
+
+Verification: two changed native-open expectations fail before the correction. Exact-identity and platform tests pass, existing touch lifecycle tests pass, and device typecheck/root lint pass. A bounded actual Electron check with the owner stopped acquired and closed the same shared touch-controller path exclusively, observed five collections on it and performed zero writes. The owner app was restored immediately. Scratch evidence is under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake/macos-touch-pointer/`. Physical cursor suppression and tile input are not verified by this handle-only check and remain open under `open-quake-l86.23`.
