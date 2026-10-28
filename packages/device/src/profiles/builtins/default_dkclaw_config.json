@@ -118,6 +118,7 @@
 			"type": "clawbot",
 			"title": {
 				"text": "资料精灵",
+				"i18nKey": "openclawAgents.materialfinder.name",
 				"pos": "top",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -153,6 +154,7 @@
 			"type": "clawbot",
 			"title": {
 				"text": "股票大师",
+				"i18nKey": "openclawAgents.stockmaster.name",
 				"pos": "top",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -340,6 +342,7 @@
 			"type": "clawbot",
 			"title": {
 				"text": "数据整理大师",
+				"i18nKey": "openclawAgents.dataorganizer.name",
 				"pos": "top",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -375,6 +378,7 @@
 			"type": "clawbot",
 			"title": {
 				"text": "软件大拿",
+				"i18nKey": "openclawAgents.techex.name",
 				"pos": "top",
 				"size": 8,
 				"color": "#FFFFFF",

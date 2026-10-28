@@ -223,3 +223,5 @@ The bead remains in progress for parent acceptance of the pushed SHA and remote
 CI/review. This is one authorized batched continuation; this lane does not reply,
 resolve, retrigger reviews, watch or merge. Evidence is retained under
 /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/assistant-routing/continuation/.
+
+- [x] Localization correction: use English prompt catalog fallback outside Chinese locales and verify regional locale normalization. Bead `open-quake-l86.36`, implementation tracked in `agent-naming/tasks.md` section 2.

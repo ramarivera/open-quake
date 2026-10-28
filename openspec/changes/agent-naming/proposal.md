@@ -22,3 +22,7 @@ open-quake supports Hermes and OpenClaw runtimes on the host or over HTTP. Vendo
 ## Impact
 
 Renderer dictionaries and copy consumers, device profile display catalog and tests. No dependencies, IPC, routes, error codes, profile IDs or hardware behavior change. Execution bead open-quake-ekc; epic open-quake-4rw.
+
+## Localization correction
+
+Ramiro reports Chinese/Japanese strings in the English UI. This follow-up also fixes raw Agent template titles and the prompt library's Chinese fallback outside Chinese locales. Existing saved defaults resolve for display without replacing custom text or changing action payloads. Bead `open-quake-l86.36`.

@@ -51,12 +51,13 @@ function csv(text: string): unknown {
 		throw new Error("invalid columns");
 	return rows.map((r) => ({ act: r[0], prompt: r[1] }));
 }
-/** Local data only. All historical non-English locales deliberately use the Chinese fallback. */
+/** Local catalogs only. Locales without their own source use English. */
 export function loadSystemPrompts(
 	locale: string,
 	input: { readonly en?: string; readonly zh?: string } = sources,
 ): readonly SystemPrompt[] {
-	const lang = locale === "en" ? "en" : "zh";
+	const lang =
+		locale.trim().toLowerCase().split(/[-_]/)[0] === "zh" ? "zh" : "en";
 	try {
 		const text = input[lang];
 		if (!text) return [DEFAULT];

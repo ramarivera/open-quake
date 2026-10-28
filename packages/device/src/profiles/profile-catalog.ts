@@ -24,6 +24,25 @@ export const profileText = (
 	key: string,
 	locale: ProfileLocale = "en",
 ): string => dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+/** Recognize only known defaults; explicit edits, including CJK titles, stay verbatim. */
+export function localizedAgentTitle(
+	key: ProfileKey,
+	locale: ProfileLocale,
+): string | undefined {
+	if (key.config.type !== "clawbot" || key.config.userModifiedTitle === true)
+		return undefined;
+	const agent = key.config.actions.find((action) => action.type === "agentId");
+	if (typeof agent?.value !== "string") return undefined;
+	const name = `openclawAgents.${agent.value}.name`;
+	if (
+		!Object.values(dictionaries).some(
+			(copy) => copy[name] === key.config.title.text,
+		)
+	)
+		return undefined;
+	return profileText(name, locale);
+}
+
 export const BUILTIN_PROFILES = [
 	{ id: "1-0", title: "discord", mode: 1 },
 	{ id: "1-1", title: "meetingAssistant", mode: 1 },
@@ -172,6 +191,16 @@ export const translateProfile = (
 		pages: EffectArray.map(profile.pages, (page) => ({
 			...page,
 			keys: page.keys.map((key) => {
+				if (key.config.userModifiedTitle === true) return key;
+				const agentTitle = localizedAgentTitle(key, locale);
+				if (agentTitle !== undefined)
+					return {
+						...key,
+						config: {
+							...key.config,
+							title: { ...key.config.title, text: agentTitle },
+						},
+					};
 				const source = Option.isSome(key.compatibility)
 					? key.compatibility.value.source
 					: undefined;
@@ -180,37 +209,14 @@ export const translateProfile = (
 				const title = Schema.decodeUnknownEither(titleSchema)(
 					result.right.config.title,
 				);
-				if (key.config.type === "clawbot") {
-					const agent = key.config.actions.find(
-						(action) => action.type === "agentId",
-					);
-					if (
-						agent &&
-						typeof agent.value === "string" &&
-						(key.config.title.text ===
-							profileText(`openclawAgents.${agent.value}.name`, "en") ||
-							(title._tag === "Right" &&
-								key.config.title.text === title.right.text))
-					)
-						return {
-							...key,
-							config: {
-								...key.config,
-								title: {
-									...key.config.title,
-									text: profileText(
-										`openclawAgents.${agent.value}.name`,
-										locale,
-									),
-								},
-							},
-						};
-				}
+
 				if (
 					title._tag === "Left" ||
 					!title.right.i18nKey ||
 					title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
-					key.config.title.text !== profileText(title.right.i18nKey, "en")
+					!Object.values(dictionaries).some(
+						(copy) => copy[title.right.i18nKey ?? ""] === key.config.title.text,
+					)
 				)
 					return key;
 				return {
