@@ -38,3 +38,36 @@ export function mdiPlugin(): Plugin {
 		},
 	};
 }
+
+/** Keep the regular Phosphor catalog in one lazy chunk, like the MDI catalog. */
+export function phosphorPlugin(): Plugin {
+	return {
+		name: "phosphor-icon-assets",
+		generateBundle() {
+			const root = dirname(dirname(require.resolve("@phosphor-icons/core")));
+			this.emitFile({
+				type: "asset",
+				fileName: "PHOSPHOR-LICENSE.txt",
+				source: readFileSync(join(root, "LICENSE"), "utf8"),
+			});
+		},
+		resolveId: (id) =>
+			id === "virtual:phosphor-icons" ? "\0virtual:phosphor-icons" : undefined,
+		load(id) {
+			if (id !== "\0virtual:phosphor-icons") return;
+			const root = dirname(dirname(require.resolve("@phosphor-icons/core")));
+			const catalog: {
+				icons: readonly { name: string; tags: readonly string[] }[];
+			} = require("@phosphor-icons/core");
+			const icons = catalog.icons.map((icon) => ({
+				name: icon.name,
+				tags: icon.tags,
+				svg: readFileSync(
+					join(root, "assets", "regular", `${icon.name}.svg`),
+					"utf8",
+				).replace('fill="currentColor"', 'fill="white"'),
+			}));
+			return `export default ${JSON.stringify(icons)}`;
+		},
+	};
+}

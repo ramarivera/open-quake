@@ -8,7 +8,7 @@ import {
 	Schema,
 } from "effect";
 import { GTProvider } from "gt-react";
-import { act } from "react";
+import { act, useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
 	KeyRuntime,
@@ -71,6 +71,7 @@ import {
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
+import { IconPickerSurface } from "./IconPicker";
 import { KeyEditor } from "./KeyEditor";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -1413,6 +1414,75 @@ it("MGMT-066/078 retargets the open picker across keys and discards replies afte
 	).toHaveLength(2);
 	request.mockRestore();
 });
+
+it.each([false, true])(
+	"opens the icon library and applies artwork with a saved icon lock=%s",
+	async (locked) => {
+		const quick = builtinProfiles("darwin", "en").find(
+			(profile) => profile.id === "1-2",
+		);
+		const builtinKey = quick?.pages[0].keys.find(
+			(key) => key.config.type === "mic",
+		);
+		if (!builtinKey) throw new Error("Missing built-in Quick microphone key");
+		const key = Schema.encodeSync(ProfileKey)(builtinKey);
+		const f = await gridFixture([
+			{
+				...key,
+				keyCode: "1,1",
+				config: {
+					...key.config,
+					basicEditableItems: {
+						...key.config.basicEditableItems,
+						icon: !locked,
+					},
+				},
+			},
+		]);
+		const original = window.quakeKeyLibrary.request;
+		let finish = (_reply: KeyReply) => {};
+		let openWindow = () => {};
+		function PickerHost() {
+			const [open, setOpen] = useState(false);
+			openWindow = () => setOpen(true);
+			return open ? <IconPickerSurface /> : null;
+		}
+		const chooser = await mount(<PickerHost />);
+		cleanups.push(chooser.close);
+		vi.spyOn(window.quakeKeyLibrary, "request").mockImplementation(
+			(command) => {
+				if (command.type === "open-icons") {
+					// Simulate loading the child renderer only when its bridge is invoked.
+					openWindow();
+					return new Promise<KeyReply>((resolve) => {
+						finish = resolve;
+					});
+				}
+				if (command.type === "icons" || command.type === "application-icons")
+					return Promise.resolve({ _tag: "success", packs: [] });
+				return original(command);
+			},
+		);
+		await f.select();
+		const before = f.stored();
+		await click(button(f.host, "Icon Library"));
+		await settle(() =>
+			expect(
+				chooser.host.querySelector('[aria-label="Icon Library"]'),
+			).toBeDefined(),
+		);
+		expect(
+			chooser.host.querySelector('[aria-label="Icon Library"]'),
+		).not.toBeNull();
+		const icon = "data:image/png;base64,AAAA";
+		await act(async () => finish({ _tag: "success", icon }));
+		expect(f.stored()).toEqual(before);
+		// Saved icon locks no longer apply: every key's artwork is editable.
+		const previews = f.calls.filter((command) => command.type === "preview");
+		expect(previews).toHaveLength(1);
+		expect(previews[0]?.key.config.icon).toBe(icon);
+	},
+);
 
 it("MGMT-066/078 SCREEN-138 click-away reverts an unsaved preview without writing", async () => {
 	const f = await gridFixture([gridKey("1,1")]);

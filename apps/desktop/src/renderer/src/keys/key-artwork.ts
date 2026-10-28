@@ -1,59 +1,60 @@
-// Semantic fallbacks from the pinned Apache-2.0 MDI set, not DK resource packs.
+// Semantic tile artwork from the pinned MIT-licensed Phosphor regular set.
 
-import alarm from "@mdi/svg/svg/alarm.svg?raw";
-import application from "@mdi/svg/svg/application.svg?raw";
-import apps from "@mdi/svg/svg/apps.svg?raw";
-import left from "@mdi/svg/svg/arrow-left.svg?raw";
-import right from "@mdi/svg/svg/arrow-right.svg?raw";
-import bellOff from "@mdi/svg/svg/bell-off.svg?raw";
-import bellRing from "@mdi/svg/svg/bell-ring.svg?raw";
-import brightness from "@mdi/svg/svg/brightness-7.svg?raw";
-import broadcast from "@mdi/svg/svg/broadcast.svg?raw";
-import calculator from "@mdi/svg/svg/calculator.svg?raw";
-import cameraOff from "@mdi/svg/svg/camera-off.svg?raw";
-import chat from "@mdi/svg/svg/chat-processing-outline.svg?raw";
-import clipboard from "@mdi/svg/svg/clipboard-text.svg?raw";
-import close from "@mdi/svg/svg/close-circle.svg?raw";
-import controlPanel from "@mdi/svg/svg/cog.svg?raw";
-import console from "@mdi/svg/svg/console.svg?raw";
-import desktop from "@mdi/svg/svg/desktop-classic.svg?raw";
-import deafen from "@mdi/svg/svg/ear-hearing-off.svg?raw";
-import folder from "@mdi/svg/svg/folder.svg?raw";
-import list from "@mdi/svg/svg/format-list-numbered.svg?raw";
-import text from "@mdi/svg/svg/format-text.svg?raw";
-import gamepad from "@mdi/svg/svg/gamepad-variant.svg?raw";
-import unknown from "@mdi/svg/svg/help-circle-outline.svg?raw";
-import keyboard from "@mdi/svg/svg/keyboard.svg?raw";
-import lock from "@mdi/svg/svg/lock.svg?raw";
-import magnify from "@mdi/svg/svg/magnify.svg?raw";
-import microphone from "@mdi/svg/svg/microphone.svg?raw";
-import microphoneOff from "@mdi/svg/svg/microphone-off.svg?raw";
-import monitorScreenshot from "@mdi/svg/svg/monitor-screenshot.svg?raw";
-import play from "@mdi/svg/svg/play-pause.svg?raw";
-import record from "@mdi/svg/svg/record-circle-outline.svg?raw";
-import robot from "@mdi/svg/svg/robot-outline.svg?raw";
-import rotate from "@mdi/svg/svg/rotate-right.svg?raw";
-import share from "@mdi/svg/svg/share-variant.svg?raw";
-import shieldCheck from "@mdi/svg/svg/shield-check.svg?raw";
-import next from "@mdi/svg/svg/skip-next.svg?raw";
-import previous from "@mdi/svg/svg/skip-previous.svg?raw";
-import stop from "@mdi/svg/svg/stop.svg?raw";
-import subtitles from "@mdi/svg/svg/subtitles-outline.svg?raw";
-import textBox from "@mdi/svg/svg/text-box-outline.svg?raw";
-import timer from "@mdi/svg/svg/timer-outline.svg?raw";
-import translate from "@mdi/svg/svg/translate.svg?raw";
-import tune from "@mdi/svg/svg/tune.svg?raw";
-import dashboard from "@mdi/svg/svg/view-dashboard.svg?raw";
-import volume from "@mdi/svg/svg/volume-high.svg?raw";
-import volumeMuted from "@mdi/svg/svg/volume-mute.svg?raw";
-import mute from "@mdi/svg/svg/volume-off.svg?raw";
-import web from "@mdi/svg/svg/web.svg?raw";
-import window from "@mdi/svg/svg/window-maximize.svg?raw";
+import alarm from "@phosphor-icons/core/assets/regular/alarm.svg?raw";
+import application from "@phosphor-icons/core/assets/regular/app-window.svg?raw";
+import left from "@phosphor-icons/core/assets/regular/arrow-left.svg?raw";
+import right from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
+import rotate from "@phosphor-icons/core/assets/regular/arrows-clockwise.svg?raw";
+import textBox from "@phosphor-icons/core/assets/regular/article.svg?raw";
+import bellRing from "@phosphor-icons/core/assets/regular/bell-ringing.svg?raw";
+import bellOff from "@phosphor-icons/core/assets/regular/bell-slash.svg?raw";
+import broadcast from "@phosphor-icons/core/assets/regular/broadcast.svg?raw";
+import window from "@phosphor-icons/core/assets/regular/browsers.svg?raw";
+import calculator from "@phosphor-icons/core/assets/regular/calculator.svg?raw";
+import chat from "@phosphor-icons/core/assets/regular/chat-circle-dots.svg?raw";
+import clipboard from "@phosphor-icons/core/assets/regular/clipboard-text.svg?raw";
+import desktop from "@phosphor-icons/core/assets/regular/desktop.svg?raw";
+import deafen from "@phosphor-icons/core/assets/regular/ear-slash.svg?raw";
+import folder from "@phosphor-icons/core/assets/regular/folder.svg?raw";
+import gamepad from "@phosphor-icons/core/assets/regular/game-controller.svg?raw";
+import controlPanel from "@phosphor-icons/core/assets/regular/gear.svg?raw";
+import web from "@phosphor-icons/core/assets/regular/globe.svg?raw";
+import keyboard from "@phosphor-icons/core/assets/regular/keyboard.svg?raw";
+import list from "@phosphor-icons/core/assets/regular/list-numbers.svg?raw";
+import lock from "@phosphor-icons/core/assets/regular/lock.svg?raw";
+import magnify from "@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw";
+import microphone from "@phosphor-icons/core/assets/regular/microphone.svg?raw";
+import microphoneOff from "@phosphor-icons/core/assets/regular/microphone-slash.svg?raw";
+import play from "@phosphor-icons/core/assets/regular/play-pause.svg?raw";
+import unknown from "@phosphor-icons/core/assets/regular/question.svg?raw";
+import record from "@phosphor-icons/core/assets/regular/record.svg?raw";
+import robot from "@phosphor-icons/core/assets/regular/robot.svg?raw";
+import monitorScreenshot from "@phosphor-icons/core/assets/regular/selection-background.svg?raw";
+import share from "@phosphor-icons/core/assets/regular/share-network.svg?raw";
+import shieldCheck from "@phosphor-icons/core/assets/regular/shield-check.svg?raw";
+import previous from "@phosphor-icons/core/assets/regular/skip-back.svg?raw";
+import next from "@phosphor-icons/core/assets/regular/skip-forward.svg?raw";
+import tune from "@phosphor-icons/core/assets/regular/sliders-horizontal.svg?raw";
+import volume from "@phosphor-icons/core/assets/regular/speaker-high.svg?raw";
+import volumeMuted from "@phosphor-icons/core/assets/regular/speaker-slash.svg?raw";
+import mute from "@phosphor-icons/core/assets/regular/speaker-slash.svg?raw";
+import apps from "@phosphor-icons/core/assets/regular/squares-four.svg?raw";
+import dashboard from "@phosphor-icons/core/assets/regular/squares-four.svg?raw";
+import stop from "@phosphor-icons/core/assets/regular/stop.svg?raw";
+import subtitles from "@phosphor-icons/core/assets/regular/subtitles.svg?raw";
+import brightness from "@phosphor-icons/core/assets/regular/sun.svg?raw";
+import console from "@phosphor-icons/core/assets/regular/terminal.svg?raw";
+import text from "@phosphor-icons/core/assets/regular/text-aa.svg?raw";
+import timer from "@phosphor-icons/core/assets/regular/timer.svg?raw";
+import translate from "@phosphor-icons/core/assets/regular/translate.svg?raw";
+import cameraOff from "@phosphor-icons/core/assets/regular/video-camera-slash.svg?raw";
+import close from "@phosphor-icons/core/assets/regular/x-circle.svg?raw";
 import { isInlineIcon } from "../strip/tileMetrics";
 
 const defaults: Readonly<Record<string, string>> = {
 	brightness,
 	luminance: brightness,
+	panelBrightness: brightness,
 	buzzer: bellRing,
 	mic: microphone,
 	createFolder: folder,
@@ -100,7 +101,7 @@ const defaults: Readonly<Record<string, string>> = {
 	mute: mute,
 	microphone: microphone,
 };
-/** Built-in numeric IDs refer to DecoKee-native PNGs, not renderer assets. */
+/** Legacy numeric IDs retain their meaning using bundled Phosphor artwork. */
 const builtinArtwork: Readonly<Record<string, string>> = {
 	"0-1": brightness,
 	"0-11": web,
@@ -132,7 +133,7 @@ const builtinArtwork: Readonly<Record<string, string>> = {
 	"0-98": translate,
 	"0-99": record,
 	"0-102": volumeMuted,
-	"0-103": volumeMuted,
+	"0-103": microphoneOff,
 	"0-104": share,
 	"0-105": right,
 	"0-106": left,
@@ -160,9 +161,14 @@ export const keyArtwork = (icon: string, type: string): string => {
 	const cacheKey = `${icon}\u0000${type}`;
 	let data = cache.get(cacheKey);
 	if (!data) {
-		const svg = (builtinArtwork[icon] ?? defaults[type] ?? unknown).replace(
-			"<svg ",
-			'<svg fill="white" ',
+		const source = Object.hasOwn(builtinArtwork, icon)
+			? builtinArtwork[icon]
+			: Object.hasOwn(defaults, type)
+				? defaults[type]
+				: unknown;
+		const svg = (source ?? unknown).replace(
+			'fill="currentColor"',
+			'fill="white"',
 		);
 		data = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 		cache.set(cacheKey, data);

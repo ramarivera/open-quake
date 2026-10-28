@@ -1,8 +1,8 @@
 import { defineConfig } from "vitest/config";
-import { mdiPlugin } from "./mdi-plugin";
+import { mdiPlugin, phosphorPlugin } from "./mdi-plugin";
 
 export default defineConfig({
-	plugins: [mdiPlugin()],
+	plugins: [mdiPlugin(), phosphorPlugin()],
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.{ts,tsx}"],
