@@ -422,7 +422,7 @@ async function fixture({
 	};
 }
 
-it("labels the profile selector as editing and offers device activation through the profile manager", async () => {
+it("switching the profile selector makes that profile active on the device", async () => {
 	const f = await fixture({
 		configure: (value) => ({
 			...value,
@@ -432,8 +432,20 @@ it("labels the profile selector as editing and offers device activation through 
 			],
 		}),
 	});
-	expect(f.host.textContent).toContain("Profile being edited");
 	expect(f.host.textContent).toContain("Active on device");
+	const selected = f.stored();
+	f.setProfileManagerReply({
+		_tag: "success",
+		view: {
+			envelope: {
+				...selected,
+				activeByDevice: {
+					...selected.activeByDevice,
+					"desktop-preview": { profileId: "q", pageId: "one" },
+				},
+			},
+		},
+	});
 	const selector = query(f.host, "#keys-profile", HTMLSelectElement);
 	await act(async () => {
 		selector.value = "q";
@@ -448,31 +460,7 @@ it("labels the profile selector as editing and offers device activation through 
 			};
 			return command.type === "manage";
 		}),
-	).toEqual([]);
-	const selected = f.stored();
-	f.setProfileManagerReply({
-		_tag: "success",
-		view: {
-			envelope: {
-				...selected,
-				activeByDevice: {
-					...selected.activeByDevice,
-					"desktop-preview": { profileId: "q", pageId: "one" },
-				},
-			},
-		},
-	});
-	await click(button(f.host, "Make active on device"));
-	expect(
-		f.managerCalls.filter((call) => {
-			const command = call as {
-				readonly type?: string;
-				readonly command?: unknown;
-			};
-			return command.type === "manage";
-		}),
 	).toEqual([{ type: "manage", command: { type: "select", id: "q" } }]);
-	await settle(() => expect(f.host.textContent).toContain("Second profile"));
 });
 
 it("MGMT-079 / MGMT-083 commits removal of the selected middle operation and retains the other operations", async () => {

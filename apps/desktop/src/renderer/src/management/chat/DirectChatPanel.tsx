@@ -199,18 +199,21 @@ export function DirectChatPanel({
 						)}
 					</div>
 				)}
-				{terminal?.errorCode && last && (
+				{terminal?.errorCode && (
 					<div className="cw-turn-error">
+						{/* Every failed turn keeps its explanation; only the last can be reused. */}
 						<p>{errorText(terminal.errorCode, locale)}</p>
-						<button
-							type="button"
-							className="mc-button"
-							data-variant="quiet"
-							disabled={state.pending}
-							onClick={() => compose(input)}
-						>
-							{t.reuse}
-						</button>
+						{last && (
+							<button
+								type="button"
+								className="mc-button"
+								data-variant="quiet"
+								disabled={state.pending}
+								onClick={() => compose(input)}
+							>
+								{t.reuse}
+							</button>
+						)}
 					</div>
 				)}
 				{last &&

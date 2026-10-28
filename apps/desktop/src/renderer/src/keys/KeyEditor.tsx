@@ -642,15 +642,20 @@ export function KeyEditor({
 			<PageHeader title="Keys" />
 			<fieldset className="keys-save-boundary" disabled={saving}>
 				<Group title="Configuration">
-					<Row label={editorText("profileEditing")} htmlFor="keys-profile">
+					<Row label={editorText("active")} htmlFor="keys-profile">
 						<select
 							id="keys-profile"
 							value={profile.id}
+							// One selection: the edited profile is also delivered to the device,
+							// so the editor never shows a profile the device isn't using.
 							onChange={(e) => {
 								const next = envelope.profiles.find(
 									(p) => p.id === e.target.value,
 								);
-								if (next) void selectPage(next.id, next.pages[0].id);
+								if (next)
+									void activateProfile(next.id).then(() =>
+										selectPage(next.id, next.pages[0].id),
+									);
 							}}
 						>
 							{envelope.profiles.map((p) => (
@@ -659,20 +664,6 @@ export function KeyEditor({
 								</option>
 							))}
 						</select>
-					</Row>
-					<Row label={editorText("active")}>
-						<span className="value">
-							{envelope.profiles.find(
-								(p) => p.id === envelope.activeByDevice[serial]?.profileId,
-							)?.name ?? "—"}
-						</span>
-						<button
-							type="button"
-							className="button"
-							onClick={() => void activateProfile(profile.id)}
-						>
-							{editorText("makeActive")}
-						</button>
 					</Row>
 					<Row label={keyText("pageNumber", locale)} htmlFor="keys-page">
 						<select

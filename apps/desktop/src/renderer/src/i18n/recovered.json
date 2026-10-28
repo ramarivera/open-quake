@@ -81,8 +81,6 @@
 			"title": "地区建议"
 		},
 		"keysEditor": {
-			"profileEditing": "正在编辑的配置",
-			"makeActive": "在设备上设为当前配置",
 			"active": "当前配置",
 			"activationFailed": "无法在设备上激活此配置。"
 		}
@@ -150,8 +148,6 @@
 			"title": "Regional suggestions"
 		},
 		"keysEditor": {
-			"profileEditing": "Profile being edited",
-			"makeActive": "Make active on device",
 			"active": "Active on device",
 			"activationFailed": "This profile could not be made active on the device."
 		}
@@ -238,8 +234,6 @@
 			"title": "Sugerencias regionales"
 		},
 		"keysEditor": {
-			"profileEditing": "Perfil que se está editando",
-			"makeActive": "Activar en el dispositivo",
 			"active": "Activo en el dispositivo",
 			"activationFailed": "No se pudo activar este perfil en el dispositivo."
 		}
@@ -326,8 +320,6 @@
 			"title": "Suggestions régionales"
 		},
 		"keysEditor": {
-			"profileEditing": "Profil en cours de modification",
-			"makeActive": "Activer sur l’appareil",
 			"active": "Actif sur l’appareil",
 			"activationFailed": "Impossible d’activer ce profil sur l’appareil."
 		}
@@ -414,8 +406,6 @@
 			"title": "지역별 제안"
 		},
 		"keysEditor": {
-			"profileEditing": "편집 중인 프로필",
-			"makeActive": "장치에서 활성화",
 			"active": "장치에서 활성 상태",
 			"activationFailed": "장치에서 이 프로필을 활성화하지 못했습니다."
 		}
@@ -483,8 +473,6 @@
 			"title": "Regionale Vorschläge"
 		},
 		"keysEditor": {
-			"profileEditing": "Bearbeitetes Profil",
-			"makeActive": "Auf dem Gerät aktivieren",
 			"active": "Auf dem Gerät aktiv",
 			"activationFailed": "Dieses Profil konnte auf dem Gerät nicht aktiviert werden."
 		}
@@ -571,8 +559,6 @@
 			"title": "Suggerimenti regionali"
 		},
 		"keysEditor": {
-			"profileEditing": "Profilo in modifica",
-			"makeActive": "Attiva sul dispositivo",
 			"active": "Attivo sul dispositivo",
 			"activationFailed": "Impossibile attivare questo profilo sul dispositivo."
 		}
@@ -659,8 +645,6 @@
 			"title": "地域別の提案"
 		},
 		"keysEditor": {
-			"profileEditing": "編集中のプロファイル",
-			"makeActive": "デバイスで有効にする",
 			"active": "デバイスで有効",
 			"activationFailed": "このプロファイルをデバイスで有効にできませんでした。"
 		}
