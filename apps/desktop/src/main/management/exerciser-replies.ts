@@ -15,3 +15,13 @@ export function failureReason(reply: unknown): string | undefined {
 			? reply.reason
 			: String(tag ?? "unsuccessful");
 }
+
+/** Operation names only; never retain IPC request values. */
+export function operationName(input: unknown): string {
+	return typeof input === "object" && input !== null
+		? String("type" in input ? input.type : "_tag" in input ? input._tag : "")
+		: "";
+}
+export function isPassiveOperation(operation: string): boolean {
+	return ["read", "query", "snapshot", "status"].includes(operation);
+}

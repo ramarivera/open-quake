@@ -54,3 +54,7 @@ the player hint's 18 px size.
 - The bar meter replaces the mountain drawing. Its property tests on the
   level smoothing (`stepBarMotion`) stay. The drawing tests are rewritten for
   the bar.
+
+## Owner wheel correction, 2026-10-28
+
+Ramiro's device photo rejects the opaque left edge and flashing direction bar. Extend the backdrop 160 logical pixels beyond the label sheet, blur the underlying tiles and mask that blur/background to transparency at the left edge. Keep selected-name typography and its local marker crisp. Remove the independent 300ms direction bar; the existing 200ms name nudge provides motion feedback. This supersedes the earlier opaque wheel-sheet clause.

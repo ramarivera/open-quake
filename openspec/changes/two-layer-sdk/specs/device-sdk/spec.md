@@ -390,3 +390,14 @@ The opt-in management exerciser SHALL reset targeted scenarios through the fixtu
 - **WHEN** the exerciser runs three times on the same source
 - **THEN** its pass and failure records are identical apart from documented timing tolerances
 - **AND** it exits with failure if report finalization throws
+
+#### Scenario: Overlong rename remains editable without stealing focus
+- **WHEN** a pasted ASCII or weighted name exceeds the package-name limit
+- **THEN** the full draft stays editable with an associated error and no rename command is sent
+- **AND** unrelated updates do not focus the rename input again
+
+#### Scenario: Selector restoration or report finalization fails
+- **WHEN** a selector cannot restore its original value
+- **THEN** the exerciser records that restoration failure and continues exploring the page
+- **WHEN** report finalization throws
+- **THEN** it logs the exception before exiting with failure

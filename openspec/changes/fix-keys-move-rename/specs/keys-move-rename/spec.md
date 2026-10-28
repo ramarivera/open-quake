@@ -67,3 +67,15 @@ Generic tile artwork SHALL reserve two rendered title lines at the configured fo
 #### Scenario: Size-12 two-line title
 - **WHEN** an ordinary 216 by 216 tile displays a two-line title at explicit size 12
 - **THEN** artwork and the top or bottom title block do not overlap
+
+### Requirement: Action drafts remain editable and validation follows active fields
+
+Numeric action inputs SHALL retain an editable local draft and SHALL publish only valid numeric values. Save SHALL stay disabled while an active action draft is invalid. The legacy blank force flag SHALL remain supported. Removing or replacing an input SHALL remove its validation blocker.
+
+#### Scenario: Clear and replace a number
+- **WHEN** a numeric action is cleared and then replaced with a valid number
+- **THEN** the empty draft stays visible without publishing a number and Save becomes available only after valid input
+
+#### Scenario: Function replaces malformed JSON
+- **WHEN** malformed JSON disables Save and the user changes Function to one without that field
+- **THEN** the removed field no longer blocks Save and the new function persists

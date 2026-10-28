@@ -3257,3 +3257,45 @@ it("keeps an unsaved knob draft conflict-protected when page creation introduces
 		"nextPage",
 	);
 });
+
+it("blocks Save for an empty numeric draft and persists the corrected action", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "timer", {
+			actions: [
+				{ type: "time", value: 12 },
+				{ type: "sound", value: "" },
+				{ type: "callback", value: 1 },
+			],
+		}),
+	]);
+	await f.select();
+	const field = query(f.host, "#key-action-0", HTMLInputElement);
+	await input(field, "");
+	expect(field.value).toBe("");
+	expect(button(f.host, "Save").disabled).toBe(true);
+	await click(button(f.host, "Save"));
+	expect(f.writes()).toBe(0);
+	await input(field, "24");
+	expect(button(f.host, "Save").disabled).toBe(false);
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.writes()).toBe(1));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.actions,
+	).toContainEqual({ type: "time", value: 24 });
+});
+
+it("changing Function removes an unmounted JSON validation blocker", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "emoji", {
+			actions: [{ type: "emojiConfig", value: { enabled: true } }],
+		}),
+	]);
+	await f.select();
+	await input(query(f.host, "#key-action-0", HTMLTextAreaElement), "{");
+	expect(button(f.host, "Save").disabled).toBe(true);
+	await input(query(f.host, "#key-function", HTMLSelectElement), "nextPage");
+	await settle(() => expect(button(f.host, "Save").disabled).toBe(false));
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.writes()).toBe(1));
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.type).toBe("nextPage");
+});

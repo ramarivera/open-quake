@@ -36,3 +36,7 @@ The management exerciser's swap scenario now follows the source at its new coord
 ## Sweep verification
 
 Desktop typecheck passed; desktop tests passed 3,750 with one existing skip; device tests passed 732; root lint passed with 20 existing warnings and three infos. Strict OpenSpec validation passed. The native management sweep visited all 13 pages: baseline run-McUrB6 had 13 failures and zero renderer errors; final run-qp4mKc had six known profile-duplicate failures, zero Keys failures and zero renderer/uncaught-main errors. All nine targeted native scenarios passed, including Emoji navigation and JSON restoration. The legacy blank force regression failed before the fix and passed after; the broad baseline did not reproduce nf7. No dependencies, real device access, owner app, foreground focus or physical cursor movement.
+
+## Carried action-input findings
+
+PR155 follow-ups use local numeric text state and the existing validity callback. Validity belongs to a mounted input; unmount reports its removal, and selection/function identity remounts fields. Existing domain validation and blank force behavior remain intact.

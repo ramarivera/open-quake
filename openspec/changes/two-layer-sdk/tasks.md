@@ -235,3 +235,9 @@ handling and failure during report finalization were directly probed. All
 artifacts remain outside git under the SSD scratch root. Main advanced from the
 tested `1d967e4c` to disjoint `e62b57e1` during acceptance; source stayed fixed
 across all three runs. Assigned beads retain delivery/merge notes for the lead.
+
+## Carried PR156 findings, open-quake-l86.34
+
+- [x] 3.8 Keep overlong emoji names intact, focus rename on opening only and associate validation feedback with the field.
+- [x] 3.9 Count actual emoji command invocations, share operation parsing, log finalization exceptions and record selector restoration failures while continuing exploration.
+- [ ] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
