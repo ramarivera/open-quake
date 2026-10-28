@@ -245,6 +245,20 @@ export function mountStripTouch(
 	let nativeActive = false;
 	let nativeDuplicatesDom = false;
 	let vendorConnected = false;
+	// Panel contacts dropped while connected with no vendor report in between.
+	// Repeated drops mean the touch controller is down, so DOM input takes over.
+	let blockedWithoutVendor = 0;
+	let lastDom: { x: number; y: number } | undefined;
+	const vendorOwnsInput = (): boolean =>
+		vendorConnected && blockedWithoutVendor < 3;
+	// Vendor input supersedes a DOM contact that started before it, releasing it.
+	const releaseDom = (): void => {
+		if (domActive && lastDom) domPoint(lastDom.x, lastDom.y, 0);
+		domActive = false;
+		pointerId = undefined;
+		touchIdentifier = undefined;
+		nativeDuplicatesDom = false;
+	};
 	const reset = (): void => {
 		controller.event({
 			source: "mock",
@@ -262,7 +276,9 @@ export function mountStripTouch(
 		if (disposed) return;
 		if (event.kind === "touch") {
 			vendorConnected = true;
-			if (domActive || nativeDuplicatesDom) {
+			blockedWithoutVendor = 0;
+			if (domActive) releaseDom();
+			if (nativeDuplicatesDom) {
 				nativeDuplicatesDom = event.points[0]?.action !== 0;
 				return;
 			}
@@ -275,11 +291,14 @@ export function mountStripTouch(
 			}
 		} else if (event.kind === "status") {
 			vendorConnected = event.state === "connected";
-			if (!vendorConnected) onCancel?.();
+			blockedWithoutVendor = 0;
+			if (vendorConnected) releaseDom();
+			else onCancel?.();
 		}
 		controller.event(event);
 	});
 	const domPoint = (x: number, y: number, action: 0 | 1): void => {
+		lastDom = { x, y };
 		const box = root.getBoundingClientRect();
 		const point = clientToLogical(
 			{ x, y },
@@ -306,9 +325,13 @@ export function mountStripTouch(
 		if (disposed) return;
 		const panelTarget =
 			event.target instanceof Node && root.contains(event.target);
-		if (vendorConnected && (panelTarget || domActive)) {
-			event.preventDefault();
-			event.stopImmediatePropagation();
+		if (vendorOwnsInput() && panelTarget) {
+			if (event.type === "pointerdown") blockedWithoutVendor++;
+			// Text fields keep native caret placement and selection.
+			if (!isEditableTouchTarget(event.target)) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
 			return;
 		}
 		if (performance.now() < nativeUntil) return;
@@ -352,9 +375,11 @@ export function mountStripTouch(
 	};
 	const touch = (event: TouchEvent): void => {
 		if (disposed) return;
-		if (vendorConnected) {
-			event.preventDefault();
-			event.stopImmediatePropagation();
+		if (vendorOwnsInput()) {
+			if (!isEditableTouchTarget(event.target)) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
 			return;
 		}
 		if (
@@ -397,7 +422,12 @@ export function mountStripTouch(
 		}
 	};
 	const click = (event: MouseEvent): void => {
-		if (vendorConnected) {
+		// Keyboard activation (detail 0) can never be a mirrored touch.
+		if (
+			vendorOwnsInput() &&
+			event.detail > 0 &&
+			!isEditableTouchTarget(event.target)
+		) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			return;

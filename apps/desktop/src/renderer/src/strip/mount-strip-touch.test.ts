@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import type { QuakeEvent } from "../../../preload/quake";
@@ -86,6 +86,111 @@ it("ignores mirrored DOM pointer input while the vendor touch connection is heal
 	} finally {
 		dispose();
 		await view.unmount();
+	}
+});
+
+const setup = async (child: ReactNode) => {
+	const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+	if (!profile) throw new Error("Missing SysView");
+	const layout = stripLayout(profile, profile.pages[0]);
+	const view = await mount(
+		createElement("div", { className: "strip-slot" }, child),
+	);
+	const slot = required(view.container, ".strip-slot", HTMLDivElement);
+	vi.spyOn(view.container, "getBoundingClientRect").mockReturnValue(
+		new DOMRect(0, 0, 1920, 480),
+	);
+	const rect = layout.tiles[0]?.slot;
+	if (!rect) throw new Error("Missing test tile");
+	const x = rect.x + rect.width / 2;
+	const y = rect.y + rect.height / 2;
+	let event: (value: QuakeEvent) => void = () => {};
+	const key = vi.fn();
+	const dispose = mountStripTouch(
+		view.container,
+		{
+			version: "test",
+			onQuakeEvent: (callback) => {
+				event = callback;
+				return () => {};
+			},
+		},
+		0,
+		() => layout,
+		key,
+	);
+	const pointer = (type: string, target: Element = slot) => {
+		const input = new Event(type, { bubbles: true, cancelable: true });
+		Object.assign(input, {
+			button: 0,
+			pointerId: 1,
+			clientX: x,
+			clientY: 480 - y,
+		});
+		target.dispatchEvent(input);
+		return input;
+	};
+	return {
+		view,
+		key,
+		pointer,
+		emit: (value: QuakeEvent) => event(value),
+		close: async () => {
+			dispose();
+			await view.unmount();
+		},
+	};
+};
+
+it("releases a DOM contact when vendor input takes over", async () => {
+	const panel = await setup("Tile");
+	try {
+		panel.pointer("pointerdown");
+		expect(panel.key).toHaveBeenCalledWith(
+			expect.objectContaining({ keyAction: 0 }),
+		);
+		panel.emit({ source: "mock", kind: "status", state: "connected" });
+		// DOM releases are delivered after the controller's release delay.
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		expect(panel.key).toHaveBeenLastCalledWith(
+			expect.objectContaining({ keyAction: 1 }),
+		);
+	} finally {
+		await panel.close();
+	}
+});
+
+it("keeps native editing in panel text fields while vendor touch owns input", async () => {
+	const panel = await setup(createElement("textarea"));
+	try {
+		panel.emit({ source: "mock", kind: "status", state: "connected" });
+		const textarea = required(
+			panel.view.container,
+			"textarea",
+			HTMLTextAreaElement,
+		);
+		expect(panel.pointer("pointerdown", textarea).defaultPrevented).toBe(false);
+		expect(panel.key).not.toHaveBeenCalled();
+	} finally {
+		await panel.close();
+	}
+});
+
+it("falls back to DOM input after repeated contacts without vendor reports", async () => {
+	const panel = await setup("Tile");
+	try {
+		panel.emit({ source: "mock", kind: "status", state: "connected" });
+		for (let index = 0; index < 3; index++) {
+			panel.pointer("pointerdown");
+			panel.pointer("pointerup");
+		}
+		expect(panel.key).not.toHaveBeenCalled();
+		panel.pointer("pointerdown");
+		expect(panel.key).toHaveBeenCalledWith(
+			expect.objectContaining({ keyAction: 0 }),
+		);
+	} finally {
+		await panel.close();
 	}
 });
 afterEach(() => {

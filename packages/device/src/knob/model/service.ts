@@ -565,7 +565,9 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							return yield* cancelVoice;
 						case "Key": {
 							if (state.selector.mode !== "closed" && event.code !== 255) {
-								if (event.code === 1) return yield* confirm();
+								// Same feedback as a timed commit: the ring stays briefly, the picker closes.
+								if (event.code === 1)
+									return yield* confirm(state.selector.mode !== "picker");
 								yield* stopSelection;
 								yield* emit({ selector: closed });
 							}

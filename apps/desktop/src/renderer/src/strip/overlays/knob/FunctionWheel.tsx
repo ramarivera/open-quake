@@ -1,8 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-	KNOB_TIMING,
-	type MenuProfile,
-} from "../../../../../shared/knob-contracts";
+import type { MenuProfile } from "../../../../../shared/knob-contracts";
 
 const ROW_OFFSETS = [-108, -57, 0, 57, 108] as const;
 
@@ -20,7 +17,6 @@ export function FunctionWheel({
 }): React.JSX.Element | null {
 	const [nudge, setNudge] = useState(0);
 	const [indicator, setIndicator] = useState(false);
-	const [feedbackVisible, setFeedbackVisible] = useState(true);
 	const [width, setWidth] = useState(320);
 	const labels = useRef<HTMLDivElement>(null);
 	const entryId = entries[index]?.id;
@@ -49,17 +45,12 @@ export function FunctionWheel({
 	useEffect(() => {
 		setNudge(0);
 		setIndicator(false);
-		setFeedbackVisible(true);
-		const feedbackTimer = setTimeout(
-			() => setFeedbackVisible(false),
-			KNOB_TIMING.ringHide,
-		);
 		if (
 			!entryId ||
 			motion === "reduce" ||
 			window.matchMedia("(prefers-reduced-motion: reduce)").matches
 		)
-			return () => clearTimeout(feedbackTimer);
+			return;
 		setIndicator(true);
 		const indicatorTimer = setTimeout(() => setIndicator(false), 300);
 		const started = performance.now();
@@ -73,12 +64,10 @@ export function FunctionWheel({
 		};
 		frame = requestAnimationFrame(tick);
 		return () => {
-			clearTimeout(feedbackTimer);
 			cancelAnimationFrame(frame);
 			clearTimeout(indicatorTimer);
 		};
 	}, [entryId, direction, motion]);
-	if (!feedbackVisible) return null;
 	return (
 		<>
 			<span role="status" aria-live="polite" className="visually-hidden">
