@@ -789,3 +789,33 @@ describe("Agent profile display compatibility", () => {
 		}
 	});
 });
+
+it("shows the Agent titles for agent tiles saved before the rename", async () => {
+	const { keyTitle } = await import("./key-editing-invariants.js");
+	const profile = builtinProfiles("darwin").find((p) =>
+		p.pages.some((page) => page.keys.some((k) => k.config.type === "quakeBot")),
+	);
+	const keys = profile?.pages.flatMap((page) => page.keys) ?? [];
+	for (const [type, legacy, current] of [
+		["quakeBot", "ClawBotView", "Agent"],
+		["quakeBotInput", "ClawBotInput", "Agent input"],
+	] as const) {
+		const key = keys.find((k) => k.config.type === type);
+		if (!key) throw new Error(`Missing ${type}`);
+		const saved = {
+			...key,
+			config: {
+				...key.config,
+				title: { ...key.config.title, text: legacy },
+				userModifiedTitle: false,
+			},
+		};
+		expect(keyTitle(saved, "en")).toBe(current);
+		expect(
+			keyTitle(
+				{ ...saved, config: { ...saved.config, userModifiedTitle: true } },
+				"en",
+			),
+		).toBe(legacy);
+	}
+});
