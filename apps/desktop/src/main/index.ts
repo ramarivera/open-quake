@@ -38,6 +38,7 @@ import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import { isTransientStripPage } from "../shared/strip-selection";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
+import { knobAgentState } from "./agent-http/knob-route";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
 import { prepareAgents } from "./agents";
 import { createLocalChannelRuntime } from "./agents/channel-runtime";
@@ -310,15 +311,17 @@ if (!app.requestSingleInstanceLock()) {
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
+						let ownsAgentRuntime = false;
 						const httpModule = prepareAgentHttp({
 							localAgents: async () => {
 								const view = await agentsModule.runtime.runPromise(
 									AgentsService.view(),
 								);
-								return {
-									status: view.runtime.status,
-									agentIds: view.agents.map((a) => a.id),
-								};
+								return knobAgentState(
+									ownsAgentRuntime,
+									view.runtime.status,
+									view.agents.map((a) => a.id),
+								);
 							},
 							diagnostics,
 							management: () => managementWin,
@@ -539,17 +542,18 @@ if (!app.requestSingleInstanceLock()) {
 						const localAgentState = createLocalAgentState(
 							join(app.getPath("userData"), "channel-runtime-v1"),
 						);
+						const ownedAgentRuntime = createOwnedAgentRuntime({
+							root: localAgentState.root,
+							storage: localAgentState,
+							command:
+								process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+									? undefined
+									: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
+						});
+						ownsAgentRuntime = ownedAgentRuntime !== undefined;
 						const agentsModule = prepareAgents({
 							diagnostics,
-							backend:
-								createOwnedAgentRuntime({
-									root: localAgentState.root,
-									storage: localAgentState,
-									command:
-										process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
-											? undefined
-											: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
-								}) ?? httpModule.backend,
+							backend: ownedAgentRuntime ?? httpModule.backend,
 							drafting: httpModule.drafting,
 							management: () => managementWin,
 							renderer: rendererURL,

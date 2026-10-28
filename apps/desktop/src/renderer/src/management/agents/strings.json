@@ -24,7 +24,7 @@
 			"restartFailed": "The local runtime couldn't be restarted.",
 			"title": "Local OpenClaw runtime",
 			"notConfigured": "Not configured",
-			"setupHint": "Install OpenClaw, then launch open-quake with OPEN_QUAKE_OPENCLAW_COMMAND set to the absolute path of its executable. For a running Hermes or OpenClaw server, add an HTTP connection in Agents > Settings.",
+			"setupHint": "Install OpenClaw, then launch open-quake with OPEN_QUAKE_OPENCLAW_COMMAND set to the absolute path of its executable. For a running Hermes or OpenClaw server, add an HTTP connection in Agents > Conversations.",
 			"startShort": "Start",
 			"stopShort": "Stop",
 			"restartShort": "Restart"
@@ -273,7 +273,7 @@
 			"restartFailed": "Die lokale Laufzeit konnte nicht neu gestartet werden.",
 			"title": "Lokale OpenClaw-Laufzeit",
 			"notConfigured": "Nicht konfiguriert",
-			"setupHint": "Installiere OpenClaw und starte open-quake mit OPEN_QUAKE_OPENCLAW_COMMAND auf den absoluten Pfad zur ausführbaren Datei gesetzt. Für einen laufenden Hermes- oder OpenClaw-Server füge unter Agenten > Einstellungen eine HTTP-Verbindung hinzu.",
+			"setupHint": "Installiere OpenClaw und starte open-quake mit OPEN_QUAKE_OPENCLAW_COMMAND auf den absoluten Pfad zur ausführbaren Datei gesetzt. Für einen laufenden Hermes- oder OpenClaw-Server füge unter Agenten > Unterhaltungen eine HTTP-Verbindung hinzu.",
 			"startShort": "Starten",
 			"stopShort": "Stoppen",
 			"restartShort": "Neu starten"

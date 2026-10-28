@@ -12,6 +12,13 @@ export interface KnobAgentState {
 	readonly status: "ready" | "starting" | "stopping" | "error" | "stopped";
 	readonly agentIds: readonly string[];
 }
+/** Without an owned OpenClaw process, the lifecycle adapter is inert and reports
+ * stopped; HTTP readiness then comes from the registry and discovery checks. */
+export const knobAgentState = (
+	ownsRuntime: boolean,
+	status: KnobAgentState["status"],
+	agentIds: readonly string[],
+): KnobAgentState => ({ status: ownsRuntime ? status : "ready", agentIds });
 /** Local workspace IDs become HTTP agent IDs only after discovery confirms that exact identity. */
 export const pinAgentKnob = Effect.fn("AgentHttp.pinAgentKnob")(function* (
 	snapshot: KnobCaptureSnapshot,
