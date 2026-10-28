@@ -137,8 +137,12 @@ describe("source-backed monitor readouts", () => {
 			}),
 		);
 		expect(html).toContain("AC Power");
-		expect(html).not.toContain(">100<");
+		expect(html).toContain("AC power · no battery");
 		expect(html).toContain(
+			'data-testid="sys-monitor-value-battery-percent">No battery</div>',
+		);
+		expect(html).not.toContain(">100<");
+		expect(html).not.toContain(
 			'data-testid="sys-monitor-value-battery-percent">--</div>',
 		);
 		expect(sampleOf(snapshot, "cpu").values.load).toBe(37);
@@ -173,9 +177,44 @@ describe("source-backed monitor readouts", () => {
 				expect(html).toContain(
 					`data-testid="sys-monitor-power-source">${supply === "Battery Power" && styleId === "cyber" ? "ON_BATTERY" : supply}</b>`,
 				);
+				if (supply === "Battery Power")
+					expect(html).toContain(
+						'data-testid="sys-monitor-value-battery-percent">87<small>%</small>',
+					);
 			}
 		},
 	);
+	it("shows the Mac hardware identifier and temperature limitation in panel styles", () => {
+		const fixture = previewSnapshot();
+		for (const styleId of STYLES) {
+			const snapshot = {
+				...fixture,
+				samples: fixture.samples.map((sample) => {
+					if (sample.id !== "cpu" && sample.id !== "gpu") return sample;
+					const values = { ...sample.values };
+					delete values.temperature;
+					return {
+						...sample,
+						values: {
+							...values,
+							temperatureAvailability: "unsupported-on-mac" as const,
+							...(sample.id === "gpu"
+								? { model: "Apple M4 Pro · Mac15,12" }
+								: {}),
+						},
+					};
+				}),
+			};
+			const html = renderToStaticMarkup(
+				createElement(MonitorPanel, {
+					settings: { ...defaults(), styleId },
+					snapshot,
+				}),
+			);
+			expect(html).toContain("Not available on this Mac");
+			expect(html).toContain("Apple M4 Pro · Mac15,12");
+		}
+	});
 	it("omits units for absent disk usage and keeps measured zero", () => {
 		const sample = {
 			id: "disk",

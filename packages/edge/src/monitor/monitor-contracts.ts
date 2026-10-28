@@ -28,6 +28,10 @@ export const MetricValues = Schema.Struct({
 	connected: optionalNumber,
 	load: optionalNumber,
 	temperature: optionalNumber,
+	temperatureAvailability: Schema.optionalWith(
+		Schema.Literal("unsupported-on-mac"),
+		{ exact: true },
+	),
 	model: Schema.optionalWith(Schema.String, { exact: true }),
 	total: optionalNumber,
 	used: optionalNumber,

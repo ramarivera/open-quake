@@ -43,9 +43,10 @@ delivery after unsubscribe. `MonitorStore` remains the sole persistence owner;
 its accepted atomic write settles in memory and on disk even if a caller exits.
 
 The native adapter uses Node os for CPU deltas and memory. macOS uses df, ps,
-netstat and pmset, plus optional IOAccelerator GPU utilization and system_profiler
-Bluetooth inventory. Windows uses fixed local PowerShell CIM/Get-NetAdapter
-scripts over typed stdio, with optional nvidia-smi GPU load/temperature. Linux
+netstat and pmset, plus optional IOAccelerator GPU utilization, cached `sysctl`
+model identity and system_profiler Bluetooth inventory. Windows uses fixed local
+PowerShell CIM/Get-NetAdapter scripts over typed stdio, with optional nvidia-smi
+GPU load/temperature. Linux
 uses df, ps, proc network counters and sysfs GPU, CPU-temperature, power and
 Bluetooth data, with optional nvidia-smi. No vendor service or socket starts.
 Commands have two-second deadlines and one-MiB output limits. Disk and Bluetooth
@@ -55,7 +56,11 @@ and expire after sixty failed checks. CPU temperature on macOS and Windows, and
 GPU temperature on macOS, remain absent without a qualified provider. Memory is
 os total minus free. Network rates need two samples and reset on interface change,
 counter rollback or stream restart. Battery presence, source and charging state
-remain independent. Unsupported or denied fields stay absent.
+remain independent. Unsupported or denied fields stay absent. macOS has no
+unprivileged temperature source in the current command/native toolset.
+IOAccelerator exposes utilization but not CPU/GPU temperatures, and
+`powermetrics` requires elevated privileges. The panel reports
+`Not available on this Mac` for those temperature fields.
 
 The local `monitor-v1/settings.json` stores revision and validated settings.
 Atomic rename and revision checks preserve the previous record on write failure
@@ -75,7 +80,8 @@ independent-device-design palette. DESIGN.md records ownership and the explicit
 replacement of vendor blur, textures and decorative animation.
 
 Unavailable values stay `--` at startup and on unsupported hosts. A confirmed
-absent battery shows AC Power and no percentage or charging bolt. Per-field
+absent battery shows `AC power · no battery` and `No battery` in the capacity
+readout, with no percentage or charging bolt. Per-field
 absence remains distinct from a measured zero. Unavailable readouts omit numeric
 units, including analog temperatures, ticker rates and disk percentages. The disk list uses smDiskList
 with the shared gesture recognizer and fling runner. No native touch reader is

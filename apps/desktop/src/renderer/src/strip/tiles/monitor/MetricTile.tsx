@@ -82,7 +82,10 @@ export function MetricReadout({
 			<strong>{value}</strong>
 			{id === "cpu" || id === "gpu" ? (
 				<span>
-					{temperature(v.temperature, unit)}
+					{v.temperature === undefined &&
+					v.temperatureAvailability === "unsupported-on-mac"
+						? "Not available on this Mac"
+						: temperature(v.temperature, unit)}
 					{v.temperature !== undefined &&
 					v.temperature > 0 &&
 					v.temperature <= 150

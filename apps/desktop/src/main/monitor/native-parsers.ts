@@ -64,6 +64,13 @@ export function parsePower(output: string): MetricValues {
 				: {}),
 	};
 }
+
+/** sysctl -n hw.model returns a model identifier without a key prefix. */
+export function parseHardwareModel(output: string): string | undefined {
+	const model = output.trim().replace(/^hw\.model:\s*/, "");
+	return /^[A-Za-z0-9,._-]+$/.test(model) ? model : undefined;
+}
+
 export function parseNetworkCounters(
 	output: string,
 	iface: string,

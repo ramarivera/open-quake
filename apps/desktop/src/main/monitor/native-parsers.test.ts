@@ -1,9 +1,10 @@
-import type { NetworkInterfaceInfo } from "node:os";
+import { cpus, type NetworkInterfaceInfo } from "node:os";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nativeCollector } from "./native-collector";
 import {
 	parseDisks,
+	parseHardwareModel,
 	parseNetworkCounters,
 	parsePower,
 	parseProcesses,
@@ -37,6 +38,11 @@ describe("platform collection boundaries", () => {
 			batteryState: "discharging",
 		});
 		expect(parsePower("invalid")).toEqual({});
+	});
+	it("parses a sysctl model identifier and rejects unexpected output", () => {
+		expect(parseHardwareModel("Mac15,12\n")).toBe("Mac15,12");
+		expect(parseHardwareModel("hw.model: Mac15,12\n")).toBe("Mac15,12");
+		expect(parseHardwareModel("Mac15,12\nprivate detail")).toBeUndefined();
 	});
 	it.each([
 		["charging", "charging"],
@@ -309,17 +315,111 @@ describe("qualified platform fixtures", () => {
 		expect(run).toHaveBeenCalledTimes(3);
 	});
 	it("qualifies macOS optional GPU and Bluetooth without inventing temperature", async () => {
-		const c = nativeCollector("darwin", async (file) =>
-			file.endsWith("ioreg")
-				? '"Device Utilization %"=0'
-				: '{"SPBluetoothDataType":[{"devices_connected":[{}]}]}',
+		const c = nativeCollector(
+			"darwin",
+			async (file) =>
+				file.endsWith("ioreg")
+					? '"Device Utilization %"=0'
+					: '{"SPBluetoothDataType":[{"devices_connected":[{}]}]}',
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
 		);
 		expect((await Effect.runPromise(c.collect("gpu"))).values).toEqual({
 			load: 0,
+			model: cpus()[0]?.model.trim(),
+			temperatureAvailability: "unsupported-on-mac",
 		});
 		expect(
 			(await Effect.runPromise(c.collect("bluetooth"))).values.connected,
 		).toBe(1);
+	});
+	it("collects cached Mac hardware identity and reports unsupported temperature explicitly", async () => {
+		const run = vi.fn(async (file: string) => {
+			if (file.endsWith("sysctl")) return "Mac15,12\n";
+			if (file.endsWith("ioreg")) return '"Device Utilization %"=0';
+			if (file.endsWith("pmset")) return "Now drawing from 'AC Power'\n";
+			throw new Error(`Unexpected command: ${file}`);
+		});
+		const collector = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
+		);
+		expect(await Effect.runPromise(collector.collect("power"))).toEqual({
+			state: "available",
+			values: { hasBattery: false, source: "ac" },
+		});
+		expect(await Effect.runPromise(collector.collect("gpu"))).toEqual({
+			state: "available",
+			values: {
+				load: 0,
+				model: `${cpus()[0]?.model.trim()} · Mac15,12`,
+				temperatureAvailability: "unsupported-on-mac",
+			},
+		});
+		expect(await Effect.runPromise(collector.collect("cpu"))).toMatchObject({
+			values: { temperatureAvailability: "unsupported-on-mac" },
+		});
+		expect(
+			run.mock.calls.filter(([file]) => file.endsWith("sysctl")),
+		).toHaveLength(1);
+		expect(run.mock.calls.map(([file]) => file)).not.toContain("powermetrics");
+	});
+	it("reports failed GPU reads as unavailable and retries a failed model lookup", async () => {
+		let sysctlCalls = 0;
+		const run = vi.fn(async (file: string) => {
+			if (file.endsWith("sysctl")) {
+				sysctlCalls++;
+				if (sysctlCalls === 1) throw new Error("transient");
+				return "Mac15,12\n";
+			}
+			throw new Error("ioreg failed");
+		});
+		const appleSilicon = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"arm64",
+		);
+		const first = await Effect.runPromise(appleSilicon.collect("gpu"));
+		expect(first.state).toBe("unavailable");
+		const second = await Effect.runPromise(appleSilicon.collect("gpu"));
+		expect(second.values.model).toBe(`${cpus()[0]?.model.trim()} · Mac15,12`);
+		// Intel Macs omit the CPU identifier rather than mislabel a discrete GPU.
+		const intel = nativeCollector(
+			"darwin",
+			run,
+			undefined,
+			undefined,
+			undefined,
+			"x64",
+		);
+		expect(
+			(await Effect.runPromise(intel.collect("gpu"))).values.model,
+		).toBeUndefined();
+	});
+	it("keeps real battery percentage and charging state from mocked pmset output", async () => {
+		const collector = nativeCollector(
+			"darwin",
+			async () =>
+				"Now drawing from 'AC Power'\n -InternalBattery-0 (id=1) 87%; charging; 0:12 remaining",
+		);
+		expect(await Effect.runPromise(collector.collect("power"))).toEqual({
+			state: "available",
+			values: {
+				hasBattery: true,
+				source: "ac",
+				percent: 87,
+				batteryState: "charging",
+			},
+		});
 	});
 });
 

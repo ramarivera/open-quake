@@ -10,6 +10,7 @@ import { MonitorCollectionFailed } from "../../shared/monitor-errors";
 import { type LinuxFiles, linuxFiles, linuxMetrics } from "./linux-metrics";
 import {
 	parseDisks,
+	parseHardwareModel,
 	parseNetworkCounters,
 	parsePower,
 	parseProcesses,
@@ -52,12 +53,34 @@ export function nativeCollector(
 	interfaces: typeof networkInterfaces = networkInterfaces,
 	files: LinuxFiles = linuxFiles,
 	now: () => number = Date.now,
+	arch: NodeJS.Architecture = process.arch,
 ): MetricCollector {
 	let previousCpu: { idle: number; total: number } | undefined;
 	let previousNetwork:
 		| { iface: string; up: number; down: number; time: number }
 		| undefined;
 	const slow = new Map<ModuleId, { remaining: number; result: Result }>();
+	// Cached only once sysctl succeeds, so a transient failure retries next sample.
+	let hardwareIdentifier: string | undefined;
+	const macHardwareIdentifier = async (
+		signal: AbortSignal,
+	): Promise<string> => {
+		if (hardwareIdentifier) return hardwareIdentifier;
+		let model: string | undefined;
+		try {
+			model = parseHardwareModel(
+				await run("/usr/sbin/sysctl", ["-n", "hw.model"], signal),
+			);
+		} catch {
+			/* The CPU model remains a useful identifier if sysctl is unavailable. */
+		}
+		const chip = cpus()[0]?.model.trim();
+		const identifier =
+			[chip, model].filter(Boolean).join(" · ") ||
+			(arch === "arm64" ? "Apple Silicon" : "Mac");
+		if (model) hardwareIdentifier = identifier;
+		return identifier;
+	};
 	const externalInterface = () =>
 		Object.entries(interfaces()).find(([, entries]) =>
 			entries?.some(
@@ -141,6 +164,8 @@ export function nativeCollector(
 			previousCpu = current;
 			const elapsed = previous ? current.total - previous.total : 0;
 			let temperature = {};
+			const temperatureAvailability =
+				platform === "darwin" ? "unsupported-on-mac" : undefined;
 			if (platform === "linux") {
 				try {
 					temperature = await linuxMetrics("cpu", files, signal);
@@ -155,6 +180,10 @@ export function nativeCollector(
 						: "unavailable",
 				values: {
 					...temperature,
+					...(platform === "darwin"
+						? { model: await macHardwareIdentifier(signal) }
+						: {}),
+					...(temperatureAvailability ? { temperatureAvailability } : {}),
 					...(previous && elapsed > 0
 						? {
 								load: Math.max(
@@ -240,15 +269,31 @@ export function nativeCollector(
 		}
 		if (platform !== "darwin") return { state: "unsupported", values: {} };
 		if (id === "gpu") {
-			const text = await run(
-				"/usr/sbin/ioreg",
-				["-r", "-c", "IOAccelerator"],
-				signal,
-			);
-			const load = /"Device Utilization %"\s*[=:]\s*(\d+)/.exec(text)?.[1];
-			return load !== undefined && Number(load) <= 100
-				? { state: "available", values: { load: Number(load) } }
-				: { state: "unsupported", values: {} };
+			let load: number | undefined;
+			try {
+				const text = await run(
+					"/usr/sbin/ioreg",
+					["-r", "-c", "IOAccelerator"],
+					signal,
+				);
+				const rawLoad = /"Device Utilization %"\s*[=:]\s*(\d+)/.exec(text)?.[1];
+				if (rawLoad !== undefined && Number(rawLoad) <= 100)
+					load = Number(rawLoad);
+			} catch {
+				/* Reported below as an unavailable sample, so status leaves Live. */
+			}
+			return {
+				state: load !== undefined ? "available" : "unavailable",
+				values: {
+					...(load !== undefined ? { load } : {}),
+					// Apple silicon graphics are part of the chip; on Intel Macs the CPU
+					// identifier would mislabel a discrete GPU, so it is omitted there.
+					...(arch === "arm64"
+						? { model: await macHardwareIdentifier(signal) }
+						: {}),
+					temperatureAvailability: "unsupported-on-mac",
+				},
+			};
 		}
 		if (id === "bluetooth") {
 			const raw = JSON.parse(
@@ -321,6 +366,7 @@ export function nativeCollector(
 		reset: Effect.sync(() => {
 			previousCpu = undefined;
 			previousNetwork = undefined;
+			hardwareIdentifier = undefined;
 			slow.clear();
 		}),
 		collect: (id) =>

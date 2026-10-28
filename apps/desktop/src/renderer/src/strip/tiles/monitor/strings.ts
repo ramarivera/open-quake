@@ -13,6 +13,7 @@ export const labels = {
 	temp: "Temp",
 	temperature: "Temperature",
 	tempNA: "Temp (N/A)",
+	tempUnavailableMac: "Not available on this Mac",
 	tempStatus: "TEMP STATUS",
 	thermal: "THERMAL",
 	memory: "Memory",
@@ -55,6 +56,8 @@ export const labels = {
 	currentCapacity: "Current Capacity",
 	batteryPower: "Battery Power",
 	acPower: "AC Power",
+	noBattery: "No battery",
+	acNoBattery: "AC power · no battery",
 	charging: "Charging",
 	discharging: "Discharging",
 	// Truthful states absent from the recovered sysMonitor locale, WIDGETS-077/083.

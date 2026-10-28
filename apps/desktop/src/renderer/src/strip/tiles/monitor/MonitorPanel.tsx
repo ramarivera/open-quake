@@ -61,7 +61,7 @@ const Value = ({
 }): React.JSX.Element => (
 	<div className="monitor-value" data-testid={`sys-monitor-value-${id}`}>
 		{value}
-		{value === "--" ? null : <small>{unit}</small>}
+		{value === "--" || unit === "" ? null : <small>{unit}</small>}
 	</div>
 );
 function Status({
@@ -121,7 +121,11 @@ function Processor({
 								: l.temperature}
 					</Heading>
 					{v.temperature === undefined ? (
-						<span className="monitor-field-unavailable">Unavailable</span>
+						<span className="monitor-field-unavailable">
+							{v.temperatureAvailability === "unsupported-on-mac"
+								? l.tempUnavailableMac
+								: "Unavailable"}
+						</span>
 					) : null}
 				</div>
 			</div>
@@ -306,7 +310,7 @@ function Power({ sample }: { sample: MetricSample }): React.JSX.Element {
 	const hasBattery = v.hasBattery === true;
 	const status =
 		v.hasBattery === false && v.source === "ac"
-			? l.acPower
+			? l.acNoBattery
 			: v.batteryState === "charging"
 				? l.charging
 				: v.batteryState === "discharging"
@@ -331,12 +335,26 @@ function Power({ sample }: { sample: MetricSample }): React.JSX.Element {
 			</Heading>
 			<span className="monitor-total">{l.systemPowerSource}</span>
 			<Value
-				value={hasBattery ? bare(pct(v.percent)) : "--"}
-				unit="%"
+				value={
+					hasBattery
+						? bare(pct(v.percent))
+						: v.hasBattery === false
+							? l.noBattery
+							: "--"
+				}
+				unit={hasBattery ? "%" : ""}
 				id="battery-percent"
 			/>
 			<Heading>{l.currentCapacity}</Heading>
-			<Status sample={sample} />
+			{v.hasBattery === false && v.source === "ac" ? (
+				<>
+					<span className="monitor-state">{l.acNoBattery}</span>
+					{/* Retained AC-only values must still show they are stale. */}
+					{sample.state !== "available" && <Status sample={sample} />}
+				</>
+			) : (
+				<Status sample={sample} />
+			)}
 			<div className="monitor-battery-segments" aria-hidden="true">
 				{[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((threshold) => (
 					<span
@@ -416,10 +434,14 @@ function Analog({
 				>
 					{memory
 						? size(v.used)
-						: withUnit(
-								temperature(v.temperature, unit),
-								unit === "celsius" ? "°C" : "°F",
-							)}
+						: v.temperature === undefined
+							? v.temperatureAvailability === "unsupported-on-mac"
+								? l.tempUnavailableMac
+								: "--"
+							: withUnit(
+									temperature(v.temperature, unit),
+									unit === "celsius" ? "°C" : "°F",
+								)}
 				</b>
 				{memory ? (
 					<small>
@@ -458,8 +480,11 @@ function Canvas({
 					? l.activeGraphicsUnit
 					: l.hardwareIdentifier}
 			</Heading>
-			<span data-testid="sys-monitor-value-gpu-model" title={gpu.values.model}>
-				{gpu.values.model || "--"}
+			<span
+				data-testid="sys-monitor-value-gpu-model"
+				title={gpu.values.model || cpu.values.model}
+			>
+				{gpu.values.model || cpu.values.model || "--"}
 			</span>
 		</div>
 	);
