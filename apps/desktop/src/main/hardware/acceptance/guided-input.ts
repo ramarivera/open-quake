@@ -167,9 +167,18 @@ await writeFile(
 app.setPath("userData", userData);
 app.setPath("sessionData", userData);
 let code = 1;
-app.once("will-quit", (event) => {
+let aborted = false;
+let captureFinished = false;
+let exiting = false;
+let captureRun: Promise<void> | undefined;
+app.on("will-quit", (event) => {
 	event.preventDefault();
-	void (owner?.close() ?? Promise.resolve()).finally(() => app.exit(code));
+	if (exiting) return;
+	exiting = true;
+	if (!captureFinished) aborted = true;
+	void (captureRun ?? Promise.resolve())
+		.then(() => owner?.close())
+		.finally(() => app.exit(code));
 });
 await writeFile(
 	join(directory, "capture.json"),
@@ -189,7 +198,6 @@ const Drain = Schema.Struct({
 const capture = createGuidedCapture(
 	() => performance.timeOrigin + performance.now(),
 );
-let aborted = false;
 process.once("SIGTERM", () => {
 	aborted = true;
 });
@@ -315,7 +323,8 @@ async function run() {
 			await panel.webContents
 				.executeJavaScript("window.__guidedCapture?.close()")
 				.catch(() => {});
+		captureFinished = true;
 		app.quit();
 	}
 }
-void run();
+captureRun = run();
