@@ -172,6 +172,12 @@ it("detects actual application owners without treating unrelated Electron applic
 	expect(
 		competingOwners("99 1 electron /path/oq-hardware-e2e/apps/desktop", 99),
 	).toEqual([]);
+	expect(
+		competingOwners(
+			"20 1 octocode mcp --path /Users/me/dev/open-quake\n21 1 rg TODO /dev/open-quake",
+			99,
+		),
+	).toEqual([]);
 });
 
 it("ignores only the fixture's launcher ancestry and retains independent owners", () => {

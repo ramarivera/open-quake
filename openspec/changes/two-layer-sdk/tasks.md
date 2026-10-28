@@ -54,6 +54,18 @@ No handle was opened, no command was sent, and DK-Suite was never started.
 Live I/O, timing, detach, matrix and separate touch acceptance remain unchecked
 in task 3.2. The temporary hardware test was removed from the automated suite.
 
+Panel display evidence on 2026-10-28 (bead `open-quake-l86.15`): the opt-in
+`panel-display` fixture started the production app against the real QUAKE with
+scratch `userData`. The panel filled the 1920x480 QUAKE display at x=1280. The
+captured display matched the rendered panel (mean RGB difference 0.16 of 255)
+and differed from the replaced desktop by 77. The device's active profile was
+Vivid, whose single `colorfulScreen` key paints the full-screen gradient, so
+zero tiles is expected there. The read-only native suite passed 10 checks with
+3 mutation checks skipped and no failures, both before and after. The owner check no longer treats tools given the repo
+path, such as octocode, as device owners. The macOS framebuffer isn't the
+backlight, so physical light output, touch, knob gestures, matrix layout and
+USB hot-plug remain unchecked in task 3.2.
+
 ## W1 desktop wiring
 
 `apps/desktop/src/main/deviceBus.ts` consumes one main-owned QuakeDevice layer
