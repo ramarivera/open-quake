@@ -243,3 +243,11 @@ across all three runs. Assigned beads retain delivery/merge notes for the lead.
 - [x] 3.10 Validate changed consumers and one hidden native sweep; retain all strict failures and ship with one bot-review addressing round.
 
 PR157 delivery: squash merge `ebc68640398932a49230ce1ec4f98f928af7367a`, exact-head completed Devin review with no findings and all package/download checks passed. Owner app includes the correction. Native management sweep passed all 12 targeted scenarios; five existing speech configuration failures remain tracked separately in `open-quake-l86.31`.
+
+## Typed probe evidence privacy, open-quake-l86.18
+
+- [x] Reject serial bytes in Uint8Array and Buffer views, including nested evidence, without reading bytes outside a view. Verify with fake-only probe regressions and owning types/lint, then deliver.
+
+- [x] Review current input/diagnostic seams and propose bounded agent testability improvements without implementing a new recorder or observer. Proposal: `design.md` section Agent testability proposal; bead `open-quake-l86.20`.
+
+Typed-byte verification: the new regression fails against the prior guard and passes after the fix. All six fake-only probe tests, desktop typecheck and root lint pass. No native HID is loaded and no actual device serial is used. PR delivery remains tracked on `open-quake-l86.18`.
