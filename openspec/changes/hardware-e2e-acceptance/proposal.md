@@ -21,7 +21,7 @@ Ramiro explicitly requested more autonomous automated testing and granted local 
 
 ### Modified Capabilities
 
-- Existing lighting capabilities gain an explicitly approved `v3` transport and speed descriptor3 for exact QUAKE:3:1.0.19/protocol12 only. Shared-owner speed IO is hardware-qualified; brightness, color, effect selection and flash save stay unavailable.
+- Existing lighting capabilities gain an explicitly approved `v3` transport and speed descriptor 3 for exact QUAKE:3:1.0.19/protocol 12 only. Shared-owner speed IO is hardware-qualified; brightness, color, effect selection and flash save stay unavailable.
 
 ## Impact
 

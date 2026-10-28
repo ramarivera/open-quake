@@ -29,7 +29,7 @@ The suite SHALL emit a fixed named inventory with pass, fail, skip and physical-
 
 ### Requirement: Narrow hardware-qualified V3 control
 
-For exact QUAKE:3:1.0.19 firmware and protocol12, production lighting SHALL expose only readable and writable effect speed through shared-owner channel3/value3. Brightness, color, effect selection and flash save SHALL remain unavailable. Other identities SHALL not inherit this qualification.
+For exact QUAKE:3:1.0.19 firmware and protocol 12, production lighting SHALL expose only readable and writable effect speed through shared-owner channel 3/value 3. Brightness, color, effect selection and flash save SHALL remain unavailable. Other identities SHALL not inherit this qualification.
 
 #### Scenario: Installed qualified V3 device is selected
 

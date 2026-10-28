@@ -22,7 +22,7 @@ Baseline PR135 squash merged as a37a5172 after exact-head review and all hosted 
 
 - [x] 2.1 Add and exercise native lighting restoration, concurrent query and software reconnect checks with fake regressions.
 - [x] 2.2 Add and execute real USB microphone capture, pause/resume and cleanup checks through the production driver.
-- [ ] 2.3 Reconcile actual additional coverage, ship the extension and handle one review round.
+- [x] 2.3 Reconcile actual additional coverage, ship the extension and handle one review round.
 
 
 Native supplemental results passed concurrent queries, twelve software reconnect cycles, 13/13 handle cleanup and V3 effect-speed restoration. Six legacy-lighting checks are retained as skips on the installed 3:1.0.19/protocol 12 identity. Readback experiments established that brightness/color are not yet byte-for-byte controls and the repeatable write guard blocks them. The original observed 247 brightness/off 0 mode was restored after qualification. Real USB capture passed twice with ordered PCM, pause/resume, short final frames, stop and worker cleanup, plus low-level native output and playback drainage. No raw audio was saved. Ramiro subsequently approved the narrow production V3 schema fix, shipped separately in PR137.
