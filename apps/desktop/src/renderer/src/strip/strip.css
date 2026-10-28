@@ -120,6 +120,11 @@
 	white-space: normal;
 	overflow-wrap: anywhere;
 	text-align: center;
+	/* Two lines fit below the artwork on a square tile; longer titles ellipsize. */
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
 }
 
 /* Key runtime state, drawn inside the tile. */

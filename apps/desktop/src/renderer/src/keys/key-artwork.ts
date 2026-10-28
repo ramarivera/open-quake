@@ -5,6 +5,7 @@ import application from "@mdi/svg/svg/application.svg?raw";
 import apps from "@mdi/svg/svg/apps.svg?raw";
 import left from "@mdi/svg/svg/arrow-left.svg?raw";
 import right from "@mdi/svg/svg/arrow-right.svg?raw";
+import bellOff from "@mdi/svg/svg/bell-off.svg?raw";
 import bellRing from "@mdi/svg/svg/bell-ring.svg?raw";
 import brightness from "@mdi/svg/svg/brightness-7.svg?raw";
 import broadcast from "@mdi/svg/svg/broadcast.svg?raw";
@@ -26,6 +27,7 @@ import keyboard from "@mdi/svg/svg/keyboard.svg?raw";
 import lock from "@mdi/svg/svg/lock.svg?raw";
 import magnify from "@mdi/svg/svg/magnify.svg?raw";
 import microphone from "@mdi/svg/svg/microphone.svg?raw";
+import microphoneOff from "@mdi/svg/svg/microphone-off.svg?raw";
 import monitorScreenshot from "@mdi/svg/svg/monitor-screenshot.svg?raw";
 import play from "@mdi/svg/svg/play-pause.svg?raw";
 import record from "@mdi/svg/svg/record-circle-outline.svg?raw";
@@ -109,6 +111,9 @@ const builtinArtwork: Readonly<Record<string, string>> = {
 	"0-57": brightness,
 	"0-58": bellRing,
 	"0-59": microphone,
+	// Toggled states (alterIcon) of the built-in mic and buzzer keys.
+	"0-100": microphoneOff,
+	"0-101": bellOff,
 	"0-61": text,
 	"0-79": monitorScreenshot,
 	"0-80": desktop,

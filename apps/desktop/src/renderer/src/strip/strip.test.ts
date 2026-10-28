@@ -122,6 +122,16 @@ describe("strip screen", () => {
 							keyArtwork(key.config.icon, key.config.type),
 							label,
 						).not.toBe(fallbackArtwork);
+						// The mic and buzzer toggles swap to alterIcon, which must look different.
+						const alter = Option.getOrUndefined(key.config.alterIcon);
+						if (alter && ["0-58", "0-59"].includes(key.config.icon)) {
+							expect(hasSemanticKeyArtwork(alter, key.config.type), label).toBe(
+								true,
+							);
+							expect(keyArtwork(alter, key.config.type), label).not.toBe(
+								keyArtwork(key.config.icon, key.config.type),
+							);
+						}
 					}
 	});
 

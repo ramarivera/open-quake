@@ -29,6 +29,7 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
 import type { ShortcutLibrary } from "../../../../../packages/edge/src/shortcuts/shortcut-contracts";
+import { keyArtwork } from "../../renderer/src/keys/key-artwork";
 import { resolveTileArtwork } from "../../renderer/src/strip/useTileArt";
 import {
 	ManagementProfileContractsLive,
@@ -294,6 +295,28 @@ describe("integration placement through the shared ProfileService repository", (
 			await f.runtime.dispose();
 		}
 	});
+});
+
+it("gives synced shortcuts without row icons their action artwork, not brightness", async () => {
+	const f = setup();
+	try {
+		const id = await f.adapter.sync({
+			...library(0),
+			rows: [{ id: "copy", name: "Copy", app: "Office", chord: "control+c" }],
+		});
+		const profile = await f.runtime.runPromise(ProfileService.getProfile(id));
+		const config = profile.pages[0].keys[0]?.config;
+		expect(config?.type).toBe("hotkey");
+		expect(config?.icon).not.toBe("0-1");
+		expect(keyArtwork(config?.icon ?? "", "hotkey")).toBe(
+			keyArtwork("library:hotkey:1", "hotkey"),
+		);
+		expect(keyArtwork(config?.icon ?? "", "hotkey")).not.toBe(
+			keyArtwork("0-1", "brightness"),
+		);
+	} finally {
+		await f.runtime.dispose();
+	}
 });
 
 // AI-121 retained action data must survive the production profile adapter.
