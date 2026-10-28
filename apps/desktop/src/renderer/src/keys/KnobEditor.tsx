@@ -21,6 +21,7 @@ import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import {
 	editKnobSlot,
 	knobAssignment,
+	knobDraftIsPristine,
 	knobDraftRevision,
 	knobVoiceReady,
 	profileKnobDraft,
@@ -52,6 +53,20 @@ export function KnobEditor({
 	const pending = useRef(false);
 	const [previewed, setPreviewed] = useState(false);
 	const [reviewed, setReviewed] = useState(false);
+	useEffect(() => {
+		// Page edits can materialize an inherited knob. Follow committed changes
+		// only while clean; unsaved drafts keep their conflict-protected baseline.
+		if (
+			pending.current ||
+			profile.id !== baseline.id ||
+			profile.revision <= baseline.revision ||
+			!knobDraftIsPristine(draft, baseline)
+		)
+			return;
+		setDraft(profileKnobDraft(profile));
+		setBaseline(profile);
+	}, [profile, baseline, draft]);
+
 	useEffect(() => {
 		alive.current = true;
 		const read = async () => {

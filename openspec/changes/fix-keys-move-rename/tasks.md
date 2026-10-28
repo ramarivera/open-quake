@@ -4,10 +4,19 @@
 
 ## 2. Luminance title, open-quake-efm
 
-- [x] 2.1 Verify the source restriction, explain it beside the locked title, and add regression coverage.
+- [x] 2.1 Keep Luminance title editing available under the owner's updated customization policy and add regression coverage.
 
 ## 3. Delivery
 
 - [x] 3.1 Pass desktop typecheck/tests and root lint; record evidence in both beads.
 
-Delivery uses branch `fix/keys-move-rename` and a PR against main. The beads record the PR and head after pushing. No merge or bot waiting.
+Delivery uses branch `fix/keys-editor-sweep` and a PR against main. The beads record the PR and head after pushing. No merge or bot waiting.
+
+## 4. Keys editor sweep
+
+- [x] 4.1 Fix knob revisions and generic action field types, with regression coverage. Beads open-quake-3nd and open-quake-nf7.
+- [x] 4.2 Fix closed-disclosure enumeration and explicitly exercise native clicks on function-library Emojis and JSON import, with regression coverage. Beads open-quake-dbf and open-quake-ayj.
+- [x] 4.3 Preserve moved-key selection, reject hidden overlap and remove stale Luminance lock design. Bead open-quake-l86.26.
+- [x] 4.4 Fix the three late PR152 findings, with regression coverage. Bead open-quake-l86.29.
+- [x] 4.5 Separate enlarged two-line titles from artwork, with regression coverage. Title subset of open-quake-l86.24.
+- [x] 4.6 Run before/after management exercise, desktop types/tests, device tests and root lint; record the verified change for delivery.

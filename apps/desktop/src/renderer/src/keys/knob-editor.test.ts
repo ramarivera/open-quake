@@ -39,3 +39,29 @@ it("rebases knob revision after key-only saves without accepting concurrent knob
 	});
 	expect(knobDraftRevision(baseline, editedKnob)).toBe(2);
 });
+
+it("ignores JSON record order in a saved knob but retains concurrent knob conflict protection", () => {
+	const profile = (revision: number, config: Record<string, unknown>) =>
+		Schema.decodeUnknownSync(Profile)({
+			id: "p",
+			name: "Profile",
+			revision,
+			pages: [{ id: "page", keys: [] }],
+			knob: { keyCode: "0,1", config },
+		});
+	const baseline = profile(2, {
+		type: "knob",
+		future: { enabled: true, level: 4 },
+	});
+	const reordered = profile(3, {
+		future: { level: 4, enabled: true },
+		type: "knob",
+	});
+	expect(knobDraftRevision(baseline, reordered)).toBe(3);
+	expect(
+		knobDraftRevision(
+			baseline,
+			profile(3, { type: "knob", future: { enabled: false, level: 4 } }),
+		),
+	).toBe(2);
+});

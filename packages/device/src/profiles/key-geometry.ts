@@ -38,8 +38,6 @@ export function editKeyLayout(
 ): KeyLayoutResult {
 	const original = keys.find((k) => k.keyCode === key.keyCode);
 	const requested = geometry.destination ?? key.keyCode;
-	// A wide tile can be targeted through a covered cell as well as its anchor.
-	// Match drag-and-drop without turning a partial one-cell drop into a swap.
 	const destination =
 		requested !== key.keyCode &&
 		!geometry.placement &&
@@ -104,6 +102,9 @@ export function editKeyLayout(
 	if (moving) {
 		const target = keys.find((k) => k.keyCode === destination);
 		const movedCells = new Set(occupiedCells({ ...key, keyCode: destination }));
+		const displacedCells = new Set(
+			target ? occupiedCells({ ...target, keyCode: key.keyCode }) : [],
+		);
 		if (
 			keys.some(
 				(other) =>
@@ -112,10 +113,26 @@ export function editKeyLayout(
 					keyStructurallyLocked(other) &&
 					(other === target ||
 						(other.config.display &&
-							occupiedCells(other).some((cell) => movedCells.has(cell)))),
+							occupiedCells(other).some(
+								(cell) => movedCells.has(cell) || displacedCells.has(cell),
+							))),
 			)
 		)
 			return { _tag: "rejected", reason: "locked" };
+
+		// Hidden keys don't occupy rendered cells, but a move must not hide them
+		// under another tile or leave selection pointing at that tile's owner.
+		if (
+			keys.some(
+				(other) =>
+					other.keyCode !== key.keyCode &&
+					other !== target &&
+					!isEmptyCell(other) &&
+					other.config.display &&
+					occupiedCells(other).some((cell) => movedCells.has(cell)),
+			)
+		)
+			return { _tag: "rejected", reason: "spaceNotEnough" };
 
 		if (
 			target &&

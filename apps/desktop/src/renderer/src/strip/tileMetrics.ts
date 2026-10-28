@@ -21,11 +21,15 @@ export function genericTileMetrics(
 	box: { readonly width: number; readonly height: number },
 	title: Pick<ProfileTitle, "pos" | "style"> & {
 		readonly userModifiedStyle?: boolean | undefined;
+		readonly size?: number | undefined;
 	},
 ): GenericTileMetrics {
 	const base = Math.min(box.width, box.height);
 	const padding = Math.round(base * 0.09);
-	const fontSize = Math.min(34, Math.max(22, Math.round(base * 0.11)));
+	const baseFontSize = Math.min(34, Math.max(22, Math.round(base * 0.11)));
+	const fontSize = title.userModifiedStyle
+		? Math.round(baseFontSize * ((title.size ?? 8) / 8))
+		: baseFontSize;
 	const styles = title.style.split("|");
 	const explicit = title.userModifiedStyle === true;
 	const titleAnchor = !explicit
@@ -36,9 +40,12 @@ export function genericTileMetrics(
 				? "mid"
 				: "bottom";
 	// The icon centres in the space the label leaves free.
-	const label = (fontSize * 1.25 + padding) / box.height;
+	// The title can wrap to two lines at the rendered size. Keep a gap
+	// between that block and the artwork, including explicit large titles.
+	const label = (fontSize * 1.2 * 2 + padding + 8) / box.height;
+	const freeHeight = Math.max(0, box.height * (1 - label));
 	return {
-		iconSize: Math.round(Math.min(base * 0.42, 168)),
+		iconSize: Math.round(Math.min(base * 0.42, 168, freeHeight)),
 		padding,
 		fontSize,
 		titleAnchor,
