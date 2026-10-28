@@ -66,6 +66,39 @@ path, such as octocode, as device owners. The macOS framebuffer isn't the
 backlight, so physical light output, touch, knob gestures, matrix layout and
 USB hot-plug remain unchecked in task 3.2.
 
+Rerun on 2026-10-28 at `a2744a4e` (bead `open-quake-l86.17`), clean checkout,
+each run in a fresh scratch directory. Read-only suite: 10 passed, 3 mutation
+checks skipped, 0 failed, 7 supervised. Mutation suite: 13 of 20 passed (65%),
+0 failed, with microphone, panel luminance and knob LED changed, read back and
+restored. Extended suite: 7 passed and 3 skipped without mutations; with
+mutations, the qualified effect-speed round trip also passed (8 passed), and
+brightness and color stay skipped as unqualified for this firmware. Every run
+retained diagnostics with zero drops. The audio fixture passed: two capture
+sessions from the USB input with PCM framing, pause/resume, drain and worker
+cleanup, a partial final frame, and native playback (peak RMS 0.07). It doesn't
+prove audibility. The panel fixture passed with the per-channel flat-frame
+metric: panel difference 0.16 of 255, desktop difference 77.5, color deviation
+43.1.
+
+Query probe on 2026-10-28 (bead `open-quake-l86.17`): the opt-in read-only
+probe sent only flag-2 queries. Every one of the seven query-only commands
+answered with a valid checksum: 0x02 reported 0, 0x04 screen power 1, 0x06
+knob LED 0 or 1 across runs, 0x07 idle flags 0, 0x1E config byte 3, and 0x2D
+the device tick. The 0x1F name reply is the device serial, so evidence keeps
+only its length (11) and that it matches. The tick is in milliseconds:
+1005 ticks over 1004 ms and 3005 over 3005 ms. Keep-alive pongs carry a
+counter that increments by one. Starvation brackets on separate runs: the
+counter kept counting after 20, 21.5, 23, 24 and 24.5 seconds without a
+keep-alive and reset to 0 after 25, 30, 35 and 40 seconds, so firmware idle
+tracking expires between 24.5 and 25 seconds. Screen power and idle flags
+didn't change through 40 seconds, so starvation doesn't switch the screen off
+in firmware state; the production 15-second interval stays inside the window.
+Ramiro saw the LEDs flashing during these runs. This settles the reply meaning
+of these queries for task 3.4. What their set forms do, and how 0x02, 0x06 and
+0x1E map to visible output, needs someone watching the device. Task 3.3 needs
+A2 resource writes to device storage plus visual confirmation, so it stays
+with Ramiro.
+
 ## W1 desktop wiring
 
 `apps/desktop/src/main/deviceBus.ts` consumes one main-owned QuakeDevice layer

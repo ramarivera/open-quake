@@ -132,3 +132,27 @@ exec ./node_modules/.bin/electron out/panel-display/panel-display.js
 This is supplemental evidence for the `display` scenario, which stays
 supervised. It shows what macOS sends to the QUAKE, not the backlight or the
 light the panel physically emits.
+
+## Query probe
+
+Set `OPEN_QUAKE_HW_E2E_PROBE=1` with the native opt-in, exact serial and a fresh
+artifact directory, then run `pnpm test:hardware`. It can't be combined with
+extended or mutation mode. Its own allowlist permits only flag-2 queries: the
+existing microphone, luminance, firmware and keep-alive reads plus seven
+query-only commands from the reconstructed firmware: 0x02, 0x04 screen power,
+0x06, 0x07 idle flags, 0x1E, 0x1F name and 0x2D tick. Set commands, key
+injection, GPIO, firmware upload and DFU are refused before they reach the
+handle.
+
+The probe records every query reply, checks that keep-alive counts are
+consecutive and measures the gap between keep-alives with the device's own
+clock. It then sends nothing for 40 seconds and compares screen power, idle
+flags and the keep-alive count before and after. Override the gap with
+`OPEN_QUAKE_HW_E2E_STARVATION_MS`, up to 40000.
+
+On QUAKE:3:1.0.19 the name reply is the device serial, so the result keeps
+only its length and whether it matches the selected device, and the run fails
+if serial text or bytes reach the evidence. Replies establish what the
+firmware reports, not what the panel or LEDs physically show. In the
+reconstructed firmware, the first keep-alive after idle restarts the lighting
+effect, and the LEDs were seen flashing during these runs.
