@@ -4,7 +4,7 @@
 		"config": {
 			"type": "quakeBot",
 			"title": {
-				"text": "ClawBotView",
+				"text": "Agent",
 				"pos": "top",
 				"size": 6,
 				"color": "#FFFFFF",
@@ -187,7 +187,7 @@
 		"config": {
 			"type": "quakeBotInput",
 			"title": {
-				"text": "ClawBotInput",
+				"text": "Agent input",
 				"pos": "top",
 				"size": 6,
 				"color": "#FFFFFF",

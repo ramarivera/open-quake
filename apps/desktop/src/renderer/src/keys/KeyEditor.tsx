@@ -715,6 +715,7 @@ export function KeyEditor({
 					profile={profile}
 					accept={accept}
 					keyEditOpen={selection !== undefined || saving}
+					keysLocale={locale}
 				/>
 				<GridEditor
 					onActivate={onOpenLibrary}

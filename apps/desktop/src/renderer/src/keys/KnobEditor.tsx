@@ -6,13 +6,16 @@ import {
 } from "../../../../../../packages/device/src/knob/knob-contracts.js";
 import { validateKnobResource } from "../../../../../../packages/device/src/knob/knob-invariants.js";
 import { migrateKnobVoiceActions } from "../../../../../../packages/device/src/knob/knob-voice-migration.js";
+import { profileText } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import {
 	Profile,
 	type ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
+import { useAppLocale } from "../i18n";
 import { Group, Row } from "../ui/Form";
 import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import {
@@ -28,11 +31,15 @@ export function KnobEditor({
 	profile,
 	accept,
 	keyEditOpen = false,
+	keysLocale,
 }: {
 	readonly profile: Profile;
 	readonly keyEditOpen?: boolean;
+	/** The Keys editor's own language, which key labels follow. */
+	readonly keysLocale?: ProfileLocale;
 	readonly accept: (envelope: typeof ProfileEnvelope.Encoded) => void;
 }): React.JSX.Element {
+	const { locale } = useAppLocale();
 	const [draft, setDraft] = useState(() => profileKnobDraft(profile));
 	const [baseline, setBaseline] = useState(profile);
 	const revision = knobDraftRevision(baseline, profile);
@@ -317,7 +324,9 @@ export function KnobEditor({
 								}}
 							>
 								<option value="legacyAssistant">Legacy assistant</option>
-								<option value="dkclaw">DK Claw (OpenClaw)</option>
+								<option value="dkclaw">
+									{profileText("DKClaw", keysLocale ?? locale)}
+								</option>
 								<option value="direct">Direct chat</option>
 							</select>
 						</Row>

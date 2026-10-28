@@ -382,7 +382,7 @@ function PanelSettings({
 									)}
 								</span>
 								<select
-									aria-label={`DK-Claw ${code}`}
+									aria-label={format(d.keyLabel, { code })}
 									value={slots[code]}
 									disabled={busy}
 									onChange={(event) => {

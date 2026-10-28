@@ -195,8 +195,8 @@ it("localizes the shell runtime label", () => {
 	const missing = snapshot("stopped", false).runtime;
 	expect(
 		runtimeStatusLabel(missing, agentsCopy("de").openclawRuntimeIndicator),
-	).toBe("OpenClaw-Laufzeit nicht konfiguriert");
+	).toBe("Lokale Agenten-Laufzeit nicht konfiguriert");
 	expect(
 		runtimeStatusLabel(missing, agentsCopy("en").openclawRuntimeIndicator),
-	).toBe("OpenClaw runtime not configured");
+	).toBe("Local agent runtime not configured");
 });

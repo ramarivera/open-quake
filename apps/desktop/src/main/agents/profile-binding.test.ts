@@ -482,7 +482,7 @@ it("MGMT-348/349 round trips the exact protected DK Claw preset and preserves al
 		expect(conversation?.config).toMatchObject({
 			type: "quakeBot",
 			size: [4, 2],
-			title: { text: "ClawBotView", pos: "top", size: 6 },
+			title: { text: "Agent", pos: "top", size: 6 },
 			actions: [
 				{ type: "agentId", value: "default" },
 				{ type: "ttsEngine", value: "qwen" },
