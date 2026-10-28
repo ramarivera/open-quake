@@ -18,3 +18,16 @@ Display naming SHALL preserve profile IDs, key types, route values and saved dat
 #### Scenario: Custom name
 - **WHEN** a profile has a user-chosen name
 - **THEN** the UI preserves that name across locale changes
+
+### Requirement: Source-language defaults follow the selected UI locale
+Built-in Agent key names SHALL use the selected locale on fresh catalogs and persisted catalogs without rewriting stored action payloads. Explicit user titles SHALL remain unchanged. The prompt library SHALL use English when the selected locale has no bundled catalog, and SHALL use Chinese only for a Chinese locale.
+
+#### Scenario: Persisted Chinese Agent defaults in English
+- **WHEN** the English UI renders an unchanged built-in Agent key with a Chinese or Japanese default name, with or without retained source metadata
+- **THEN** the management preview and strip show its English default name
+- **AND** user-authored names and configured actions remain unchanged
+
+#### Scenario: Prompt library fallback
+- **WHEN** a locale such as en-US or German requests the prompt library
+- **THEN** its role labels come from the English catalog
+- **AND** selecting zh-CN retains the Chinese catalog

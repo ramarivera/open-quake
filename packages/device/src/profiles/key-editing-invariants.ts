@@ -1,6 +1,6 @@
 import { Array as EffectArray, Option, Schema } from "effect";
 import locales from "./key-locales.json";
-import { profileText } from "./profile-catalog.js";
+import { localizedAgentTitle, profileText } from "./profile-catalog.js";
 import type {
 	Profile,
 	ProfileEnvelope,
@@ -85,6 +85,8 @@ export function keyTitle(
 			locale,
 		);
 	if (key.config.userModifiedTitle === true) return key.config.title.text;
+	const agentTitle = localizedAgentTitle(key, locale);
+	if (agentTitle !== undefined) return agentTitle;
 	const text = key.config.title.text;
 	// Profiles installed before the Agent rename keep the old template titles.
 	const renamed = renamedAgentTitles[key.config.type];

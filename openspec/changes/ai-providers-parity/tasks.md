@@ -230,3 +230,5 @@ resolve, retrigger reviews, watch or merge. Evidence is retained under
 - [ ] Verify the mounted form against invalid/valid drafts, partial XFY secrets and credential scope changes; run focused types/lint and deliver.
 
 Speech form evidence: all four mounted regressions fail against the unchanged pre-fix component because Save remains enabled. The corrected form plus existing main settings and IPC tests pass 11 checks. Desktop typecheck and root lint pass, retaining the existing 20 warnings and 3 informational diagnostics. No provider execution, real credentials, microphone capture or native input occurred. The broad native sweep is not repeated for this bounded form correction.
+
+- [x] Localization correction: use English prompt catalog fallback outside Chinese locales and verify regional locale normalization. Bead `open-quake-l86.36`, implementation tracked in `agent-naming/tasks.md` section 2.
