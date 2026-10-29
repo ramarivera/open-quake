@@ -16,12 +16,14 @@ export function SelectedKeyPreview({
 	tile,
 	target,
 	serial,
+	revision,
 	beforeWrite,
 	onSaved,
 	isCurrent,
 }: {
 	tile: StripTile;
 	serial?: string | undefined;
+	revision?: number | undefined;
 	target: ClockTarget;
 	beforeWrite: () => Promise<boolean>;
 	onSaved: () => Promise<void>;
@@ -29,7 +31,7 @@ export function SelectedKeyPreview({
 }): React.JSX.Element {
 	const hardware = useHardwareSnapshot(serial);
 	const runtimeStates = useKeyRuntime();
-	const runtimeState = hardware?.available
+	const candidate = hardware?.available
 		? runtimeStates.get(
 				JSON.stringify([
 					hardware.serial,
@@ -39,6 +41,12 @@ export function SelectedKeyPreview({
 				]),
 			)
 		: undefined;
+	const runtimeState =
+		candidate?.revision === undefined ||
+		revision === undefined ||
+		candidate.revision === revision
+			? candidate
+			: undefined;
 	const frame = useRef<HTMLDivElement>(null);
 	const [side, setSide] = useState(80 * 0.85);
 	useLayoutEffect(() => {

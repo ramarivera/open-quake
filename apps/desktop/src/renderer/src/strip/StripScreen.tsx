@@ -200,6 +200,7 @@ function StripGrid({
 					tileRadius: deviceRadius(painted.tileRadius),
 				};
 				const Tile = stripTileFor(tile.type);
+				const feedback = runtime(tile.keyCode);
 				return (
 					<div
 						key={tile.keyCode}
@@ -254,7 +255,9 @@ function StripGrid({
 										: undefined
 									: tile.type === "brightness" &&
 											tile.key.config.title.userModifiedStyle !== true
-										? undefined
+										? feedback
+											? { ...feedback, progress: -1 }
+											: undefined
 										: runtime(tile.keyCode)
 							}
 						/>
@@ -475,11 +478,17 @@ export function StripScreen({
 		)
 			return undefined;
 		const key = selection.page.keys.find((key) => key.keyCode === keyCode);
+		if (!state) return undefined;
 		return key?.config.type === "timer"
 			? state
-			: state
-				? { ...state, countdown: -1, countdownPhase: "hidden" }
-				: undefined;
+			: {
+					...state,
+					countdown: -1,
+					countdownPhase: "hidden",
+					...(key?.config.type === "brightness" && !hardware?.available
+						? { progress: -1 }
+						: {}),
+				};
 	};
 	const now = wallpaper ? new Date(wallpaper.clock.epochMillis) : undefined;
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";

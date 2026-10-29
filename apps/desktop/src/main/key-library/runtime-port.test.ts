@@ -136,6 +136,7 @@ function layer(
 	owned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	runtimeActions: DesktopKeyRuntimeActions = {},
+	extraProfiles: readonly (typeof Profile.Encoded)[] = [],
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -173,6 +174,7 @@ function layer(
 										},
 									],
 								},
+								...extraProfiles,
 							],
 							activeByDevice: { device: { profileId: "p", pageId: "one" } },
 						}),
@@ -1740,6 +1742,61 @@ it("publishes confirmed host brightness and clears a failed read through existin
 					),
 				),
 				Effect.provide(TestContext.TestContext),
+			),
+		),
+	);
+});
+
+it("publishes host brightness to inactive Studio profiles and pages on the connected device", async () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	const key = profile?.pages[0]?.keys.find(
+		(k) => k.config.type === "brightness",
+	);
+	if (!profile || !key) throw Error("Host brightness missing");
+	const inactive = Schema.encodeSync(Profile)({
+		...profile,
+		id: "inactive",
+		pages: [
+			{ ...profile.pages[0], id: "other", keys: [key] },
+			{ ...profile.pages[0], id: "other-page", keys: [key] },
+		],
+	});
+	const events: { profileId: string; pageId: string; progress?: number }[] = [];
+	const read = vi.fn(() => ({ target: "test", percent: 42, quantum: 1 }));
+	const brightness = { read: Effect.sync(read), write: () => Effect.void };
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				yield* KeyRuntimePort;
+				yield* Effect.promise(() =>
+					vi.waitFor(() => {
+						expect(
+							events
+								.filter((e) => e.profileId === "inactive")
+								.map((e) => [e.pageId, e.progress]),
+						).toEqual([
+							["other", 42],
+							["other-page", 42],
+						]);
+					}),
+				);
+				expect(read).toHaveBeenCalledOnce();
+			}).pipe(
+				Effect.provide(
+					layer(
+						true,
+						(e) =>
+							Effect.sync(() => {
+								events.push(e);
+							}),
+						undefined,
+						undefined,
+						undefined,
+						() => ({}) as HardwareSession,
+						{ brightness },
+						[inactive],
+					),
+				),
 			),
 		),
 	);

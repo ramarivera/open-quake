@@ -116,25 +116,26 @@ export const desktopKeyRuntimePort = (
 				Effect.forever(
 					Effect.gen(function* () {
 						const { envelope } = yield* profiles.loadProfiles();
-						const keys = Object.entries(envelope.activeByDevice).flatMap(
-							([deviceId, selected]) => {
+						const keys = Object.keys(envelope.activeByDevice).flatMap(
+							(deviceId) => {
 								if (!hardware(deviceId)) return [];
-								const profile = envelope.profiles.find(
-									(p) => p.id === selected.profileId,
-								);
-								return (
-									profile?.pages
-										.find((p) => p.id === selected.pageId)
-										?.keys.filter(
-											(key) =>
-												key.config.display && key.config.type === "brightness",
-										)
-										.map((key) => ({
-											deviceId,
-											...selected,
-											revision: profile.revision,
-											keyCode: key.keyCode,
-										})) ?? []
+								// Host brightness belongs to the host, including inactive Studio previews.
+								return envelope.profiles.flatMap((profile) =>
+									profile.pages.flatMap((page) =>
+										page.keys
+											.filter(
+												(key) =>
+													key.config.display &&
+													key.config.type === "brightness",
+											)
+											.map((key) => ({
+												deviceId,
+												profileId: profile.id,
+												pageId: page.id,
+												revision: profile.revision,
+												keyCode: key.keyCode,
+											})),
+									),
 								);
 							},
 						);

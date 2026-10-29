@@ -27,7 +27,9 @@ export function GenericTile({
 				? undefined
 				: luminancePercent(luminance)
 			: config.type === "brightness" &&
-					context.hardware?.available !== false &&
+					(context.hardware?.available === true ||
+						(context.interactive === false &&
+							context.hardware === undefined)) &&
 					hostPercent !== undefined &&
 					Number.isFinite(hostPercent) &&
 					hostPercent >= 0 &&
