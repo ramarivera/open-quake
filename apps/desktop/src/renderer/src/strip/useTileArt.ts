@@ -137,6 +137,14 @@ export async function resolveTileArtwork(
 		: "";
 }
 
+/** Only named bundled monochrome art follows the palette. Imported art keeps its colors. */
+export const isThemeableArtwork = (source: string): boolean =>
+	/^[\d-]+$/.test(source) ||
+	/^library:[\w-]+:\d+$/.test(source) ||
+	/^@mdi\/(?:svg\/)?[a-z0-9-]+(?:\.svg)?$/.test(source) ||
+	/^mdi-[a-z0-9-]{1,80}$/.test(source) ||
+	/^@\/icon\/[a-z0-9-]+\.svg$/.test(source);
+
 export function useTileArtwork(source: string, type: string) {
 	const { ref, visible } = useArtworkVisibility<HTMLDivElement>(true);
 	const [loaded, setLoaded] = useState(() => ({
@@ -166,6 +174,7 @@ export function useTileArtwork(source: string, type: string) {
 	}, [source, type, visible]);
 	return {
 		ref,
+		monochrome: isThemeableArtwork(source),
 		state:
 			!visible ||
 			loaded.source !== source ||

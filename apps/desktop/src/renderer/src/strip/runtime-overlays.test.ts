@@ -21,6 +21,7 @@ import { resetKeysOnLinkLoss } from "../../../main/key-library/device-status";
 import { KeyRuntimeState } from "../../../shared/key-library";
 import type { ProfileEnvelope } from "../../../shared/profiles";
 import { mount } from "../test/mount";
+import { STRIP_PALETTE } from "./palette";
 import { StripScreen } from "./StripScreen";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -132,7 +133,9 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 		const countdown = chip();
 		if (!countdown) throw new Error("Missing countdown");
 		expect(getComputedStyle(countdown).fontSize).toBe("48px");
-		expect(getComputedStyle(countdown).color).toBe("#0000ff");
+		expect(getComputedStyle(countdown).color).toBe(STRIP_PALETTE.selection);
+		view.container.style.setProperty("--quake-selection", "#1555ce");
+		expect(getComputedStyle(countdown).color).toBe("#1555ce");
 		expect(
 			view.container.querySelector('[data-key-code="1,2"] .strip-key-state'),
 		).toBeNull();
@@ -205,7 +208,9 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 		).toBe("42");
 		const progress = view.container.querySelector('[role="progressbar"]');
 		if (!progress) throw new Error("Missing progress");
-		expect(getComputedStyle(progress).backgroundColor).toBe("#0a0a1a");
+		expect(getComputedStyle(progress).backgroundColor).toBe(
+			STRIP_PALETTE.surface,
+		);
 		const failure = view.container.querySelector('[data-kind="invalid"]');
 		if (!failure) throw new Error("Missing invalid alert");
 		expect(Number(getComputedStyle(failure).zIndex)).toBeGreaterThan(

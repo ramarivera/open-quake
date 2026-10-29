@@ -1,5 +1,4 @@
 import type { KeyAlertKind } from "../../../../../shared/voice-surface";
-import { STRIP_PALETTE } from "../../palette";
 import "./voice.css";
 
 /**
@@ -49,8 +48,8 @@ export function CancelIndicator({ id }: { id: string }): React.JSX.Element {
 				cx="120"
 				cy="120"
 				r="104"
-				fill={STRIP_PALETTE.raised}
-				stroke={STRIP_PALETTE.danger}
+				fill="var(--strip-raised)"
+				stroke="var(--strip-danger)"
 				strokeWidth="6"
 			/>
 			<rect
@@ -59,7 +58,7 @@ export function CancelIndicator({ id }: { id: string }): React.JSX.Element {
 				width="72"
 				height="72"
 				rx="10"
-				fill={STRIP_PALETTE.danger}
+				fill="var(--strip-danger)"
 			/>
 		</svg>
 	);

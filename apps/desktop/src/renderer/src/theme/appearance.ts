@@ -1,5 +1,5 @@
 import { type CustomTheme, isRecord, validateCustomTheme } from "./customTheme";
-import type { BuiltinTheme } from "./tokens";
+import { type BuiltinTheme, isBuiltinTheme } from "./tokens";
 
 export const APPEARANCE_STORAGE_KEY = "open-quake.appearance.v2";
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
@@ -27,12 +27,7 @@ export const defaultAppearance: Appearance = {
 };
 
 export function isThemeSelection(value: unknown): value is ThemeSelection {
-	return (
-		value === "dark" ||
-		value === "light" ||
-		value === "custom" ||
-		value === "grey"
-	);
+	return value === "custom" || isBuiltinTheme(value);
 }
 
 export function isMotionPreference(value: unknown): value is MotionPreference {

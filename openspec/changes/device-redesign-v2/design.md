@@ -15,3 +15,14 @@ Use existing profile translation at the knob boundary and preserve stored data. 
 ## Risks / Trade-offs
 
 Native dialogs and audio acquisition need bounded ownership and teardown; a restart alone is not a fix. Full redesigns may need shared geometry changes after selection. Temperature support may require a new platform integration, which is not authorized merely by a blank reading. Unsupported sources must remain explicit.
+
+
+## Selected visual direction, 2026-10-29
+
+Signal Deck is approved as the visual language for device and Studio. Its proposed left navigation rail, new scene compositions, reduced key geometry and alternate profile-list layout are not approved. Preserve existing geometry, hit targets, pages, tile spans, actions, wallpaper media and explicit user artwork/title/style choices. New profiles and layout authoring are future requests.
+
+Use semantic palette roles for canvas, panels, text, secondary text, control boundaries, primary action, selection, success, warning and failure. Existing theme IDs and version2 appearance records remain valid. Device components consume the same selected theme as Studio, including previews. Add familiar editor/product-inspired palettes and correct native light/dark chrome. Signal Deck identity comes from instrument-style typography, restrained corners, channel rules and clear status accents across every current renderer.
+
+The background capability remains. Ambient replaces the disliked default Vivid/BB wording without changing stored profile identifiers or custom names. New backgrounds are additive and do not overwrite existing playlists. Reactive visuals must respond to actual audio that the user chooses to supply; sample previews must identify sample energy, and idle/unavailable inputs stay explicit. No incidental microphone or system-audio capture is allowed during verification.
+
+Ambient presentation is a per-device renderer appearance preference synchronized between windows through the existing origin's storage events, without changing the wallpaper IPC or file schema. Media save/cancel stays independent and the UI says styles apply immediately. Original Media preserves the existing playback path; Contour, Horizon and Plotter add procedural art. Lava and Ambilight analyze only enabled background-video audio through a captured media stream. No microphone or system capture is started. Streams, graph nodes, contexts and animation frames are owned by the active media layer and released on pause, replacement, hiding or unmount. Silent, missing and unsupported audio are distinct visible states.

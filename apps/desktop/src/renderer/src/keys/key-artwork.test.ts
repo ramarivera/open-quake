@@ -49,3 +49,22 @@ it("keeps numeric and library references valid and preserves custom artwork", as
 	expect(keyArtwork(custom, "hotkey")).toBe(custom);
 	expect(await resolveTileArtwork(custom, "hotkey")).toBe(custom);
 });
+
+it("themes bundled references without changing user image, application or data artwork", async () => {
+	const { isThemeableArtwork } = await import("../strip/useTileArt");
+	for (const source of [
+		"0-1",
+		"library:vol:0",
+		"mdi-speaker",
+		"@mdi/svg/speaker.svg",
+		"@/icon/speaker.svg",
+	])
+		expect(isThemeableArtwork(source)).toBe(true);
+	for (const source of [
+		"data:image/png;base64,AA==",
+		"resource:" + "a".repeat(64),
+		"application:" + "b".repeat(64),
+		"emoji:smile",
+	])
+		expect(isThemeableArtwork(source)).toBe(false);
+});

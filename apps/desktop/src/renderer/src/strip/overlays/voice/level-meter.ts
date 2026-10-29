@@ -57,13 +57,13 @@ export function drawLevelMeter(
 	width: number,
 	height: number,
 	motion: BarMotion,
+	colors: { accent: string; line: string } = STRIP_PALETTE,
 ): void {
 	ctx.clearRect(0, 0, width, height);
 	const heights = meterHeights(height, motion);
 	const total = METER_BARS * METER_BAR_WIDTH + (METER_BARS - 1) * METER_BAR_GAP;
 	const left = (width - total) / 2;
-	ctx.fillStyle =
-		motion.display > 0 ? STRIP_PALETTE.accent : STRIP_PALETTE.line;
+	ctx.fillStyle = motion.display > 0 ? colors.accent : colors.line;
 	heights.forEach((bar, index) => {
 		ctx.fillRect(
 			left + index * (METER_BAR_WIDTH + METER_BAR_GAP),

@@ -52,8 +52,12 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 			<div
 				ref={artwork.ref}
 				data-tile-artwork-state={artwork.state}
+				data-themed-artwork={artwork.monochrome && !!artwork.src}
 				className="strip-tile-icon"
 				style={{
+					...(artwork.monochrome && artwork.src
+						? { maskImage: `url("${artwork.src}")` }
+						: {}),
 					width: titleAware ? iconWidth : 64,
 					height: titleAware ? iconHeight : 64,
 					left: titleAware ? "50%" : 24,

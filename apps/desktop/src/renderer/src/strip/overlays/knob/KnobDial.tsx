@@ -7,7 +7,7 @@ export function KnobDial({
 	width,
 	height,
 	angle: _angle,
-	accent = "#5fcab5",
+	accent = "var(--strip-selection)",
 }: {
 	width: number;
 	height: number;

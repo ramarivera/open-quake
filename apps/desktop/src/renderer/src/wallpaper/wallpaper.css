@@ -116,3 +116,61 @@
 	border: 1px solid var(--oq-border);
 	border-radius: var(--oq-radius-md);
 }
+
+.ambient-settings {
+	margin: 24px 0;
+	padding: 20px;
+	border: 1px solid var(--oq-hairline);
+	border-radius: 4px;
+	background: var(--oq-surface);
+}
+.ambient-settings label {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 600;
+}
+.ambient-settings select {
+	width: min(100%, 380px);
+}
+.ambient-settings p {
+	color: var(--oq-text-muted);
+	max-width: 68ch;
+}
+.ambient-art {
+	font-family: system-ui, sans-serif;
+	pointer-events: none;
+}
+.ambient-blob {
+	transition:
+		rx 180ms linear,
+		ry 180ms linear,
+		opacity 180ms linear;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+.ambient-art[data-audio-state="live"] .ambient-blob {
+	animation: ambient-drift 8s ease-in-out infinite alternate;
+}
+.ambient-blob-1,
+.ambient-blob-4 {
+	animation-delay: -3s;
+}
+.ambient-blob-2,
+.ambient-blob-5 {
+	animation-delay: -6s;
+}
+@keyframes ambient-drift {
+	to {
+		transform: translate(44px, -76px) rotate(24deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.ambient-art[data-audio-state] .ambient-blob {
+		animation: none;
+		transition: none;
+	}
+}
+[data-motion="reduce"] .ambient-art[data-audio-state] .ambient-blob {
+	animation: none;
+	transition: none;
+}

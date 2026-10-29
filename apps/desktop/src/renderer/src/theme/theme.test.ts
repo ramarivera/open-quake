@@ -29,7 +29,7 @@ const custom = {
 };
 
 describe("theme properties", () => {
-	it.each(["dark", "grey", "light"] as const)(
+	it.each(builtinThemeOrder)(
 		"generates every semantic property for %s without extra CSS",
 		(name) => {
 			const palette = themes[name];
@@ -44,12 +44,21 @@ describe("theme properties", () => {
 
 	it("names the built-in themes independently of DK-Suite", () => {
 		expect(builtinThemeOrder.map((id) => themeLabels[id])).toEqual([
-			"Graphite",
+			"Signal Deck",
 			"Midnight",
-			"Paper",
+			"Signal Light",
+			"Catppuccin Mocha",
+			"Catppuccin Latte",
+			"GitHub Dark",
+			"GitHub Light",
+			"Superhuman",
+			"Codex",
+			"Linear",
+			"Notion Light",
+			"Notion Dark",
 		]);
 		// One accent hue across the dark themes; it is not DK's white or grey.
-		expect(themes.grey.accent).toBe(themes.dark.accent);
+		expect(themes.grey.accent).not.toBe(themes.grey.selection);
 		for (const name of ["dark", "grey"] as const) {
 			expect(themes[name].accent).not.toMatch(/^#(ffffff|5a5a5a)$/i);
 		}
@@ -64,7 +73,7 @@ describe("theme properties", () => {
 		}
 	});
 
-	it.each(["dark", "grey", "light"] as const)(
+	it.each(builtinThemeOrder)(
 		"keeps %s text, status, and control labels at WCAG AA contrast",
 		(name) => {
 			const palette = themes[name];
@@ -93,6 +102,8 @@ describe("theme properties", () => {
 				"accent",
 				"success",
 				"warning",
+				"selection",
+				"danger",
 			] as const) {
 				for (const background of ["background", "surface"] as const) {
 					expect(
@@ -129,7 +140,7 @@ describe("custom theme validation", () => {
 			...themes.light,
 			...custom.colors,
 		});
-		expect(themes.light.accent).toBe("#0b7466");
+		expect(themes.light.accent).toBe("#426200");
 	});
 
 	it("accepts a complete palette without dropping tokens", () => {
@@ -301,3 +312,11 @@ it("keeps default-derived v2 records byte-stable through validation", () => {
 		expect(JSON.stringify(parseAppearance(serialized))).toBe(serialized);
 	}
 });
+
+it.each(builtinThemeOrder)(
+	"persists %s without changing the appearance record format",
+	(theme) => {
+		const record = { ...defaultAppearance, theme };
+		expect(parseAppearance(JSON.stringify(record))).toEqual(record);
+	},
+);

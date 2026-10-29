@@ -57,7 +57,13 @@ export function LevelMeterCanvas({
 				level.current.speaking,
 			);
 			const ctx = context();
-			if (ctx) drawLevelMeter(ctx, width, height, state.current);
+			if (ctx) {
+				const css = getComputedStyle(ctx.canvas);
+				drawLevelMeter(ctx, width, height, state.current, {
+					accent: css.getPropertyValue("--quake-accent").trim() || "#c3ee3a",
+					line: css.getPropertyValue("--quake-border").trim() || "#526280",
+				});
+			}
 			frame = requestAnimationFrame(loop);
 		};
 		frame = requestAnimationFrame(loop);
@@ -71,7 +77,13 @@ export function LevelMeterCanvas({
 			phase: state.current.phase,
 		};
 		const ctx = context();
-		if (ctx) drawLevelMeter(ctx, width, height, state.current);
+		if (ctx) {
+			const css = getComputedStyle(ctx.canvas);
+			drawLevelMeter(ctx, width, height, state.current, {
+				accent: css.getPropertyValue("--quake-accent").trim() || "#c3ee3a",
+				line: css.getPropertyValue("--quake-border").trim() || "#526280",
+			});
+		}
 	}, [rms, speaking, motion, width, height]);
 	return (
 		<canvas ref={ref} className="voice-canvas" style={{ width, height }} />

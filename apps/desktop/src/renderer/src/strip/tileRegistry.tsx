@@ -294,7 +294,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 						placeItems: "center",
 						fontSize: 64,
 						fontWeight: 700,
-						color: "white",
+						color: "var(--strip-text)",
 					}}
 				>
 					{context.currentPage ?? 1}

@@ -127,3 +127,27 @@ it("rejects malformed or refused host responses without hanging a renderer", asy
 		}
 	}
 });
+
+it("returns a plain cloneable rejection without private host causes", async () => {
+	const bridge = createMonitoringStateBridge({
+		invoke: async () => {
+			throw new Error("private foreground details");
+		},
+		on: () => {},
+		removeListener: () => {},
+	});
+	try {
+		const failure: unknown = await bridge
+			.snapshot()
+			.catch((error: unknown) => error);
+		expect(Object.getPrototypeOf(failure)).toBe(Object.prototype);
+		expect(structuredClone(failure)).toEqual({
+			_tag: "RpcClientError",
+			reason: "Protocol",
+			message: "Monitoring transport unavailable",
+		});
+		expect(JSON.stringify(failure)).not.toContain("private foreground");
+	} finally {
+		await bridge.dispose();
+	}
+});
