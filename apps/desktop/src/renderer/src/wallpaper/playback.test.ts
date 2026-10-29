@@ -39,9 +39,62 @@ const snapshot: WallpaperSnapshot = {
 	playbackStartedAt: 0,
 };
 afterEach(() => {
+	window.localStorage.clear();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
+
+it.each(["contour", "horizon", "plotter"])(
+	"keeps video readiness and playlist progression under %s, muted until Original media returns",
+	async (style) => {
+		window.localStorage.setItem("open-quake.ambient.A", style);
+		vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+		vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+		vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+		const mounted = await mount(
+			createElement(WallpaperCanvas, { snapshot, sound: true }),
+		);
+		try {
+			const first = mounted.host.querySelector("video");
+			expect(first).not.toBeNull();
+			expect(first?.muted).toBe(true);
+			const next = {
+				...snapshot,
+				activeIndex: 1,
+				playbackId: 2,
+				asset: { ...snapshot.asset, dataUrl: "data:video/webm;base64,Yg==" },
+			};
+			await mounted.render(
+				createElement(WallpaperCanvas, { snapshot: next, sound: true }),
+			);
+			const second = mounted.host.querySelector<HTMLVideoElement>(
+				'.wallpaper-layer[data-state="preload"] video',
+			);
+			if (!second)
+				throw new Error("The next video must be mounted for readiness");
+			await act(async () => second.dispatchEvent(new Event("canplaythrough")));
+			expect(
+				second.closest(".wallpaper-layer")?.getAttribute("data-state"),
+			).toBe("active");
+			expect(second.muted).toBe(true);
+			await act(async () => {
+				window.localStorage.setItem("open-quake.ambient.A", "media");
+				window.dispatchEvent(
+					new StorageEvent("storage", { key: "open-quake.ambient.A" }),
+				);
+			});
+			expect(
+				mounted.host.querySelector(
+					'.wallpaper-layer[data-state="active"] video',
+				),
+			).toBe(second);
+			expect(second.muted).toBe(false);
+			expect(mounted.host.querySelector(".ambient-art")).toBeNull();
+		} finally {
+			await mounted.close();
+		}
+	},
+);
 it("WIDGETS-130 seeks late mounts, waits for media readiness and retains unchanged-list video elements", async () => {
 	vi.spyOn(Date, "now").mockReturnValue(50000);
 	vi.spyOn(HTMLMediaElement.prototype, "duration", "get").mockReturnValue(60);

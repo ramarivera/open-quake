@@ -11,6 +11,8 @@ import {
 	STYLES,
 } from "../../../../../shared/monitor-contracts";
 import { dispatch, mount, required } from "../../../test/mount";
+import { themes, toThemeProperties } from "../../../theme/tokens";
+import { stripPaletteProperties } from "../../palette";
 import { MonitorPanel } from "./MonitorPanel";
 
 const css = readFileSync(
@@ -28,6 +30,51 @@ afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
+it.each(STYLES)(
+	"keeps %s monitor cards and bar fills readable in a light theme with the wheel open",
+	async (styleId) => {
+		const styles = document.createElement("style");
+		styles.textContent = [
+			css,
+			readFileSync(resolve("src/renderer/src/strip/signal-deck.css"), "utf8"),
+			readFileSync(
+				resolve("src/renderer/src/strip/overlays/knob/knob.css"),
+				"utf8",
+			),
+		].join("\n");
+		document.head.append(styles);
+		const theme = themes["github-light"];
+		const view = await mount(
+			createElement(
+				"div",
+				{
+					className: "strip-screen",
+					"data-wheel-open": "true",
+					style: { ...stripPaletteProperties(), ...toThemeProperties(theme) },
+				},
+				createElement(MonitorPanel, {
+					settings: { ...defaults(), styleId },
+					snapshot: previewSnapshot(),
+				}),
+			),
+		);
+		try {
+			for (const card of view.container.querySelectorAll(".monitor-card")) {
+				expect(getComputedStyle(card).backgroundColor).toBe(theme.surface);
+				expect(getComputedStyle(card).color).toBe(theme.foreground);
+			}
+			for (const fill of view.container.querySelectorAll(
+				".monitor-bar > div",
+			)) {
+				expect(getComputedStyle(fill).backgroundColor).toBe(theme.accent);
+			}
+		} finally {
+			await view.unmount();
+			styles.remove();
+		}
+	},
+);
 
 const module = (root: ParentNode, id: string) =>
 	required(root, `[data-testid="sys-monitor-module-${id}"]`, HTMLDivElement);

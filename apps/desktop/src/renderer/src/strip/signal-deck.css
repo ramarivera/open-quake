@@ -124,7 +124,7 @@
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
-.oq-monitor[data-style] :is(.monitor-bar-fill, .monitor-progress-fill) {
+.oq-monitor[data-style] .monitor-bar > div {
 	background: var(--strip-accent);
 }
 .oq-monitor[data-style] .monitor-state[data-state="available"] {
@@ -229,9 +229,6 @@
 	background: var(--strip-surface);
 	color: var(--strip-text);
 	border-color: var(--strip-line);
-}
-.oq-monitor .monitor-bar > span {
-	background: var(--strip-accent);
 }
 .strip-screen
 	:is(

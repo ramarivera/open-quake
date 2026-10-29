@@ -3,21 +3,6 @@
 	backdrop-filter: none;
 	background: var(--strip-surface);
 }
-.strip-screen[data-wheel-open="true"]
-	.oq-monitor[data-style="cyber"]
-	.monitor-card {
-	background: rgb(5, 5, 12);
-}
-.strip-screen[data-wheel-open="true"]
-	.oq-monitor[data-style="anime"]
-	.monitor-card {
-	background: rgb(255, 255, 255);
-}
-.strip-screen[data-wheel-open="true"]
-	.oq-monitor[data-style="tactical"]
-	.monitor-card {
-	background: rgb(20, 23, 28);
-}
 .knob-panel-layer {
 	pointer-events: none;
 	overflow: visible;

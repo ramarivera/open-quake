@@ -247,11 +247,11 @@ export function WallpaperCanvas({
 						opacity={style === "media" ? 1 : 0}
 						aria-hidden={style !== "media"}
 					>
-						{(style === "media" || reactive ? layers : []).map((layer) => (
+						{layers.map((layer) => (
 							<MediaLayer
 								key={layer.id}
 								layer={layer}
-								sound={sound}
+								sound={sound && (style === "media" || reactive)}
 								player={player}
 								reactive={reactive}
 								onAudio={setAudio}
