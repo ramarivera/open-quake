@@ -74,7 +74,7 @@ it("MAIN-125 SETTINGS-051/052 opens offline once, leaves without completing and 
 	await mount(createElement(App));
 	expect(element(".content-inner").getAttribute("data-page")).toBe("overview");
 	await click(element(".setup-resume"));
-	expect(document.body.textContent).toContain("Get Started");
+	expect(document.body.textContent).toContain("Get started");
 });
 it("SETTINGS-051 explicit navigation wins a late read and completed setup never auto-opens", async () => {
 	let finish: (value: ReturnType<typeof wizard>) => void = () => {};
@@ -119,7 +119,7 @@ it("SETTINGS-053/054/056 hides welcome progress, offers legal reading and confir
 	);
 	expect(element(".setup-steps").hasAttribute("hidden")).toBe(true);
 	expect(document.body.textContent).toContain("Privacy information");
-	await click(button("Get Started"));
+	await click(button("Get started"));
 	expect(element(".setup-steps").hasAttribute("hidden")).toBe(false);
 	await click(button("China"));
 	await click(button("Continue"));
@@ -276,7 +276,7 @@ it.each(WIZARD_LANGUAGES)(
 	},
 );
 
-it("SETTINGS-054 bundles project legal documents and advances only on explicit Get Started consent", async () => {
+it("SETTINGS-054 bundles project legal documents and advances only on explicit Get started consent", async () => {
 	let saved = wizard();
 	const saveWizard = vi.fn(
 		async (draft: Parameters<SettingsBackendBridge["saveWizard"]>[0]) => {
@@ -298,7 +298,7 @@ it("SETTINGS-054 bundles project legal documents and advances only on explicit G
 		}),
 	);
 	expect(document.body.textContent).toContain(
-		'By selecting "Get Started", you agree to the MIT license',
+		'By selecting "Get started", you agree to the MIT license',
 	);
 	await click(button("MIT license"));
 	expect(element("dialog[open]").textContent).toContain(
@@ -327,7 +327,7 @@ it("SETTINGS-054 bundles project legal documents and advances only on explicit G
 	);
 	expect(saveWizard).not.toHaveBeenCalled();
 	expect(saved.step).toBe("welcome");
-	await click(button("Get Started"));
+	await click(button("Get started"));
 	expect(saveWizard).toHaveBeenCalledExactlyOnceWith({ step: "locale-region" });
 	expect(saved.step).toBe("locale-region");
 });

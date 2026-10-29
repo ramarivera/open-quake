@@ -83,7 +83,7 @@ export function HomeAssistantPage() {
 	const previewEntity =
 		live.states.find((e) => e.entity_id === key.entity_id) ?? entity;
 	return (
-		<section className="mc-panel" aria-label="Home Assistant Settings">
+		<section className="mc-panel" aria-label="Home Assistant settings">
 			<PageHeader
 				title="Home Assistant"
 				description="Show Home Assistant entities on keys and choose what the assistant may see."

@@ -31,7 +31,7 @@ export function NativeIconPicker({
 				);
 			})
 			.catch(() => {
-				if (live) callbacks.current.onClose("Could not open Icon Library.");
+				if (live) callbacks.current.onClose("Could not open icon library.");
 			});
 		return () => {
 			live = false;

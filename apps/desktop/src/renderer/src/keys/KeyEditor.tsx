@@ -876,7 +876,7 @@ export function KeyEditor({
 						{key ? (
 							<Group
 								title={
-									keyTitle(key, locale) || key.config.type || "Select Function"
+									keyTitle(key, locale) || key.config.type || "Select function"
 								}
 							>
 								{selectedTile && selection && (
@@ -960,7 +960,7 @@ export function KeyEditor({
 										<option value={key.config.type}>
 											{key.config.type
 												? keyText(key.config.type, locale)
-												: "Select Function"}
+												: "Select function"}
 										</option>
 										{ACTION_REGISTRY.filter(
 											(a) => a.id !== key.config.type,
@@ -1001,7 +1001,7 @@ export function KeyEditor({
 										aria-label={
 											locale === "de"
 												? "Ersetzung bestätigen"
-												: "Replace Confirmation"
+												: "Replace confirmation"
 										}
 									>
 										<p>
@@ -1022,7 +1022,7 @@ export function KeyEditor({
 										>
 											{locale === "de"
 												? "Ersetzen bestätigen"
-												: "Confirm Replace"}
+												: "Confirm replacement"}
 										</button>
 										<button type="button" onClick={() => void revert()}>
 											{keyText("cancel", locale)}

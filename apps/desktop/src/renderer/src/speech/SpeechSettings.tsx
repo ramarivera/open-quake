@@ -199,7 +199,7 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 			) : null}
 			<Row
 				label="Synthesis"
-				hint="Read Aloud and answer speech share this route."
+				hint="Read aloud and answer speech share this route."
 			>
 				<select
 					aria-label="Synthesis provider"
@@ -604,9 +604,9 @@ export function MicrophonePicker({
 	}, [refresh]);
 	const chosen = recoverMicrophone(value, devices);
 	return (
-		<Row label={de ? "Eingabemikrofon" : "Input Microphone"}>
+		<Row label={de ? "Eingabemikrofon" : "Input microphone"}>
 			<select
-				aria-label={de ? "Eingabemikrofon" : "Input Microphone"}
+				aria-label={de ? "Eingabemikrofon" : "Input microphone"}
 				disabled={disabled}
 				value={chosen?.deviceId ?? ""}
 				onFocus={() => {
@@ -628,7 +628,7 @@ export function MicrophonePicker({
 				}}
 			>
 				<option value="" disabled>
-					{de ? "Mikrofon auswählen" : "Select Microphone"}
+					{de ? "Mikrofon auswählen" : "Select microphone"}
 				</option>
 				{devices.map((input, i) => (
 					<option key={input.deviceId} value={input.deviceId}>

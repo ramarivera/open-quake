@@ -74,9 +74,9 @@ export function DevicePicker({ children }: { readonly children: ReactNode }) {
 		<>
 			{window.quakeManagement?.devices ? (
 				<label className="shell-device-picker">
-					{german ? "Gerätename" : "Device Name"}
+					{german ? "Gerätename" : "Device name"}
 					<select
-						aria-label={german ? "Gerätename" : "Device Name"}
+						aria-label={german ? "Gerätename" : "Device name"}
 						disabled={busy || !choices?.devices.length}
 						value={choices?.selected ?? ""}
 						onChange={(event) => void select(event.target.value)}

@@ -8,15 +8,15 @@ import { useWeatherMedia } from "./hooks";
 const audioLabels = {
 	en: [
 		"Mute",
-		"Volume Down",
-		"Volume Up",
+		"Volume down",
+		"Volume up",
 		"Play/Pause",
 		"Pause",
 		"Stop",
-		"Previous Track",
-		"Next Track",
+		"Previous track",
+		"Next track",
 		"Rewind",
-		"Fast Forward",
+		"Fast forward",
 		"Repeat",
 		"Random",
 	],
@@ -109,7 +109,7 @@ export function SystemMediaSettings({
 					}
 				>
 					<option value="">
-						{de ? "Aktueller Sitzung folgen" : "Follow Current"}
+						{de ? "Aktueller Sitzung folgen" : "Follow current"}
 					</option>
 					{target && !sessions.some((s) => s.id === target) ? (
 						<option value={target}>
@@ -217,7 +217,7 @@ export function MediaKeySettings({
 						}
 					>
 						<option value="local">
-							{locale === "de" ? "Lokale Musik" : "Local Music"}
+							{locale === "de" ? "Lokale Musik" : "Local music"}
 						</option>
 						<option value="system">System Media</option>
 					</select>

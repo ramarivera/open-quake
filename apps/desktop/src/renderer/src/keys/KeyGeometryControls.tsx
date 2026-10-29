@@ -61,7 +61,7 @@ export function KeyGeometryControls({
 					keyText("gridSize", locale) === "gridSize"
 						? de
 							? "Rastergröße"
-							: "Grid Size"
+							: "Grid size"
 						: keyText("gridSize", locale)
 				}
 				htmlFor="key-span"

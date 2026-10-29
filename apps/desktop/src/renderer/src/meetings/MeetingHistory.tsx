@@ -163,7 +163,7 @@ function MeetingDocument({
 				{record.state === "processing" || record.state === "recording" ? (
 					<p className="meeting-processing" role="status">
 						{record.state === "recording"
-							? "Start Recording"
+							? "Recording"
 							: `Processing, please wait... · ${stageLabel(record, progress)}`}
 						<small>
 							Tasks run independently. See current status on the right.
@@ -278,8 +278,8 @@ export function MeetingHistory({
 					{snapshot?.records.some(
 						(r) => Option.isNone(r.parentId) && r.state === "recording",
 					)
-						? "Stop Recording"
-						: "Start Recording"}
+						? "Stop recording"
+						: "Start recording"}
 				</button>
 			</PageHeader>
 			<MeetingSettings
@@ -357,8 +357,8 @@ export function MeetingHistory({
 								<span>
 									{durationLabel(r, now)} ·{" "}
 									{Option.isSome(r.parentId)
-										? "Temporary Record"
-										: "Main Meeting"}
+										? "Temporary recording"
+										: "Main meeting"}
 								</span>
 								<span data-state={r.state}>
 									<i className="meeting-state-dot" />

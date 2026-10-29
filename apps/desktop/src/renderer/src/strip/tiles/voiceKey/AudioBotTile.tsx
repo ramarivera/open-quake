@@ -37,7 +37,7 @@ export function AudioBotTile(props: StripTileProps): React.JSX.Element {
 			data-phase={phase}
 			disabled={!enabled}
 			aria-pressed={phase !== "idle"}
-			aria-label={tile.key.config.title.text || "Audio Bot"}
+			aria-label={tile.key.config.title.text || "Voice assistant"}
 			onClick={toggle}
 		>
 			<GenericTile {...props} />

@@ -48,7 +48,7 @@ export function SettingsPage({
 				<>
 					<Group title="Device">
 						<Row
-							label="Firmware Version"
+							label="Firmware version"
 							hint={
 								!view.serial
 									? fw.rowStatus.deviceOffline

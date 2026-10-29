@@ -49,7 +49,7 @@ export function MeetingDisplay({
 	const speed =
 		translatedAt && now - translatedAt < 5000
 			? `Update speed : ${((translatedAt - (snapshot?.translations.at(-2)?.at ?? translatedAt)) / 1000).toFixed(2)} S`
-			: "Update speed : - -";
+			: "Waiting for translation";
 	useEffect(() => {
 		if (tab === "live" && snapshot?.translations.length)
 			body.current?.scrollTo({ top: body.current.scrollHeight });
@@ -241,14 +241,14 @@ export function MeetingDisplay({
 								<MeetingGlyph kind="translate" />
 								<p>
 									{snapshot?.translating
-										? "Update speed : - -"
+										? "Waiting for translation"
 										: "Live translation is off"}
 								</p>
 							</div>
 						)
 					) : tab === "temp" && record?.state === "recording" ? (
 						<div className="meeting-viewer-empty">
-							<p>Start Recording</p>
+							<p>Recording</p>
 						</div>
 					) : record &&
 						((progress && record.state !== "completed") ||
@@ -266,7 +266,7 @@ export function MeetingDisplay({
 							<div className="meeting-document-toggle">
 								<TouchButton
 									id="meeting-document-toggle"
-									label={transcript ? "View Minutes" : "View Transcription"}
+									label={transcript ? "View minutes" : "View transcript"}
 									onClick={() => setTranscript(!transcript)}
 								>
 									{transcript ? "Transcript" : "Summary"}

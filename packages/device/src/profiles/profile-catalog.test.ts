@@ -596,7 +596,7 @@ describe("MeetAI recovered control contract", () => {
 				{
 					keyCode: "1,8",
 					type: "mic",
-					title: "Mic Mute",
+					title: "Mic mute",
 					size: [1, 1],
 					icon: "0-59",
 					actions: [

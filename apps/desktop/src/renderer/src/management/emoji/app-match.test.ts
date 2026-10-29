@@ -104,12 +104,12 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 	});
 	try {
 		let page = await mount(createElement(EmojiPage));
-		await click(button("App Match Settings"));
+		await click(button("App match settings"));
 		await click(button("Choose file…"));
 		expect(element("dialog").textContent).toContain("Slack.app");
 		await click(button("Close", element("dialog")));
 		expect(saved.apps).toEqual([]);
-		await click(button("App Match Settings"));
+		await click(button("App match settings"));
 		await click(button("Add App"));
 		await input(
 			element<HTMLInputElement>("dialog input:not([type=checkbox])"),
@@ -140,7 +140,7 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 		});
 		await page.unmount();
 		page = await mount(createElement(EmojiPage));
-		await click(button("App Match Settings"));
+		await click(button("App match settings"));
 		expect(
 			element<HTMLInputElement>("dialog input[type=checkbox]").checked,
 		).toBe(true);

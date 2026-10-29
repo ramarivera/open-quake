@@ -455,7 +455,9 @@ it("AI-310 AI-317 renders strictly overlapping words, finite open/sentinel marks
 		expect(bounds.top).toBeGreaterThanOrEqual(20);
 	}
 	await dom.push({ records: [{ ...record, parentId: Option.some(0) }] });
-	expect(element(".meeting-record").textContent).toContain("Temporary Record");
+	expect(element(".meeting-record").textContent).toContain(
+		"Temporary recording",
+	);
 	expect(dom.host.querySelector(".meeting-bookmark")).toBeNull();
 	expect(dom.host.querySelector('[data-marked="true"]')).toBeNull();
 	await dom.render(

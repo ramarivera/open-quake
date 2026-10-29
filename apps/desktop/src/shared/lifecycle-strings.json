@@ -10,19 +10,19 @@
 		"orientationDetail": "Open display settings and set Quake to landscape.",
 		"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 		"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-		"openDisplaySettings": "Open Display Settings",
+		"openDisplaySettings": "Open display settings",
 		"orientationLater": "Later"
 	},
 	"quakeDiagnostic": {
 		"eyebrow": "QUAKE DEVICE CHECK",
-		"title": "Detect QUAKE Device Connection",
+		"title": "Detect QUAKE device connection",
 		"subtitle": "Both USB and HDMI must be connected properly before entering device settings",
 		"troubleshootingTitle": "Troubleshoot in order",
 		"check": {
 			"checking": "Checking…",
 			"passDetails": "Connection is stable, no action needed",
 			"usb": {
-				"label": "USB Control Connection",
+				"label": "USB control connection",
 				"pass": "Connected",
 				"fail": "No USB device detected",
 				"steps": {
@@ -32,7 +32,7 @@
 				}
 			},
 			"hdmi": {
-				"label": "HDMI Monitor Connection",
+				"label": "HDMI monitor connection",
 				"pass": "Display detected",
 				"fail": "No HDMI monitor detected",
 				"steps": {
@@ -42,7 +42,7 @@
 				},
 				"failResolution": "Display detected, but resolution is incorrect (current {width}x{height}, expected 1920x480)",
 				"resolutionSteps": {
-					"1": "Open your system display settings and select the DK-QUAKE screen",
+					"1": "Open your system display settings and select the QUAKE screen",
 					"2": "Set the display resolution to 1920x480",
 					"3": "If 1920x480 is not listed, reconnect the QUAKE HDMI cable and re-detect"
 				}
@@ -51,7 +51,7 @@
 		"action": {
 			"recheck": "Re-detect",
 			"checking": "Checking…",
-			"support": "Contact Support"
+			"support": "Contact support"
 		},
 		"fullGuide": "Need full installation guide?",
 		"toast": {
@@ -75,7 +75,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "Later keeps the device connected and reminds you in 10 minutes.",
 				"farRight": "Move Quake to the far right",
@@ -101,7 +101,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "Später lässt das Gerät verbunden und erinnert dich in 10 Minuten.",
 				"farRight": "Quake ganz nach rechts verschieben",
@@ -153,7 +153,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "Más tarde mantiene el dispositivo conectado y te recuerda en 10 minutos.",
 				"farRight": "Mover Quake al extremo derecho",
@@ -179,7 +179,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "Plus tard garde l’appareil connecté et vous rappelle dans 10 minutes.",
 				"farRight": "Déplacer Quake tout à droite",
@@ -205,7 +205,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "나중에를 선택하면 연결을 유지하고 10분 후 다시 알립니다.",
 				"farRight": "Quake를 맨 오른쪽으로 이동",
@@ -231,7 +231,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "Più tardi mantiene il dispositivo connesso e ricorda tra 10 minuti.",
 				"farRight": "Sposta Quake a destra",
@@ -257,7 +257,7 @@
 				"orientationDetail": "Open display settings and set Quake to landscape.",
 				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
 				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
-				"openDisplaySettings": "Open Display Settings",
+				"openDisplaySettings": "Open display settings",
 				"orientationLater": "Later",
 				"laterDetail": "後でを選ぶと接続を維持し、10分後に再通知します。",
 				"farRight": "Quakeを一番右に移動",

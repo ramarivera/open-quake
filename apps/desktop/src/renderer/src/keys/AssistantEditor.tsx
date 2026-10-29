@@ -24,7 +24,7 @@ import { AssistantLink } from "./AssistantLink";
 import { useAssistantText } from "./assistant-copy";
 
 export const ASSISTANT_ENGINES = [
-	{ id: "qwen", label: "QWen" },
+	{ id: "qwen", label: "Qwen" },
 	{ id: "kimi", label: "Kimi" },
 	{ id: "deepseek", label: "DeepSeek" },
 	{ id: "openai", label: "OpenAI" },

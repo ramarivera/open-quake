@@ -121,18 +121,18 @@ it("AI-003/041/042/054/055/056/060 mounts, edits and reopens portable settings",
 		Array.from(engine.options)
 			.slice(1)
 			.map((o) => o.text),
-	).toEqual(["QWen", "Kimi", "DeepSeek", "OpenAI"]);
+	).toEqual(["Qwen", "Kimi", "DeepSeek", "OpenAI"]);
 	await input(engine, "qwen");
-	await click(field(f.host, "Custom Role"));
+	await click(field(f.host, "Custom role"));
 	await input(
 		query(f.host, "textarea", HTMLTextAreaElement),
 		"A custom retained prompt",
 	);
 	await input(field(f.host, "Personality"), "0.95");
-	await input(field(f.host, "Reply Quality"), "1.5");
-	await input(field(f.host, "Chat Timeout(s)"), "30");
-	await click(field(f.host, "Wake Chat Window"));
-	expect(field(f.host, "Use Dekie Agent").checked).toBe(false);
+	await input(field(f.host, "Reply quality"), "1.5");
+	await input(field(f.host, "Chat timeout in seconds"), "30");
+	await click(field(f.host, "Open chat window"));
+	expect(field(f.host, "Use agent").checked).toBe(false);
 	await click(button(f.host, "Save test key"));
 	expect(saved.config.assistantSettings).toMatchObject({
 		modelRowId: "qwen",
@@ -151,7 +151,7 @@ it("AI-003/041/042/054/055/056/060 mounts, edits and reopens portable settings",
 	expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
 		"A custom retained prompt",
 	);
-	expect(field(f.host, "Chat Timeout(s)").value).toBe("30");
+	expect(field(f.host, "Chat timeout in seconds").value).toBe("30");
 });
 it("AI-019/062 SETTINGS-008 shows loading, empty/single states and saves ordered explicit choice", async () => {
 	const calls = bridge();
@@ -162,7 +162,7 @@ it("AI-019/062 SETTINGS-008 shows loading, empty/single states and saves ordered
 		Array.from(select.options)
 			.slice(1)
 			.map((o) => o.text),
-	).toEqual(["QWen", "Kimi", "DeepSeek", "OpenAI"]);
+	).toEqual(["Qwen", "Kimi", "DeepSeek", "OpenAI"]);
 	await input(select, "deepseek");
 	expect(calls.at(-1)).toMatchObject({
 		type: "save-model",
@@ -201,7 +201,7 @@ it("AI-054 MGMT-285 filters excluded roles and bounds custom prompts", async () 
 		);
 	await input(field(f.host, "Filter roles"), "zzzzzzzz");
 	expect(select.options.length).toBe(1);
-	await click(field(f.host, "Custom Role"));
+	await click(field(f.host, "Custom role"));
 	expect(query(f.host, "textarea", HTMLTextAreaElement).maxLength).toBe(3000);
 });
 it("KNOB-034 MGMT-308 retains malformed JSON and requires reviewed replacement", async () => {
@@ -644,10 +644,10 @@ it("canonical knob provider and model changes clear incompatible assistant contr
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
 	await input(query(f.host, "#knob-provider", HTMLSelectElement), "qwen");
 	await input(query(f.host, "#knob-model", HTMLSelectElement), "qwen3.6-plus");
-	await click(field(f.host, "Enable Thinking"));
-	await click(field(f.host, "Web Search"));
-	expect(field(f.host, "Enable Thinking").checked).toBe(true);
-	expect(field(f.host, "Web Search").checked).toBe(true);
+	await click(field(f.host, "Enable thinking"));
+	await click(field(f.host, "Web search"));
+	expect(field(f.host, "Enable thinking").checked).toBe(true);
+	expect(field(f.host, "Web search").checked).toBe(true);
 	await input(query(f.host, "#knob-provider", HTMLSelectElement), "deepseek");
 	await input(
 		query(f.host, "#knob-model", HTMLSelectElement),
@@ -662,8 +662,8 @@ it("canonical knob provider and model changes clear incompatible assistant contr
 			webSearch: false,
 		},
 	});
-	expect(field(f.host, "Enable Thinking").checked).toBe(false);
-	expect(field(f.host, "Web Search").checked).toBe(false);
+	expect(field(f.host, "Enable thinking").checked).toBe(false);
+	expect(field(f.host, "Web search").checked).toBe(false);
 });
 
 it("followed General provider changes reconcile checked controls and cross-provider model IDs before save and reopen", async () => {
@@ -715,17 +715,17 @@ it("followed General provider changes reconcile checked controls and cross-provi
 	const f = await mount(<KeyConsumer />);
 	closes.push(f.close);
 	await settle(() =>
-		expect(field(f.host, "Enable Thinking").checked).toBe(true),
+		expect(field(f.host, "Enable thinking").checked).toBe(true),
 	);
-	expect(field(f.host, "Web Search").checked).toBe(true);
+	expect(field(f.host, "Web search").checked).toBe(true);
 	await act(async () => publish(view(models("deepseek"))));
 	await settle(() =>
 		expect(
 			query(f.host, 'select[id$="-engine"]', HTMLSelectElement).value,
 		).toBe("deepseek"),
 	);
-	expect(field(f.host, "Enable Thinking").checked).toBe(false);
-	expect(field(f.host, "Web Search").checked).toBe(false);
+	expect(field(f.host, "Enable thinking").checked).toBe(false);
+	expect(field(f.host, "Web search").checked).toBe(false);
 	expect(query(f.host, 'input[id$="-model-id"]', HTMLInputElement).value).toBe(
 		"",
 	);
@@ -737,8 +737,8 @@ it("followed General provider changes reconcile checked controls and cross-provi
 		webSearch: false,
 	});
 	await f.render(<AssistantEditor keyValue={key} onChange={() => {}} />);
-	expect(field(f.host, "Enable Thinking").checked).toBe(false);
-	expect(field(f.host, "Web Search").checked).toBe(false);
+	expect(field(f.host, "Enable thinking").checked).toBe(false);
+	expect(field(f.host, "Web search").checked).toBe(false);
 });
 
 it("AI-228/229/230 updates preset/custom persona and slider endpoints, then reloads the saved selection", async () => {
@@ -760,7 +760,7 @@ it("AI-228/229/230 updates preset/custom persona and slider endpoints, then relo
 		expect(f.host.querySelector('input[type="range"]')).not.toBeNull(),
 	);
 	const personality = field(f.host, "Personality");
-	const quality = field(f.host, "Reply Quality");
+	const quality = field(f.host, "Reply quality");
 	expect([
 		personality.min,
 		personality.max,
@@ -780,7 +780,7 @@ it("AI-228/229/230 updates preset/custom persona and slider endpoints, then relo
 	await input(quality, "2");
 	await click(button(f.host, "Update"));
 	expect(saved).toMatchObject({ roleId: 128, topP: 0, temperature: 2 });
-	await click(field(f.host, "Custom Role"));
+	await click(field(f.host, "Custom role"));
 	await input(
 		query(f.host, "textarea", HTMLTextAreaElement),
 		"Saved custom persona",
@@ -800,9 +800,9 @@ it("AI-228/229/230 updates preset/custom persona and slider endpoints, then relo
 			"Saved custom persona",
 		),
 	);
-	expect(field(f.host, "Custom Role").checked).toBe(true);
+	expect(field(f.host, "Custom role").checked).toBe(true);
 	expect(field(f.host, "Personality").value).toBe("0.05");
-	await click(field(f.host, "Custom Role"));
+	await click(field(f.host, "Custom role"));
 	await input(query(f.host, 'select[id$="-role"]', HTMLSelectElement), "6");
 	await click(button(f.host, "Update"));
 	expect(saved).toMatchObject({ roleId: 6, customPrompt: "", rolePrompt: "" });

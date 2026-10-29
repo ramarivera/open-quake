@@ -59,7 +59,7 @@ it("offers the regular Phosphor catalog alongside existing sets and custom artwo
 			document.querySelector('[aria-label="Uninstall Phosphor"]'),
 		).toBeNull();
 		expect(
-			element<HTMLButtonElement>('button[aria-label="Material Design Icons"]'),
+			element<HTMLButtonElement>('button[aria-label="Material Design icons"]'),
 		).toBeDefined();
 		await click(element<HTMLButtonElement>('button[aria-label="My icons"]'));
 		expect(

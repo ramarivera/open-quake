@@ -123,10 +123,10 @@ it.each(["en", "de"] as const)(
 	},
 );
 it.each([
-	["local", "open-quake.local", "Local Music"],
+	["local", "open-quake.local", "Local music"],
 	["system", "org.chrome", "Browser"],
 	["system", "org.music", "Music"],
-	["system", "", "System Media"],
+	["system", "", "System media"],
 ] as const)(
 	"KNOB-097 WIDGETS-112 %s source %s is read-only",
 	async (source, appId, label) => {
@@ -154,7 +154,7 @@ it.each([
 		);
 	},
 );
-it("MGMT-271 mounted session selection, Follow Current and launcher failures use persisted settings", async () => {
+it("MGMT-271 mounted session selection, Follow current and launcher failures use persisted settings", async () => {
 	const snapshot: WeatherMediaSnapshot = {
 		revision: 1,
 		settings: { ...DEFAULT_WEATHER_SETTINGS, mediaTarget: "b" },

@@ -21,7 +21,7 @@ const render = (value: ConnectionDiagnostic | undefined) =>
 describe("connection diagnostic page", () => {
 	it("offers expandable troubleshooting and Re-detect while preserving desktop preview", () => {
 		const html = render(status);
-		expect(html).toContain("USB Control Connection");
+		expect(html).toContain("USB control connection");
 		expect(html).toContain("No HDMI monitor detected");
 		expect(html).toContain('aria-expanded="true"');
 		expect(html).toContain("USB cable that supports data transfer");
@@ -49,7 +49,7 @@ describe("connection diagnostic page", () => {
 		expect(html).toContain('role="alert"');
 		expect(html).toContain("Quake display arrangement failed");
 		expect(html).toContain("10 minutes");
-		expect(html).toContain("Open Display Settings");
+		expect(html).toContain("Open display settings");
 		expect(html).toContain("Arrange Quake display again");
 		expect(html).not.toContain("both connections are normal");
 	});

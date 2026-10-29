@@ -19,11 +19,11 @@ beforeEach(() => {
 });
 it("SETTINGS-068/069 opens offline illustrated steps, changes only guide language and resets on close", async () => {
 	await mount(createElement(InstallationGuide));
-	await click(button("Installation Guide"));
+	await click(button("Installation guide"));
 	expect(document.body.textContent).toContain("left USB-C input port");
 	expect(document.body.textContent).toContain("Mini HDMI");
 	expect(document.body.textContent).toContain("latch engages");
-	expect(document.body.textContent).toContain("Box Contents");
+	expect(document.body.textContent).toContain("Box contents");
 	expect(document.querySelector("svg[role=img]")).not.toBeNull();
 	await act(async () =>
 		element("dialog").dispatchEvent(
@@ -33,7 +33,7 @@ it("SETTINGS-068/069 opens offline illustrated steps, changes only guide languag
 	expect(document.body.textContent).toContain(
 		"DisplayPort output to Quake's HDMI input",
 	);
-	await click(button("3. Laptop Setup"));
+	await click(button("3. Laptop setup"));
 	expect(document.body.textContent).toContain("USB-C port that supports DP");
 	await click(button("中文"));
 	expect(document.body.textContent).toContain("连接笔记本");
@@ -41,8 +41,8 @@ it("SETTINGS-068/069 opens offline illustrated steps, changes only guide languag
 		element("dialog").dispatchEvent(new Event("cancel", { cancelable: true })),
 	);
 	expect(document.querySelector("dialog")).toBeNull();
-	expect(document.activeElement).toBe(button("Installation Guide"));
-	await click(button("Installation Guide"));
+	expect(document.activeElement).toBe(button("Installation guide"));
+	await click(button("Installation guide"));
 	expect(document.body.textContent).toContain("1 / 3");
 	expect(document.body.textContent).toContain("left USB-C input port");
 });
@@ -51,9 +51,9 @@ it("SETTINGS-070 opens and reopens installation help from the device entrance wi
 	window.history.replaceState(null, "", "/?page=overview");
 	await mount(createElement(App));
 	for (let attempt = 0; attempt < 2; attempt++) {
-		await click(button("Installation Guide", element(".setup-entrance-guide")));
+		await click(button("Installation guide", element(".setup-entrance-guide")));
 		expect(element("dialog[open]").textContent).toContain(
-			"Connect Quake's Included Cables",
+			"Connect QUAKE's included cables",
 		);
 		await act(async () =>
 			element("dialog").dispatchEvent(

@@ -190,7 +190,7 @@ describe("mounted MeetAI consumers", () => {
 		});
 		await dom.render(view());
 		expect(animation()?.getAttribute("data-animation")).toBe("recording");
-		expect(animation()?.textContent).toContain("Start Recording");
+		expect(animation()?.textContent).toContain("Recording");
 		await click('[data-quake-sub-touch="meeting-tab-temp"]');
 		expect(dom.host.querySelector('[data-animation="recording"]')).toBeNull();
 		await click('[data-quake-sub-touch="meeting-tab-live"]');
@@ -315,7 +315,7 @@ describe("mounted MeetAI consumers", () => {
 		vi.setSystemTime(epoch + 10000);
 		dom = meetingDom([], { tab: "live", translating: true });
 		await dom.render(view());
-		expect(dom.host.textContent).toContain("Update speed : - -");
+		expect(dom.host.textContent).toContain("Waiting for translation");
 		await dom.push({
 			config: { ...dom.snapshot().config, targetLanguage: "de" },
 			translations: [

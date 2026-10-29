@@ -27,10 +27,10 @@ export function ChannelsPage() {
 	}, [refresh]);
 	const connected = channels.filter((c) => c.configured);
 	return (
-		<section className="mc-panel" aria-label="Channel Configuration">
+		<section className="mc-panel" aria-label="Channel configuration">
 			<header className="mc-toolbar">
 				<div>
-					<h2>Channel Configuration</h2>
+					<h2>Channel configuration</h2>
 					<p>{s.hub.heroCn}</p>
 					<p>{s.hub.heroIntl}</p>
 				</div>
