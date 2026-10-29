@@ -100,7 +100,8 @@ describe("logical layout invariants", () => {
 			"2,8",
 		]);
 		expect(at("1,6", [1, 1], "aiChatView")[0]).toBe("1,4");
-		expect(at("2,4", [1, 1], "dkDesktopClock")).toHaveLength(16);
+		expect(at("2,4", [1, 1], "dkDesktopClock")).toEqual(["2,4"]);
+		expect(at("1,1", [8, 2], "dkDesktopClock")).toHaveLength(16);
 		expect(at("1,2", [1, 1], "__proto__")).toEqual(["1,2"]);
 	});
 	it.prop(

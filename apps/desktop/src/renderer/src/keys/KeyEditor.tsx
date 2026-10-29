@@ -24,6 +24,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
+	Profile,
 	ProfileEnvelope,
 	type ProfileJson,
 	ProfileKey,
@@ -50,12 +51,14 @@ import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { ActionValueInput } from "./ActionValueInput";
 import { AgentKeyFields } from "./AgentKeyFields";
 import { AssistantEditor } from "./AssistantEditor";
+import { consoleProfile } from "./console-profile";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
 import { KeyGeometryControls } from "./KeyGeometryControls";
 import { KeyImport } from "./KeyImport";
 import { KeyPageControls } from "./KeyPageControls";
+import { KeyTable } from "./KeyTable";
 import { KeyTitleSettings } from "./KeyTitleSettings";
 import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
@@ -89,6 +92,7 @@ export function KeyEditor({
 		[saving, setSaving] = useState(false),
 		[overlaps, setOverlaps] = useState<readonly string[]>([]);
 	const savePending = useRef(false);
+	const consolePending = useRef(false);
 	const epoch = useRef(0);
 	const gridReset = useRef<(() => void) | undefined>(undefined);
 	const current = useRef<Selection | undefined>(undefined),
@@ -508,6 +512,57 @@ export function KeyEditor({
 			if (epoch.current === ticket) setSaving(false);
 		}
 	};
+	const createConsole = async (): Promise<void> => {
+		if (savePending.current || consolePending.current) return;
+		consolePending.current = true;
+		try {
+			await revert();
+			savePending.current = true;
+			setSaving(true);
+			setStatus("");
+			const reply = await window.quakeKeyLibrary.request({
+				type: "import-profile",
+				source: JSON.stringify(
+					Schema.encodeSync(Profile)(
+						consoleProfile(locale, editorText("console")),
+					),
+				),
+			});
+			if (reply._tag === "rejected") {
+				setStatus(reply.reason);
+				return;
+			}
+			if (
+				reply._tag !== "success" ||
+				!reply.envelope ||
+				!reply.importedProfileId
+			)
+				return;
+			accept(reply.envelope);
+			const pageId = reply.envelope.profiles.find(
+				(candidate) => candidate.id === reply.importedProfileId,
+			)?.pages[0].id;
+			if (!pageId) return;
+			const selected = await window.quakeKeyLibrary.request({
+				type: "select",
+				deviceId: serial,
+				profileId: reply.importedProfileId,
+				pageId,
+			});
+			if (selected._tag === "success" && selected.envelope) {
+				accept(selected.envelope);
+				setProfileId(reply.importedProfileId);
+				setPageId(pageId);
+			} else if (selected._tag === "rejected") setStatus(selected.reason);
+		} catch {
+			setStatus(editorText("activationFailed"));
+		} finally {
+			savePending.current = false;
+			consolePending.current = false;
+			setSaving(false);
+		}
+	};
+
 	const remove = useCallback(async (): Promise<void> => {
 		const old = current.current;
 		if (savePending.current || !old || !keyEditable(old.key, "allowDelete"))
@@ -587,6 +642,13 @@ export function KeyEditor({
 		},
 	};
 	const key = selection?.key;
+	const dirty =
+		!!selection &&
+		(JSON.stringify(Schema.encodeSync(ProfileKey)(selection.key)) !==
+			JSON.stringify(Schema.encodeSync(ProfileKey)(selection.savedKey)) ||
+			(selection.geometry.destination !== undefined &&
+				selection.geometry.destination !== selection.key.keyCode) ||
+			selection.geometry.placement === true);
 	const savedSwitchProfile =
 		key?.config.type === "switchProfile"
 			? String(
@@ -668,493 +730,552 @@ export function KeyEditor({
 				}
 			}}
 		>
-			<PageHeader title="Keys" />
+			<PageHeader title="Keys">
+				{dirty ? (
+					<span className="keys-pending">{editorText("pending")}</span>
+				) : null}
+				<span className="keys-profile-name">
+					{profileLabel(profile, locale)}
+				</span>
+			</PageHeader>
 			<fieldset className="keys-save-boundary" disabled={saving}>
-				<Group title="Configuration">
-					<Row label={editorText("active")} htmlFor="keys-profile">
-						<select
-							id="keys-profile"
-							value={profile.id}
-							// One selection: the edited profile is also delivered to the device,
-							// so the editor never shows a profile the device isn't using.
-							onChange={(e) => {
-								const next = envelope.profiles.find(
-									(p) => p.id === e.target.value,
-								);
-								if (next)
-									// A rejected activation leaves the editor on the device's profile.
-									void activateProfile(next.id).then((active) =>
-										active ? selectPage(next.id, next.pages[0].id) : undefined,
-									);
-							}}
+				<div className="keys-toolbar">
+					<Group title="Configuration">
+						<button
+							type="button"
+							className="keys-create-console"
+							onClick={() => void createConsole()}
 						>
-							{envelope.profiles.map((p) => (
-								<option key={p.id} value={p.id}>
-									{profileLabel(p, locale)}
-								</option>
-							))}
-						</select>
-					</Row>
-					<Row label={keyText("pageNumber", locale)} htmlFor="keys-page">
-						<select
-							id="keys-page"
-							value={page.id}
-							onChange={(e) => {
-								void selectPage(profile.id, e.target.value);
-							}}
-						>
-							{profile.pages.map((p, i) => (
-								<option key={p.id} value={p.id}>
-									{i + 1}
-								</option>
-							))}
-						</select>
-					</Row>
-					<KeyPageControls
-						key={`${profile.id}:${page.id}`}
-						profile={profile}
-						pageId={page.id}
-						locale={locale}
-						select={(id) => void selectPage(profile.id, id)}
-						edit={(type, id) => void editPage(type, id)}
-					/>
-					<Row label="Language" htmlFor="keys-language">
-						<select
-							id="keys-language"
-							value={locale}
-							onChange={(e) =>
-								setLocale(
-									Schema.decodeUnknownSync(ProfileLocale)(e.target.value),
-								)
-							}
-						>
-							{["en", "zh", "de", "es", "fr", "it", "ja", "ko"].map((l) => (
-								<option key={l}>{l}</option>
-							))}
-						</select>
-					</Row>
-				</Group>
-				<KnobEditor
-					key={profile.id}
-					profile={profile}
-					accept={accept}
-					keyEditOpen={selection !== undefined || saving}
-					keysLocale={locale}
-				/>
-				<GridEditor
-					onActivate={onOpenLibrary}
-					profile={profile}
-					page={page}
-					saving={saving}
-					serial={serial}
-					locale={locale}
-					selection={selection}
-					previewEnvelope={previewEnvelope}
-					wallpaperController={wallpaperController}
-					current={current}
-					epoch={epoch}
-					savePending={savePending}
-					resetRef={gridReset}
-					revert={revert}
-					save={save}
-					choose={choose}
-					selectPage={selectPage}
-					setSelection={setSelection}
-					setStatus={setStatus}
-				/>
-				{key ? (
-					<Group
-						title={
-							keyTitle(key, locale) || key.config.type || "Select Function"
-						}
-					>
-						{selectedTile && selection && (
-							<SelectedKeyPreview
-								tile={selectedTile}
-								target={{
-									profileId: profile.id,
-									pageId: page.id,
-									keyCode: key.keyCode,
-								}}
-								beforeWrite={async () => {
-									const old = current.current;
-									if (!old || savePending.current) return false;
-									if (
-										JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
-										JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
-									)
-										return true;
-									await save();
-									return old !== current.current;
-								}}
-								onSaved={() => selectKey(key.keyCode, "refresh")}
-								isCurrent={() =>
-									current.current?.target.token === selection.target.token
-								}
-							/>
-						)}
-						{Option.isSome(key.compatibility) &&
-							key.compatibility.value.unsupported === true && (
-								<p role="status" className="key-unsupported">
-									{locale === "de"
-										? "Nicht unterstützte Funktion. Die Originaldaten bleiben erhalten und werden nicht ausgeführt."
-										: "Unsupported function. Original data is preserved and won't execute."}
-								</p>
-							)}
-						<Row label="Function" htmlFor="key-function">
+							{editorText("createConsole")}
+						</button>
+						<Row label={editorText("active")} htmlFor="keys-profile">
 							<select
-								id="key-function"
-								disabled={!keyEditable(key, "allowDelete")}
-								value={key.config.type}
+								id="keys-profile"
+								value={profile.id}
+								// One selection: the edited profile is also delivered to the device,
+								// so the editor never shows a profile the device isn't using.
 								onChange={(e) => {
-									if (savePending.current) return;
-									const entry = ACTION_REGISTRY.find(
-										(a) => a.id === e.target.value,
+									const next = envelope.profiles.find(
+										(p) => p.id === e.target.value,
 									);
-									if (!entry) return;
-									const raw = Schema.encodeSync(ProfileKey)(key);
-									const next = Schema.decodeUnknownSync(ProfileKey)({
-										...raw,
-										...(raw.compatibility?.unsupported === true
-											? {
-													compatibility: {
-														...raw.compatibility,
-														unsupported: false,
-													},
-												}
-											: {}),
-										childrenName: entry.id,
-										config: {
-											...raw.config,
-											...createActionDraft(entry.id),
-											supportKnob: ["obsVolume", "vol", "brightness"].includes(
-												entry.id,
-											),
-											supportTouchEffect: entry.supportTouchEffect,
-										},
-									});
-									setIcons(false);
-									setAlternate(false);
-									void update(next);
+									if (next)
+										// A rejected activation leaves the editor on the device's profile.
+										void activateProfile(next.id).then((active) =>
+											active
+												? selectPage(next.id, next.pages[0].id)
+												: undefined,
+										);
 								}}
 							>
-								<option value={key.config.type}>
-									{key.config.type
-										? keyText(key.config.type, locale)
-										: "Select Function"}
-								</option>
-								{ACTION_REGISTRY.filter((a) => a.id !== key.config.type).map(
-									(a) => (
-										<option key={a.id} value={a.id}>
-											{keyText(a.id, locale)}
-										</option>
-									),
-								)}
+								{envelope.profiles.map((p) => (
+									<option key={p.id} value={p.id}>
+										{profileLabel(p, locale)}
+									</option>
+								))}
 							</select>
 						</Row>
-						<Row label={keyText("title", locale)} htmlFor="key-title">
-							<input
-								id="key-title"
-								value={keyTitle(key, locale, alternate)}
+						<Row label={keyText("pageNumber", locale)} htmlFor="keys-page">
+							<select
+								id="keys-page"
+								value={page.id}
+								onChange={(e) => {
+									void selectPage(profile.id, e.target.value);
+								}}
+							>
+								{profile.pages.map((p, i) => (
+									<option key={p.id} value={p.id}>
+										{i + 1}
+									</option>
+								))}
+							</select>
+						</Row>
+						<KeyPageControls
+							key={`${profile.id}:${page.id}`}
+							profile={profile}
+							pageId={page.id}
+							locale={locale}
+							select={(id) => void selectPage(profile.id, id)}
+							edit={(type, id) => void editPage(type, id)}
+						/>
+						<Row label={editorText("keyLanguage")} htmlFor="keys-language">
+							<select
+								id="keys-language"
+								value={locale}
 								onChange={(e) =>
-									void update(editKeyTitle(key, e.target.value, alternate))
-								}
-							/>
-							<small
-								data-warning={
-									titleWeight(keyTitle(key, locale, alternate)) > 16
+									setLocale(
+										Schema.decodeUnknownSync(ProfileLocale)(e.target.value),
+									)
 								}
 							>
-								{titleWeight(keyTitle(key, locale, alternate))}/20
-							</small>
+								{["en", "zh", "de", "es", "fr", "it", "ja", "ko"].map((l) => (
+									<option key={l}>{l}</option>
+								))}
+							</select>
 						</Row>
-						<KeyGeometryControls
-							keyValue={key}
-							geometry={selection?.geometry ?? {}}
+					</Group>
+				</div>
+				<div className="keys-workspace">
+					<div className="keys-canvas">
+						<h2 className="keys-layout-heading">{editorText("layout")}</h2>
+						<GridEditor
+							onActivate={onOpenLibrary}
+							profile={profile}
+							page={page}
+							saving={saving}
+							serial={serial}
 							locale={locale}
-							onChange={(next, geometry) =>
-								void update(next, undefined, geometry)
+							selection={selection}
+							previewEnvelope={previewEnvelope}
+							wallpaperController={wallpaperController}
+							current={current}
+							epoch={epoch}
+							savePending={savePending}
+							resetRef={gridReset}
+							revert={revert}
+							save={save}
+							choose={choose}
+							selectPage={selectPage}
+							setSelection={setSelection}
+							setStatus={setStatus}
+						/>
+						<KeyTable
+							page={
+								previewProfile.pages.find(
+									(candidate) => candidate.id === page.id,
+								) ?? page
 							}
+							locale={locale}
+							selected={key?.keyCode}
+							dirty={dirty}
+							choose={(code) => void choose(code)}
 						/>
-						{overlaps.length > 0 && (
-							<div
-								role="alertdialog"
-								aria-label={
-									locale === "de"
-										? "Ersetzung bestätigen"
-										: "Replace Confirmation"
+						<details className="keys-knob-settings">
+							<summary>{editorText("knobSettings")}</summary>
+							<KnobEditor
+								key={profile.id}
+								profile={profile}
+								accept={accept}
+								keyEditOpen={selection !== undefined || saving}
+								keysLocale={locale}
+							/>
+						</details>
+					</div>
+					<aside
+						className="keys-inspector"
+						aria-label={editorText("inspector")}
+					>
+						<p className="keys-inspector-kicker">{editorText("inspector")}</p>
+						{key ? (
+							<Group
+								title={
+									keyTitle(key, locale) || key.config.type || "Select Function"
 								}
 							>
-								<p>
-									{locale === "de"
-										? "Diese Felder werden ersetzt"
-										: "Placing here will replace the existing component(s)"}
-									: {overlaps.join(", ")}
-								</p>
-								<button
-									type="button"
-									id="key-confirm-overlap"
-									onClick={() =>
-										void update(key, undefined, {
-											...selection?.geometry,
-											replaceOverlaps: true,
-										})
-									}
-								>
-									{locale === "de" ? "Ersetzen bestätigen" : "Confirm Replace"}
-								</button>
-								<button type="button" onClick={() => void revert()}>
-									{keyText("cancel", locale)}
-								</button>
-							</div>
-						)}
-						<KeyTitleSettings
-							keyValue={key}
-							alternate={alternate}
-							locale={locale}
-							onChange={(next) => void update(next)}
-						/>
-						{key.config.type === "colorfulScreenSettings" && (
-							<WallpaperSettings embedded wallpaper={wallpaperController} />
-						)}
-						{key.config.type === "hotkeySwitch" && (
-							<Row label="State">
-								<button
-									type="button"
-									aria-pressed={!alternate}
-									onClick={() => {
-										setIcons(false);
-										setAlternate(false);
-									}}
-								>
-									1
-								</button>
-								<button
-									type="button"
-									aria-pressed={alternate}
-									onClick={() => {
-										setIcons(false);
-										setAlternate(true);
-									}}
-								>
-									2
-								</button>
-							</Row>
-						)}
-						<Row label={keyText("selectDecoKeeIcon", locale)}>
-							<button
-								type="button"
-								aria-haspopup="dialog"
-								onClick={() => setIcons(true)}
-							>
-								{keyText("iconLib.title", locale)}
-							</button>
-							<button
-								type="button"
-								aria-label="Reset icon to default"
-								onClick={resetIcon}
-							>
-								Reset to default
-							</button>
-						</Row>
-
-						{key.config.type === "gameMode" && (
-							<GameModeSettings
-								value={key}
-								onChange={(next) => void update(next)}
-							/>
-						)}
-						{isMonitorKey(key) && (
-							<MonitorKeySettings
-								key={selection?.target.token}
-								keyValue={key}
-								locale={locale}
-								onChange={(next) => void update(next)}
-							/>
-						)}
-						{isObsId(key.config.type) && (
-							<ObsSettings
-								key={key.config.type}
-								keyValue={key}
-								locale={locale}
-								onChange={(next) => void update(next)}
-							/>
-						)}
-						{["assistant", "aiChat"].includes(key.config.type) && (
-							<AssistantEditor
-								key={selection?.target.token}
-								keyValue={key}
-								disabled={saving}
-								onChange={(next) => void update(next)}
-							/>
-						)}
-						<AudioBotSettings
-							keyValue={key}
-							locale={locale}
-							onChange={(next) => void update(next)}
-						/>
-						{key.config.type === "switchProfile" && (
-							<Row label="Profile">
-								<select
-									aria-label="Switch profile"
-									value={savedSwitchProfile}
-									onChange={(event) => {
-										void update({
-											...key,
-											config: {
-												...key.config,
-												actions: [
-													{ type: "profile", value: event.target.value },
-													{ type: "page", value: 1 },
-												],
-											},
-										});
-									}}
-								>
-									<option value="-1">{keyText("nextProfile", locale)}</option>
-									{unavailableSwitchProfile && (
-										<option value={savedSwitchProfile} disabled>
-											{savedSwitchTarget?.name ?? savedSwitchProfile}
-										</option>
+								{selectedTile && selection && (
+									<SelectedKeyPreview
+										tile={selectedTile}
+										target={{
+											profileId: profile.id,
+											pageId: page.id,
+											keyCode: key.keyCode,
+										}}
+										beforeWrite={async () => {
+											const old = current.current;
+											if (!old || savePending.current) return false;
+											if (
+												JSON.stringify(
+													Schema.encodeSync(ProfileKey)(old.key),
+												) ===
+												JSON.stringify(
+													Schema.encodeSync(ProfileKey)(old.savedKey),
+												)
+											)
+												return true;
+											await save();
+											return old !== current.current;
+										}}
+										onSaved={() => selectKey(key.keyCode, "refresh")}
+										isCurrent={() =>
+											current.current?.target.token === selection.target.token
+										}
+									/>
+								)}
+								{Option.isSome(key.compatibility) &&
+									key.compatibility.value.unsupported === true && (
+										<p role="status" className="key-unsupported">
+											{locale === "de"
+												? "Nicht unterstützte Funktion. Die Originaldaten bleiben erhalten und werden nicht ausgeführt."
+												: "Unsupported function. Original data is preserved and won't execute."}
+										</p>
 									)}
-									{switchProfiles.map((p) => (
-										<option key={p.id} value={p.id}>
-											{p.name}
-										</option>
-									))}
-								</select>
-							</Row>
-						)}
-						{key.config.type === "switchProfile" &&
-							key.config.actions.find((action) => action.type === "profile")
-								?.value !== "-1" && (
-								<Row label={keyText("pageNumber", locale)}>
+								<Row label="Function" htmlFor="key-function">
 									<select
-										aria-label="Switch profile page"
-										disabled={unavailableSwitchProfile}
-										value={String(
-											key.config.actions.find(
-												(action) => action.type === "page",
-											)?.value ?? 1,
-										)}
-										onChange={(event) =>
+										id="key-function"
+										disabled={!keyEditable(key, "allowDelete")}
+										value={key.config.type}
+										onChange={(e) => {
+											if (savePending.current) return;
+											const entry = ACTION_REGISTRY.find(
+												(a) => a.id === e.target.value,
+											);
+											if (!entry) return;
+											const raw = Schema.encodeSync(ProfileKey)(key);
+											const next = Schema.decodeUnknownSync(ProfileKey)({
+												...raw,
+												...(raw.compatibility?.unsupported === true
+													? {
+															compatibility: {
+																...raw.compatibility,
+																unsupported: false,
+															},
+														}
+													: {}),
+												childrenName: entry.id,
+												config: {
+													...raw.config,
+													...createActionDraft(entry.id),
+													supportKnob: [
+														"obsVolume",
+														"vol",
+														"brightness",
+													].includes(entry.id),
+													supportTouchEffect: entry.supportTouchEffect,
+												},
+											});
+											setIcons(false);
+											setAlternate(false);
+											void update(next);
+										}}
+									>
+										<option value={key.config.type}>
+											{key.config.type
+												? keyText(key.config.type, locale)
+												: "Select Function"}
+										</option>
+										{ACTION_REGISTRY.filter(
+											(a) => a.id !== key.config.type,
+										).map((a) => (
+											<option key={a.id} value={a.id}>
+												{keyText(a.id, locale)}
+											</option>
+										))}
+									</select>
+								</Row>
+								<Row label={keyText("title", locale)} htmlFor="key-title">
+									<input
+										id="key-title"
+										value={keyTitle(key, locale, alternate)}
+										onChange={(e) =>
+											void update(editKeyTitle(key, e.target.value, alternate))
+										}
+									/>
+									<small
+										data-warning={
+											titleWeight(keyTitle(key, locale, alternate)) > 16
+										}
+									>
+										{titleWeight(keyTitle(key, locale, alternate))}/20
+									</small>
+								</Row>
+								<KeyGeometryControls
+									keyValue={key}
+									geometry={selection?.geometry ?? {}}
+									locale={locale}
+									onChange={(next, geometry) =>
+										void update(next, undefined, geometry)
+									}
+								/>
+								{overlaps.length > 0 && (
+									<div
+										role="alertdialog"
+										aria-label={
+											locale === "de"
+												? "Ersetzung bestätigen"
+												: "Replace Confirmation"
+										}
+									>
+										<p>
+											{locale === "de"
+												? "Diese Felder werden ersetzt"
+												: "Placing here will replace the existing component(s)"}
+											: {overlaps.join(", ")}
+										</p>
+										<button
+											type="button"
+											id="key-confirm-overlap"
+											onClick={() =>
+												void update(key, undefined, {
+													...selection?.geometry,
+													replaceOverlaps: true,
+												})
+											}
+										>
+											{locale === "de"
+												? "Ersetzen bestätigen"
+												: "Confirm Replace"}
+										</button>
+										<button type="button" onClick={() => void revert()}>
+											{keyText("cancel", locale)}
+										</button>
+									</div>
+								)}
+								<KeyTitleSettings
+									keyValue={key}
+									alternate={alternate}
+									locale={locale}
+									onChange={(next) => void update(next)}
+								/>
+								{key.config.type === "colorfulScreenSettings" && (
+									<WallpaperSettings embedded wallpaper={wallpaperController} />
+								)}
+								{key.config.type === "hotkeySwitch" && (
+									<Row label="State">
+										<button
+											type="button"
+											aria-pressed={!alternate}
+											onClick={() => {
+												setIcons(false);
+												setAlternate(false);
+											}}
+										>
+											1
+										</button>
+										<button
+											type="button"
+											aria-pressed={alternate}
+											onClick={() => {
+												setIcons(false);
+												setAlternate(true);
+											}}
+										>
+											2
+										</button>
+									</Row>
+								)}
+								<Row label={keyText("selectDecoKeeIcon", locale)}>
+									<button
+										type="button"
+										aria-haspopup="dialog"
+										onClick={() => setIcons(true)}
+									>
+										{keyText("iconLib.title", locale)}
+									</button>
+									<button
+										type="button"
+										aria-label="Reset icon to default"
+										onClick={resetIcon}
+									>
+										Reset to default
+									</button>
+								</Row>
+
+								{key.config.type === "gameMode" && (
+									<GameModeSettings
+										value={key}
+										onChange={(next) => void update(next)}
+									/>
+								)}
+								{isMonitorKey(key) && (
+									<MonitorKeySettings
+										key={selection?.target.token}
+										keyValue={key}
+										locale={locale}
+										onChange={(next) => void update(next)}
+									/>
+								)}
+								{isObsId(key.config.type) && (
+									<ObsSettings
+										key={key.config.type}
+										keyValue={key}
+										locale={locale}
+										onChange={(next) => void update(next)}
+									/>
+								)}
+								{["assistant", "aiChat"].includes(key.config.type) && (
+									<AssistantEditor
+										key={selection?.target.token}
+										keyValue={key}
+										disabled={saving}
+										onChange={(next) => void update(next)}
+									/>
+								)}
+								<AudioBotSettings
+									keyValue={key}
+									locale={locale}
+									onChange={(next) => void update(next)}
+								/>
+								{key.config.type === "switchProfile" && (
+									<Row label="Profile">
+										<select
+											aria-label="Switch profile"
+											value={savedSwitchProfile}
+											onChange={(event) => {
+												void update({
+													...key,
+													config: {
+														...key.config,
+														actions: [
+															{ type: "profile", value: event.target.value },
+															{ type: "page", value: 1 },
+														],
+													},
+												});
+											}}
+										>
+											<option value="-1">
+												{keyText("nextProfile", locale)}
+											</option>
+											{unavailableSwitchProfile && (
+												<option value={savedSwitchProfile} disabled>
+													{savedSwitchTarget?.name ?? savedSwitchProfile}
+												</option>
+											)}
+											{switchProfiles.map((p) => (
+												<option key={p.id} value={p.id}>
+													{p.name}
+												</option>
+											))}
+										</select>
+									</Row>
+								)}
+								{key.config.type === "switchProfile" &&
+									key.config.actions.find((action) => action.type === "profile")
+										?.value !== "-1" && (
+										<Row label={keyText("pageNumber", locale)}>
+											<select
+												aria-label="Switch profile page"
+												disabled={unavailableSwitchProfile}
+												value={String(
+													key.config.actions.find(
+														(action) => action.type === "page",
+													)?.value ?? 1,
+												)}
+												onChange={(event) =>
+													void update({
+														...key,
+														config: {
+															...key.config,
+															actions: key.config.actions.map((action) =>
+																action.type === "page"
+																	? {
+																			...action,
+																			value: Number(event.target.value),
+																		}
+																	: action,
+															),
+														},
+													})
+												}
+											>
+												{envelope?.profiles
+													.find(
+														(profile) =>
+															profile.id ===
+															key.config.actions.find(
+																(action) => action.type === "profile",
+															)?.value,
+													)
+													?.pages.map((page, index) => (
+														<option key={page.id} value={index + 1}>
+															{index + 1}
+														</option>
+													))}
+											</select>
+										</Row>
+									)}
+								{key.config.type === "clawbot" && (
+									<AgentKeyFields
+										value={key}
+										onChange={(next) => void update(next)}
+									/>
+								)}
+								<MediaKeySettings
+									keyValue={key}
+									locale={locale}
+									onChange={(next) => void update(next)}
+								/>
+								{key.config.actions
+									.map((action, index) => ({ action, index }))
+									.filter(
+										({ action }) =>
+											action.type !== "musicSource" &&
+											key.config.type !== "media" &&
+											key.config.type !== "dkDesktopClock" &&
+											key.config.type !== "clawbot" &&
+											key.config.type !== "gameMode" &&
+											key.config.type !== "switchProfile" &&
+											!isObsId(key.config.type) &&
+											!isMonitorKey(key),
+									)
+									.map(({ action, index }) => (
+										<Row
+											key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}
+											label={
+												action.type === "key"
+													? index === 0
+														? keyText("hotKey1", locale)
+														: keyText("hotKey2", locale)
+													: action.type
+											}
+											htmlFor={`key-action-${index}`}
+										>
+											<ActionValueInput
+												key={`${selectionToken}:${key.config.type}:${index}:${action.type}`}
+												id={`key-action-${index}`}
+												action={action}
+												onChange={(value) => changeActions(index, value)}
+												onValidityChange={(valid) =>
+													setInvalidActions((current) => {
+														if (valid === !current.has(index)) return current;
+														const next = new Set(current);
+														if (valid) next.delete(index);
+														else next.add(index);
+														return next;
+													})
+												}
+											/>
+										</Row>
+									))}
+								{key.config.type === "multiActions" && (
+									<SequenceEditor
+										value={Option.getOrElse(key.config.subActions, () => [])}
+										onChange={(value) =>
 											void update({
 												...key,
 												config: {
 													...key.config,
-													actions: key.config.actions.map((action) =>
-														action.type === "page"
-															? { ...action, value: Number(event.target.value) }
-															: action,
-													),
+													subActions: Option.some(value),
 												},
 											})
 										}
-									>
-										{envelope?.profiles
-											.find(
-												(profile) =>
-													profile.id ===
-													key.config.actions.find(
-														(action) => action.type === "profile",
-													)?.value,
-											)
-											?.pages.map((page, index) => (
-												<option key={page.id} value={index + 1}>
-													{index + 1}
-												</option>
-											))}
-									</select>
-								</Row>
-							)}
-						{key.config.type === "clawbot" && (
-							<AgentKeyFields
-								value={key}
-								onChange={(next) => void update(next)}
-							/>
-						)}
-						<MediaKeySettings
-							keyValue={key}
-							locale={locale}
-							onChange={(next) => void update(next)}
-						/>
-						{key.config.actions
-							.map((action, index) => ({ action, index }))
-							.filter(
-								({ action }) =>
-									action.type !== "musicSource" &&
-									key.config.type !== "media" &&
-									key.config.type !== "dkDesktopClock" &&
-									key.config.type !== "clawbot" &&
-									key.config.type !== "gameMode" &&
-									key.config.type !== "switchProfile" &&
-									!isObsId(key.config.type) &&
-									!isMonitorKey(key),
-							)
-							.map(({ action, index }) => (
-								<Row
-									key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}
-									label={
-										action.type === "key"
-											? index === 0
-												? keyText("hotKey1", locale)
-												: keyText("hotKey2", locale)
-											: action.type
-									}
-									htmlFor={`key-action-${index}`}
-								>
-									<ActionValueInput
-										key={`${selectionToken}:${key.config.type}:${index}:${action.type}`}
-										id={`key-action-${index}`}
-										action={action}
-										onChange={(value) => changeActions(index, value)}
-										onValidityChange={(valid) =>
-											setInvalidActions((current) => {
-												if (valid === !current.has(index)) return current;
-												const next = new Set(current);
-												if (valid) next.delete(index);
-												else next.add(index);
-												return next;
-											})
-										}
 									/>
+								)}
+								<Row label="">
+									<button
+										type="button"
+										className="button-primary"
+										disabled={invalidActions.size > 0}
+										onClick={() => void save()}
+									>
+										{keyText("save", locale)}
+									</button>
+									<button type="button" onClick={() => void revert()}>
+										{keyText("cancel", locale)}
+									</button>
+									<button
+										type="button"
+										disabled={!keyEditable(key, "allowDelete")}
+										onClick={() => void remove()}
+									>
+										Delete
+									</button>
 								</Row>
-							))}
-						{key.config.type === "multiActions" && (
-							<SequenceEditor
-								value={Option.getOrElse(key.config.subActions, () => [])}
-								onChange={(value) =>
-									void update({
-										...key,
-										config: { ...key.config, subActions: Option.some(value) },
-									})
-								}
-							/>
+							</Group>
+						) : (
+							<p className="keys-inspector-empty">{editorText("choose")}</p>
 						)}
-						<Row label="">
-							<button
-								type="button"
-								className="button-primary"
-								disabled={invalidActions.size > 0}
-								onClick={() => void save()}
-							>
-								{keyText("save", locale)}
-							</button>
-							<button type="button" onClick={() => void revert()}>
-								{keyText("cancel", locale)}
-							</button>
-							<button
-								type="button"
-								disabled={!keyEditable(key, "allowDelete")}
-								onClick={() => void remove()}
-							>
-								Delete
-							</button>
-						</Row>
-					</Group>
-				) : (
-					<p>Select a key to edit.</p>
-				)}
+					</aside>
+				</div>
 				<KeyImport
 					locale={locale}
 					accept={(reply) => {

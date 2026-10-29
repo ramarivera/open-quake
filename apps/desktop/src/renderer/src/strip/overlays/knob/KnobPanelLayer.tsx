@@ -163,6 +163,7 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 				{selector.ringVisible && entries.length ? (
 					<FunctionWheel
 						entries={entries}
+						activeId={context.session.profileId}
 						index={selector.index}
 						direction={selector.direction}
 						motion={motion}

@@ -24,8 +24,8 @@ import {
 } from "../../useStripProfiles";
 import { previewVoiceContext } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
-import { cardRect, pageArrowRect } from "./geometry";
 import { ProfilePicker } from "./ProfilePicker";
+import { sceneSlots, sceneTarget } from "./scene-rail";
 import { useKnob } from "./useKnob";
 import { useProfileFrame } from "./useProfileFrame";
 
@@ -118,238 +118,209 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-describe("SCREEN-087/088/089/094 rendered picker", () => {
-	it("uses German page-arrow names on both pages and preserves navigation", async () => {
-		for (const [index, direction, label] of [
-			[0, "next", "Nächste Seite"],
-			[15, "previous", "Vorherige Seite"],
-		] as const) {
-			await render(picker(16, index, "de"));
-			expect(
-				host.querySelector(".knob-page-previous")?.getAttribute("aria-label"),
-			).toBe("Vorherige Seite");
-			expect(
-				host.querySelector(".knob-page-next")?.getAttribute("aria-label"),
-			).toBe("Nächste Seite");
-			const arrow = host.querySelector<HTMLButtonElement>(
-				`.knob-page-${direction}`,
-			);
-			expect(arrow?.getAttribute("aria-label")).toBe(label);
-			request.mockClear();
-			await act(async () => arrow?.click());
-			expect(request).toHaveBeenCalledExactlyOnceWith({
-				_tag: "Page",
-				sessionId: "s1",
-				delta: index === 0 ? 1 : -1,
-			});
-		}
-	});
+describe("Scene Rail profile selection", () => {
 	for (const locale of Object.keys(recovered).filter(
 		(key): key is keyof typeof recovered => key in recovered,
 	)) {
-		it.each([1, 16])(
-			`uses ${locale} source labels for %i profiles and renders the canonical settle progress`,
-			async (count) => {
-				await render(picker(count, 0, locale));
-				const copy = recovered[locale].picker;
-				expect(host.querySelector("header")?.textContent).toContain(copy.title);
-				expect(host.querySelector(".knob-current-label")?.textContent).toBe(
-					`${copy.currentPrefix} · ${entries(count)[0]?.name}`,
-				);
-				expect(host.querySelector(".knob-picker-hint")?.textContent).toBe(
-					copy.knobHint,
-				);
-				expect(
-					host.querySelector<HTMLElement>(".knob-settle div")?.style.width,
-				).toBe("50%");
-				if (count > 15) {
-					expect(
-						host
-							.querySelector(".knob-page-previous")
-							?.getAttribute("aria-label"),
-					).toBe(copy.previousPage);
-					expect(
-						host.querySelector(".knob-page-next")?.getAttribute("aria-label"),
-					).toBe(copy.nextPage);
-					expect(host.querySelector("footer")?.textContent).toContain(
-						copy.pageHint,
-					);
-					expect(host.querySelector(".knob-current-badge")).toBeNull();
-				} else {
-					expect(host.querySelector("footer")).toBeNull();
-					expect(host.querySelector(".knob-current-badge")?.textContent).toBe(
-						copy.currentBadge,
-					);
-				}
-			},
-		);
+		it(`localizes current, selected, destination and timeout labels in ${locale}`, async () => {
+			await render(picker(4, 1, locale));
+			const copy = recovered[locale].picker;
+			expect(host.querySelector("h1")?.textContent).toBe(copy.title);
+			expect(host.querySelector(".knob-picker-hint")?.textContent).toBe(
+				copy.knobHint,
+			);
+			expect(host.querySelector(".scene-timeout")?.textContent).toBe(
+				copy.pageHint,
+			);
+			expect(
+				host.querySelector('[data-current="true"]')?.getAttribute("aria-label"),
+			).toBe(entries(4)[0]?.name);
+			expect(
+				host.querySelector('[data-focused="true"]')?.getAttribute("aria-label"),
+			).toBe("Profile 1");
+			expect(
+				host.querySelector('[data-focused="true"] .scene-card-action')
+					?.textContent,
+			).toContain(copy.switchTo);
+			expect(
+				host
+					.querySelector('[role="progressbar"]')
+					?.getAttribute("aria-valuenow"),
+			).toBe("50");
+		});
 	}
-	it.each([1, 2, 3, 6, 8, 9, 12, 15, 16, 30, 31])(
-		"renders %i cards with the same exact rectangles as touch input on every page",
+	it.each([0, 1, 2, 3, 16, 31, 46])(
+		"renders unique neighbours with matching physical hit regions for %i profiles",
 		async (count) => {
-			for (let page = 0; page < Math.ceil(count / 15); page++) {
-				await render(picker(count, page * 15));
+			for (const index of new Set([0, Math.max(0, count - 1)])) {
+				await render(picker(count, index));
+				const slots = sceneSlots(count, index);
 				const cards = host.querySelectorAll<HTMLElement>(".knob-profile-card");
-				expect(cards).toHaveLength(Math.min(15, count - page * 15));
-				cards.forEach((card, offset) => {
-					const rect = cardRect(count, offset, page);
+				expect(cards).toHaveLength(Math.min(count, 3));
+				expect(new Set(slots.map((slot) => slot.index)).size).toBe(
+					slots.length,
+				);
+				cards.forEach((card, i) => {
+					const slot = slots[i];
+					if (!slot) throw new Error("Missing scene slot");
 					expect([
 						card.style.left,
 						card.style.top,
 						card.style.width,
 						card.style.height,
 					]).toEqual([
-						`${rect.x}px`,
-						`${rect.y}px`,
-						`${rect.width}px`,
-						`${rect.height}px`,
+						`${slot.rect.x}px`,
+						`${slot.rect.y}px`,
+						`${slot.rect.width}px`,
+						`${slot.rect.height}px`,
 					]);
-					expect(rect.width / rect.height).toBe(4);
+					expect(
+						sceneTarget(count, index, slot.rect.x + 5, slot.rect.y + 5),
+					).toEqual({ kind: "card", index: slot.index });
 				});
-				const focus = host.querySelector<HTMLElement>(".knob-picker-focus");
-				const first = cardRect(count, 0, page);
-				expect(focus?.style.transform).toBe(
-					`translate3d(${first.x}px,${first.y}px,0) scale(1.06)`,
-				);
-				expect(host.querySelectorAll(".knob-picker-focus")).toHaveLength(1);
 			}
 		},
 	);
-	it("draws a placeholder, thumbnail and pressed state and dispatches keyboard select once", async () => {
+	it("routes physical selection once, cancels drags, and closes without selecting", async () => {
 		await render(picker(3));
-		expect(host.querySelectorAll(".knob-card-placeholder")).toHaveLength(2);
-		expect(host.querySelectorAll("img")).toHaveLength(1);
-		const rect = cardRect(3, 1);
-		await act(async () =>
-			host.dispatchEvent(
-				new CustomEvent("quake-strip-overlay-touch", {
-					detail: { x: rect.x + 1, y: rect.y + 1, action: 1 },
-				}),
-			),
-		);
+		const slot = sceneSlots(3, 0).find((slot) => slot.position === "next");
+		if (!slot) throw new Error("Missing next scene");
+		const touch = async (x: number, y: number, action: number) =>
+			act(async () => {
+				host.dispatchEvent(
+					new CustomEvent("quake-strip-overlay-touch", {
+						detail: { x, y, action },
+					}),
+				);
+			});
+		await touch(slot.rect.x + 10, slot.rect.y + 10, 1);
 		expect(
 			host.querySelector('[data-pressed="true"]')?.getAttribute("aria-label"),
 		).toBe("Profile 1");
-		await act(async () =>
+		await touch(slot.rect.x + 10, slot.rect.y + 10, 0);
+		expect(request).toHaveBeenCalledExactlyOnceWith({
+			_tag: "Select",
+			sessionId: "s1",
+			profileId: "p1",
+		});
+		request.mockClear();
+		await touch(slot.rect.x + 10, slot.rect.y + 10, 1);
+		await touch(20, 20, 1);
+		await touch(20, 20, 0);
+		expect(request).not.toHaveBeenCalled();
+		await touch(50, 400, 1);
+		await touch(50, 400, 0);
+		expect(request).toHaveBeenCalledExactlyOnceWith({
+			_tag: "Dismiss",
+			sessionId: "s1",
+		});
+	});
+	it("keeps a held physical contact across timer-only snapshot publications", async () => {
+		await render(picker(3));
+		const slot = sceneSlots(3, 0).find((slot) => slot.position === "next");
+		if (!slot) throw new Error("Missing next scene");
+		await act(async () => {
 			host.dispatchEvent(
 				new CustomEvent("quake-strip-overlay-touch", {
-					detail: { x: rect.x + 1, y: rect.y + 1, action: 0 },
+					detail: { x: slot.rect.x + 10, y: slot.rect.y + 10, action: 1 },
 				}),
-			),
-		);
+			);
+		});
+		await render(picker(3));
+		await act(async () => {
+			host.dispatchEvent(
+				new CustomEvent("quake-strip-overlay-touch", {
+					detail: { x: slot.rect.x + 10, y: slot.rect.y + 10, action: 0 },
+				}),
+			);
+		});
 		expect(request).toHaveBeenCalledExactlyOnceWith({
 			_tag: "Select",
 			sessionId: "s1",
 			profileId: "p1",
 		});
 	});
-	it("renders arrow bounds verbatim and disables hidden first/last arrows", async () => {
-		for (const page of [0, 1]) {
-			await render(picker(16, page * 15));
-			for (const delta of [-1, 1] as const) {
-				const arrow = host.querySelector<HTMLButtonElement>(
-					`.knob-page-${delta < 0 ? "previous" : "next"}`,
-				);
-				const rect = pageArrowRect(delta);
-				const hidden = delta < 0 ? page === 0 : page === 1;
-				expect([
-					arrow?.style.left,
-					arrow?.style.top,
-					arrow?.style.width,
-					arrow?.style.height,
-				]).toEqual([
-					`${rect.x}px`,
-					`${rect.y}px`,
-					`${rect.width}px`,
-					`${rect.height}px`,
-				]);
-				expect(arrow?.disabled).toBe(hidden);
-				expect(arrow?.style.visibility).toBe(hidden ? "hidden" : "visible");
-			}
-		}
+
+	it("preserves keyboard selection, dismissal and many-profile paging", async () => {
+		await render(picker(31, 15, "de"));
+		const next = host.querySelector<HTMLButtonElement>(
+			'button[aria-label="Nächste Seite"]',
+		);
+		await act(async () => next?.click());
+		expect(request).toHaveBeenCalledExactlyOnceWith({
+			_tag: "Page",
+			sessionId: "s1",
+			delta: 1,
+		});
+		request.mockClear();
+		await act(async () =>
+			host.querySelector<HTMLButtonElement>('[data-focused="true"]')?.click(),
+		);
+		expect(request).toHaveBeenCalledExactlyOnceWith({
+			_tag: "Select",
+			sessionId: "s1",
+			profileId: "p15",
+		});
+		request.mockClear();
+		await act(async () =>
+			host
+				.querySelector('[role="dialog"]')
+				?.dispatchEvent(
+					new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+				),
+		);
+		expect(request).toHaveBeenCalledExactlyOnceWith({
+			_tag: "Dismiss",
+			sessionId: "s1",
+		});
 	});
 });
 
-describe("SCREEN-075/076/077/080/084 wheel", () => {
-	it("announces selection changes in a polite status outside the wheel image", async () => {
-		for (const index of [0, 1]) {
+describe("Scene Rail knob feedback", () => {
+	it.each([1, 2, 8])(
+		"shows unique destinations and announces the selected profile for %i entries",
+		async (count) => {
 			await render(
 				<FunctionWheel
-					entries={entries(2)}
-					index={index}
+					entries={entries(count)}
+					index={count - 1}
+					activeId="p0"
 					direction={1}
 					motion="reduce"
 				/>,
 			);
-			const status = host.querySelector('[role="status"]');
-			expect(status).not.toBeNull();
-			expect(status?.getAttribute("aria-live")).toBe("polite");
-			expect(status?.textContent).toBe(entries(2)[index]?.name);
-			expect(status?.closest('[role="img"]')).toBeNull();
-			expect(
-				host.querySelector('[role="img"]')?.getAttribute("aria-label"),
-			).toBe("Profile wheel");
-		}
-	});
-	it.each([1, 2, 8])(
-		"renders five clipped wrapped names for %i menu entries without management actions",
-		async (count) => {
-			vi.spyOn(Range.prototype, "getBoundingClientRect").mockReturnValue(
-				new DOMRect(0, 0, 1600, 48),
+			expect(host.querySelector('[role="status"]')?.textContent).toBe(
+				entries(count)[count - 1]?.name,
 			);
-			await render(
-				<div className="knob-overlay-root">
-					<FunctionWheel
-						entries={entries(count)}
-						index={count - 1}
-						direction={1}
-						motion="reduce"
-					/>
-				</div>,
+			expect(host.querySelectorAll(".scene-card")).toHaveLength(
+				Math.min(3, count),
 			);
-			const labels = host.querySelectorAll<HTMLElement>(".knob-wheel-label");
-			expect(labels).toHaveLength(5);
-			expect(labels[2]?.textContent).toBe(entries(count)[count - 1]?.name);
-			expect(labels[0]?.style.top).toBe("72px");
-			expect(labels[4]?.style.top).toBe("408px");
 			expect(
-				Number.parseFloat(
-					host.querySelector<HTMLElement>(".knob-wheel-backdrop")?.style
-						.width ?? "0",
-				),
-			).toBeGreaterThanOrEqual(440);
-			expect(host.querySelector("button")).toBeNull();
-			expect(host.querySelector("svg")).toBeNull();
-			expect(host.querySelector(".knob-wheel-direction")).toBeNull();
+				host.querySelector('[data-focused="true"] .scene-card-name')
+					?.textContent,
+			).toBe(entries(count)[count - 1]?.name);
+			expect(
+				host.querySelector("button, svg, .scene-knob-direction"),
+			).toBeNull();
+			expect(
+				host.querySelector(".scene-knob")?.getAttribute("data-motion"),
+			).toBe("reduce");
 		},
 	);
-	it("keeps interrupted wheel nudges smooth without flashing a top or bottom direction bar", async () => {
-		await render(
-			<FunctionWheel entries={entries(8)} index={0} direction={1} />,
-		);
-		await advance(100);
-		await render(
-			<FunctionWheel entries={entries(8)} index={1} direction={-1} />,
-		);
-		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
-		await advance(220);
-		expect(
-			host.querySelector<HTMLElement>(".knob-wheel-list")?.style.transform,
-		).toBe("translateY(0px)");
-		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
-		await advance(80);
-		expect(host.querySelector(".knob-wheel-direction")).toBeNull();
-		await render(
-			<FunctionWheel
-				entries={entries(8)}
-				index={2}
-				direction={1}
-				motion="reduce"
-			/>,
-		);
-		expect(
-			host.querySelector<HTMLElement>(".knob-wheel-list")?.style.transform,
-		).toBe("translateY(0px)");
+	it("doesn't flash a direction bar or spin an indicator during interrupted turns", async () => {
+		for (const index of [0, 1, 4, 2]) {
+			await render(
+				<FunctionWheel entries={entries(8)} index={index} direction={-1} />,
+			);
+			await advance(100);
+			expect(
+				host.querySelector(".scene-knob-direction, circle, .knob-dial"),
+			).toBeNull();
+			expect(
+				host.querySelector('[data-focused="true"] .scene-card-name')
+					?.textContent,
+			).toBe(entries(8)[index]?.name);
+		}
 	});
 });
 
@@ -383,7 +354,7 @@ it("SCREEN-090: coalescing renders only the latest revision and keeps page, card
 	expect(
 		host.querySelector('[data-focused="true"]')?.getAttribute("aria-label"),
 	).toBe("Profile 45");
-	expect(host.querySelector("footer")?.textContent).toContain("4 / 4");
+	expect(host.querySelector(".scene-count")?.textContent).toBe("46 / 46");
 	resolveRead({ _tag: "success", snapshot: snapshot(46) });
 	await advance(150);
 	expect(
@@ -576,7 +547,7 @@ it("SCREEN-081/084: clock, monitor and chat content survives wheel entry/exit wi
 			expect(host.querySelector(selector)?.textContent?.length).toBeGreaterThan(
 				0,
 			);
-			expect(host.querySelectorAll(".knob-wheel")).toHaveLength(open ? 1 : 0);
+			expect(host.querySelectorAll(".scene-knob")).toHaveLength(open ? 1 : 0);
 			if (open && type === "systemMonitorPanel") {
 				const card = host.querySelector(".monitor-card");
 				if (!card) throw new Error("Missing monitor card");
@@ -614,7 +585,9 @@ it("SCREEN-079: pending profile disables only stale grid input and its published
 	expect(host.querySelector(".strip-screen")?.hasAttribute("inert")).toBe(
 		false,
 	);
-	expect(host.querySelector(".knob-page-next")?.closest("[inert]")).toBeNull();
+	expect(
+		host.querySelector(".scene-pages button")?.closest("[inert]"),
+	).toBeNull();
 	expect(onLayout).toHaveBeenLastCalledWith(undefined);
 });
 
@@ -687,29 +660,22 @@ it("SCREEN-100/106: StripPanel paints committed add/edit/delete snapshots withou
 			}),
 		);
 		expect(title()).toBe(expected);
-		expect(host.querySelector(".knob-wheel, .knob-picker")).toBeNull();
+		expect(host.querySelector(".scene-knob, .knob-picker")).toBeNull();
 	}
 });
 
-it("SCREEN-094: touches at rendered arrow edges and hidden arrows use the same bounds", async () => {
-	for (const [page, delta] of [
-		[0, 1],
-		[1, -1],
+it("SCREEN-094: physical page controls retain their boundaries and disable the unavailable direction", async () => {
+	for (const [page, delta, x] of [
+		[0, 1, 142],
+		[1, -1, 36],
 	] as const) {
 		await render(picker(16, page * 15));
-		const arrow = host.querySelector<HTMLElement>(
-			`.knob-page-${delta === 1 ? "next" : "previous"}`,
-		);
-		if (!arrow) throw new Error("Missing arrow");
-		const x = Number.parseFloat(arrow.style.left),
-			y = Number.parseFloat(arrow.style.top);
-		const points = [
-			[x + 0.1, y + 0.1, true],
-			[x + 159.9, y + 219.9, true],
-			[delta === 1 ? x - 0.1 : x + 160.1, y + 110, false],
-			[delta === 1 ? 0.1 : 1919.9, y + 110, false],
-		] as const;
-		for (const [px, py, visible] of points) {
+		for (const [px, py, visible] of [
+			[x + 0.1, 288.1, true],
+			[x + 89.9, 335.9, true],
+			[x - 0.1, 310, false],
+			[x + 90.1, 310, false],
+		] as const) {
 			request.mockClear();
 			for (const action of [1, 0])
 				await act(async () => {

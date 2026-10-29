@@ -602,7 +602,6 @@ export function GridEditor({
 										height: `${rect.height / 4.8}%`,
 									}}
 									data-drop-code={code}
-									data-selected={key?.keyCode === anchor || undefined}
 									data-drop={
 										dropCode === code
 											? dropAllowed
@@ -623,6 +622,21 @@ export function GridEditor({
 								/>
 							);
 						})}
+						{layout.tiles
+							.filter((tile) => tile.keyCode === key?.keyCode)
+							.map((tile) => (
+								<div
+									key={tile.keyCode}
+									className="keys-selected-footprint"
+									data-selected="true"
+									style={{
+										left: `${tile.slot.x / 19.2}%`,
+										top: `${tile.slot.y / 4.8}%`,
+										width: `${tile.slot.width / 19.2}%`,
+										height: `${tile.slot.height / 4.8}%`,
+									}}
+								/>
+							))}
 					</div>
 				)}
 			</fieldset>

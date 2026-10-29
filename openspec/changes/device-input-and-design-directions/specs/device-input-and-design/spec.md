@@ -27,3 +27,15 @@ Automated tests SHALL exercise the mounted device input and feedback paths befor
 #### Scenario: Diagnose routed input safely
 - **WHEN** a tested device input is accepted, suppressed or mapped
 - **THEN** bounded routing diagnostics can explain the outcome without serials, raw frames, credentials or user text
+
+
+### Requirement: Selected hybrid production design
+The device home and Management Studio SHALL use the selected Instrument Console direction. The profile selector and knob overlay SHALL use the selected Scene Rail direction. Real saved profiles, action execution, localized labels and editor persistence SHALL remain usable.
+
+#### Scenario: Browse scenes without changing the active profile
+- **WHEN** the user rotates through available profiles
+- **THEN** previous, selected and next destinations are readable, the active profile stays explicitly marked, and existing confirmation behavior controls activation
+
+#### Scenario: Edit an actual key
+- **WHEN** a user chooses a key in the Studio mirror or key table
+- **THEN** the inspector edits that real key and saves through the existing profile contract

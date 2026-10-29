@@ -3299,3 +3299,46 @@ it("changing Function removes an unmounted JSON validation blocker", async () =>
 	await settle(() => expect(f.writes()).toBe(1));
 	expect(f.stored().profiles[0].pages[0].keys[0]?.config.type).toBe("nextPage");
 });
+
+it("Console table selects the same real key, tracks edits, and saves through KeyEditing", async () => {
+	const f = await fixture();
+	await f.select();
+	// Toggle through the table after selecting the same key in the mirror.
+	const row = query(f.host, ".keys-table tbody button", HTMLButtonElement);
+	await click(row);
+	expect(f.host.querySelector("#key-title")).toBeNull();
+	await click(row);
+	await settle(() => expect(f.host.querySelector("#key-title")).not.toBeNull());
+	await input(query(f.host, "#key-title", HTMLInputElement), "Console action");
+	await settle(() =>
+		expect(
+			f.host.querySelector('.keys-table td[data-edited="true"]')?.textContent,
+		).toBe("Edited"),
+	);
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
+			"Console action",
+		),
+	);
+	expect(f.host.querySelector('.keys-table td[data-edited="true"]')).toBeNull();
+});
+
+it("creates and selects the Console preset without replacing an existing profile", async () => {
+	const f = await fixture();
+	const before = f.stored().profiles[0];
+	await click(button(f.host, "Create console profile"));
+	await settle(() =>
+		expect(f.stored().activeByDevice["desktop-preview"]?.profileId).toBe(
+			"imported",
+		),
+	);
+	expect(f.stored().profiles[0]).toEqual(before);
+	expect(
+		f.stored().profiles.find((profile) => profile.id === "imported")?.pages[0]
+			.keys,
+	).toHaveLength(7);
+	expect(
+		f.host.querySelectorAll('.keys-preview .strip-slot[data-state="tile"]'),
+	).toHaveLength(7);
+});

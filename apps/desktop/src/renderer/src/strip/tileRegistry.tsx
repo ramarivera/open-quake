@@ -6,6 +6,7 @@ import {
 	normalizeClockStyle,
 } from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
+import type { KeyRuntimeState } from "../../../shared/key-library";
 import { GameModeTile } from "../hardware/GameModeTile";
 import type { PanelKeyTarget } from "../keys/panel-key-dispatch";
 import { EmojiTile } from "../management/emoji/EmojiTile";
@@ -22,6 +23,7 @@ import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
 import type { StripVoiceContext } from "./overlays/voice/voice-context";
 import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
+import { ConsoleVolumeTile } from "./tiles/ConsoleVolumeTile";
 import { ClawBotTile } from "./tiles/clawBot/ClawBotTile";
 import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { ClockTile } from "./tiles/clock/ClockTile";
@@ -53,6 +55,7 @@ import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
+	readonly runtimeState?: KeyRuntimeState | undefined;
 	readonly currentPage?: number | undefined;
 	readonly hardware?:
 		| import("../../../shared/hardware-contracts").HardwareSnapshot
@@ -267,6 +270,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
+		["vol", ConsoleVolumeTile],
 		[
 			"pageNo",
 			({ context, tile }) => (

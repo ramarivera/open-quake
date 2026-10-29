@@ -100,13 +100,18 @@ export function ClockTile({
 		<div
 			className="oq-clock"
 			data-theme={active ?? "none"}
+			data-compact={widthPx < 960}
 			data-motion={reduced ? "reduce" : "full"}
 			style={{ ...palette, width: widthPx, height: heightPx }}
 		>
 			<div
 				className="oq-clock-stage"
 				style={{
-					transform: `scale(${widthPx / CLOCK_STAGE.width}, ${heightPx / CLOCK_STAGE.height})`,
+					...(widthPx < 960
+						? {}
+						: {
+								transform: `scale(${widthPx / CLOCK_STAGE.width}, ${heightPx / CLOCK_STAGE.height})`,
+							}),
 				}}
 			>
 				<ClockBackground

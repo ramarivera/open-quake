@@ -106,23 +106,16 @@ describe("KNOB-016: rendered focus indicator", () => {
 		[460, 220, 90],
 		[1920, 480, -45],
 	])(
-		"fits %d × %d and rotates by %d degrees without a tick crown",
+		"fits %d × %d and ignores detent angle %d without covering tile content",
 		(width, height, angle) => {
 			const markup = renderToStaticMarkup(
 				createElement(KnobDial, { width, height, angle, accent: "#5fcab5" }),
 			);
 			expect(markup).toContain(`viewBox="0 0 ${width} ${height}"`);
 			expect(markup).toContain(
-				`<rect x="2" y="2" width="${width - 4}" height="${height - 4}" rx="26" fill="none" stroke="#5fcab5" stroke-width="2"`,
+				`<rect x="2" y="2" width="${width - 4}" height="${height - 4}" rx="4" fill="none" stroke="#5fcab5" stroke-width="2"`,
 			);
-			expect(markup).toContain(
-				`r="${Math.floor(Math.min(width, height) * 0.24)}"`,
-			);
-			expect(markup).toContain(
-				`transform="rotate(${angle} ${width / 2} ${height / 2})"`,
-			);
-			expect(markup.match(/<circle/g)).toHaveLength(1);
-			expect(markup.match(/<line /g)).toHaveLength(1);
+			expect(markup).not.toMatch(/<circle|<line|rotate\(/);
 			expect(markup).not.toMatch(/<path|<image|<filter|<text/);
 		},
 	);

@@ -5,18 +5,18 @@
  * properties for every strip stylesheet.
  */
 export const STRIP_PALETTE = {
-	canvas: "#000000",
+	canvas: "#0b0c0d",
 	scrim: "rgba(11, 12, 13, 0.92)",
-	surface: "#15171a",
-	raised: "#1e2124",
+	surface: "#121416",
+	raised: "#202326",
 	hairline: "#26292d",
 	line: "#3a3e43",
 	text: "#f2f1ee",
 	muted: "#a3a29d",
 	subtle: "#74746f",
-	accent: "#5fcab5",
-	accentInk: "#062520",
-	accentSoft: "rgba(95, 202, 181, 0.16)",
+	accent: "#f2a93b",
+	accentInk: "#271b09",
+	accentSoft: "rgba(242, 169, 59, 0.16)",
 	success: "#62c98a",
 	warning: "#e7b153",
 	warningSoft: "rgba(231, 177, 83, 0.14)",
@@ -36,6 +36,5 @@ export const stripPaletteProperties = (): Record<string, string> =>
 		]),
 	);
 
-/** Theme corner radii (48 / 24 / 0 on 220-ish cells) drawn at the device radius. */
-export const deviceRadius = (radius: number): number =>
-	Math.round((radius * 7) / 12);
+/** Console banks use small corners; explicit square themes stay square. */
+export const deviceRadius = (radius: number): number => (radius > 0 ? 4 : 0);

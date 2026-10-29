@@ -17,14 +17,15 @@ export interface Footprint {
 /**
  * DK-Suite 0.4.95 lays these types out at a fixed span and ignores
  * `config.size` (QuakeShortCutView getAreaSize/getCellStyle, Utils
- * getActualDisplaySize, monitorStyleContract). One table replaces DK's four
+ * getActualDisplaySize, monitorStyleContract). Clock and Agent input honor
+ * saved sizes for the Console layout. Shipped profiles retain their dimensions.
+ * One table replaces DK's four
  * disagreeing copies (MGMT-065). A Map keeps `__proto__` and friends inert.
  */
 export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
 	["obsStats", [2, 1]],
 	["obsScreenshot", [2, 2]],
 	["playAudio", [8, 2]],
-	["dkDesktopClock", [8, 2]],
 	["systemMonitorPanel", [8, 2]],
 	["aiChatView", [5, 2]],
 	["gameMode", [4, 2]],
@@ -32,7 +33,6 @@ export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
 	["cameraView", [3, 2]],
 	["cameraControlView", [3, 2]],
 	["printerStatusView", [2, 2]],
-	["quakeBotInput", [2, 2]],
 ]);
 
 export const effectiveSpan = (type: string, size: TileSpan): TileSpan =>
