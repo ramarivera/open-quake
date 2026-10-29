@@ -126,6 +126,12 @@ export function prepareMeetings(
 	quitOwner = false,
 ) {
 	const root = join(options.userData, "meetings-v1");
+	const managementWindow = (): BrowserWindow | undefined => {
+		const id = options.management?.()?.webContents.id;
+		return BrowserWindow.getAllWindows().find(
+			(win) => !win.isDestroyed() && win.webContents.id === id,
+		);
+	};
 	const renderer =
 		options.renderer ??
 		process.env.ELECTRON_RENDERER_URL ??
@@ -170,6 +176,7 @@ export function prepareMeetings(
 					root,
 					renderer,
 					hardware: options.hardware,
+					managementId: () => options.management?.()?.webContents.id,
 					microphone: options.microphone,
 					mock: options.mock,
 					ffmpeg: options.ffmpeg ?? process.env.OPEN_QUAKE_FFMPEG ?? "ffmpeg",
@@ -448,7 +455,9 @@ export function prepareMeetings(
 							if (!artifact.text) return yield* meetingError("Invalid");
 							yield* Effect.tryPromise({
 								try: async () => {
-									const result = await dialog.showSaveDialog({
+									const owner = managementWindow();
+									if (!owner) throw meetingError("ExportFailed");
+									const result = await dialog.showSaveDialog(owner, {
 										defaultPath: artifact.name,
 										filters: [
 											{
@@ -477,10 +486,12 @@ export function prepareMeetings(
 				platform: process.platform,
 				mock: options.mock,
 				confirm: async () => {
+					const owner = managementWindow();
+					if (!owner) return false;
 					const text = audioSetupText(options.locale?.() ?? "en");
 					return (
 						(
-							await dialog.showMessageBox({
+							await dialog.showMessageBox(owner, {
 								type: "warning",
 								message: text.nativeConfirm,
 								detail: `${text.warning}\n\n${text.retention}`,
@@ -492,8 +503,10 @@ export function prepareMeetings(
 					);
 				},
 				select: async () => {
+					const owner = managementWindow();
+					if (!owner) return undefined;
 					const text = audioSetupText(options.locale?.() ?? "en");
-					const result = await dialog.showOpenDialog({
+					const result = await dialog.showOpenDialog(owner, {
 						title: text.nativeTitle,
 						buttonLabel: text.nativeChoose,
 						properties: ["openFile"],

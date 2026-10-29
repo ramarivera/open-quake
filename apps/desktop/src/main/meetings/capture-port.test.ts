@@ -27,12 +27,14 @@ const native = vi.hoisted(() => {
 	const ipc = new Events();
 	const app = new Events();
 	class Window extends Events {
+		static nextId = 0;
 		static windows: Window[] = [];
 		static getAllWindows = () => Window.windows.filter((win) => !win.destroyed);
 		destroyed = false;
 		url = "";
 		frame = { url: "" };
 		webContents = Object.assign(new Events(), {
+			id: ++Window.nextId,
 			getURL: () => this.url,
 			mainFrame: this.frame,
 			setWindowOpenHandler: vi.fn(),
@@ -87,10 +89,12 @@ const native = vi.hoisted(() => {
 		ipc,
 		Window,
 		reply,
-		prompt: vi.fn(async () => ({
-			response: reply.choice,
-			checkboxChecked: false,
-		})),
+		prompt: vi.fn(
+			async (_owner?: unknown, _options?: { signal?: AbortSignal }) => ({
+				response: reply.choice,
+				checkboxChecked: false,
+			}),
+		),
 		converterReady: vi.fn(),
 	};
 });
@@ -117,13 +121,14 @@ import { meetingError } from "../../../../../packages/edge/src/meetings/meeting-
 import { createCapturePort } from "./capture-port";
 
 const ports: ReturnType<typeof createCapturePort>[] = [];
-const setup = () => {
+const setup = (managementId?: () => number | undefined) => {
 	const onLost = vi.fn();
 	const onNoWindows = vi.fn();
 	const capture = createCapturePort({
 		root: "unused",
 		renderer: "file:///app/index.html",
 		ffmpeg: "unused",
+		managementId,
 		hardware: () => undefined,
 		mock: false,
 		onLost,
@@ -248,7 +253,8 @@ for (const choice of [0, 1]) {
 		native.reply.failSystem = true;
 		native.reply.choice = choice;
 		try {
-			const { capture } = setup();
+			const management = new native.Window();
+			const { capture } = setup(() => management.webContents.id);
 			const id = MeetingId.make(crypto.randomUUID());
 			const result = await Effect.runPromise(
 				capture.port
@@ -256,6 +262,7 @@ for (const choice of [0, 1]) {
 					.pipe(Effect.either),
 			);
 			expect(native.prompt).toHaveBeenLastCalledWith(
+				management,
 				expect.objectContaining({
 					buttons: ["Microphone only", "Cancel"],
 					defaultId: 1,
@@ -279,3 +286,76 @@ for (const choice of [0, 1]) {
 		}
 	});
 }
+
+it("cancels system-audio fallback without an unparented modal when management has closed", async () => {
+	native.reply.failSystem = true;
+	try {
+		const { capture } = setup();
+		const calls = native.prompt.mock.calls.length;
+		const result = await Effect.runPromise(
+			capture.port
+				.start(
+					MeetingId.make(crypto.randomUUID()),
+					{ ...defaultMeetingConfig, systemAudio: true },
+					undefined,
+				)
+				.pipe(Effect.either),
+		);
+		expect(result).toMatchObject({
+			_tag: "Left",
+			left: { code: "QUAKE.MEETING.CAPTURE_FAILED" },
+		});
+		expect(native.prompt.mock.calls).toHaveLength(calls);
+		expect(native.Window.getAllWindows()).toHaveLength(0);
+	} finally {
+		native.reply.failSystem = false;
+	}
+});
+
+it("aborts a stalled parented fallback after its timeout and releases the capture host", async () => {
+	vi.useFakeTimers();
+	native.reply.failSystem = true;
+	let ready = () => {};
+	const opened = new Promise<void>((resolve) => {
+		ready = resolve;
+	});
+	let aborted = false;
+	native.prompt.mockImplementationOnce(
+		async (_owner, options) =>
+			new Promise((resolve) => {
+				options?.signal?.addEventListener(
+					"abort",
+					() => {
+						aborted = true;
+						resolve({ response: 1, checkboxChecked: false });
+					},
+					{ once: true },
+				);
+				ready();
+			}),
+	);
+	try {
+		const management = new native.Window();
+		const { capture } = setup(() => management.webContents.id);
+		const result = Effect.runPromise(
+			capture.port
+				.start(
+					MeetingId.make(crypto.randomUUID()),
+					{ ...defaultMeetingConfig, systemAudio: true },
+					undefined,
+				)
+				.pipe(Effect.either),
+		);
+		await opened;
+		await vi.advanceTimersByTimeAsync(60_001);
+		expect(await result).toMatchObject({
+			_tag: "Left",
+			left: { code: "QUAKE.MEETING.TIMEOUT" },
+		});
+		expect(aborted).toBe(true);
+		expect(native.Window.getAllWindows()).toEqual([management]);
+	} finally {
+		native.reply.failSystem = false;
+		vi.useRealTimers();
+	}
+});

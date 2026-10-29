@@ -187,7 +187,13 @@ describe("Scene Rail profile selection", () => {
 			expect(
 				host.querySelector('[data-focused="true"] .scene-card-action')
 					?.textContent,
-			).toContain(copy.switchTo);
+			).toContain(copy.apply);
+			await render(picker(4, 0, locale));
+			expect(
+				host.querySelector('[data-focused="true"] .scene-card-action')
+					?.textContent,
+			).toContain(copy.apply);
+
 			expect(
 				host
 					.querySelector('[role="progressbar"]')

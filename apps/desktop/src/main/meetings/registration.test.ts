@@ -36,6 +36,7 @@ const ipc = vi.hoisted(() => ({
 		filePaths: [] as string[],
 	})),
 	app: { on: vi.fn(), removeListener: vi.fn(), quit: vi.fn() },
+	windows: [] as { isDestroyed: () => boolean; webContents: { id: number } }[],
 }));
 const capture = vi.hoisted(() => ({
 	id: "",
@@ -71,7 +72,10 @@ vi.mock("../diagnostics/runtime", async (importOriginal) => {
 vi.mock("electron", () => ({
 	app: ipc.app,
 	ipcMain: ipc,
-	BrowserWindow: { getAllWindows: () => [], fromWebContents: () => ({}) },
+	BrowserWindow: {
+		getAllWindows: () => ipc.windows,
+		fromWebContents: () => ({}),
+	},
 	dialog: { showMessageBox: ipc.confirmSetup, showOpenDialog: ipc.selectSetup },
 	shell: { showItemInFolder: ipc.reveal },
 }));
@@ -812,6 +816,8 @@ it("AI-283 authenticates the setup handler and keeps mock install requests away 
 });
 
 it("AI-283 native confirmation and package selection read the current saved EN/DE locale", async () => {
+	const management = { isDestroyed: () => false, webContents: { id: 42 } };
+	ipc.windows = [management];
 	const platform = Object.getOwnPropertyDescriptor(process, "platform");
 	Object.defineProperty(process, "platform", { value: "darwin" });
 	const root = await mkdtemp(join(tmpdir(), "audio-setup-native-locale-"));
@@ -840,6 +846,7 @@ it("AI-283 native confirmation and package selection read the current saved EN/D
 				state: "cancelled",
 			});
 			expect(ipc.confirmSetup).toHaveBeenLastCalledWith(
+				management,
 				expect.objectContaining({
 					message: text.nativeConfirm,
 					detail: `${text.warning}\n\n${text.retention}`,
@@ -849,6 +856,7 @@ it("AI-283 native confirmation and package selection read the current saved EN/D
 				}),
 			);
 			expect(ipc.selectSetup).toHaveBeenLastCalledWith(
+				management,
 				expect.objectContaining({
 					title: text.nativeTitle,
 					buttonLabel: text.nativeChoose,
@@ -857,6 +865,7 @@ it("AI-283 native confirmation and package selection read the current saved EN/D
 			);
 		}
 	} finally {
+		ipc.windows = [];
 		await owner.dispose();
 		if (platform) Object.defineProperty(process, "platform", platform);
 		await rm(root, { recursive: true, force: true });
