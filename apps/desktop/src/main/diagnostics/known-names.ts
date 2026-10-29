@@ -194,6 +194,10 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 
 export const knownLogEvents = new Set([
 	"panel.input",
+	"panel.renderer.retry",
+	"panel.renderer.exhausted",
+	"panel.overview.dismissed",
+	"panel.overview.failed",
 	"hardware.acceptance.failed",
 	"hardware.request.failed",
 	"hardware.lock.failed",

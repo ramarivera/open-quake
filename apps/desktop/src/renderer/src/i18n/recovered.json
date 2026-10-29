@@ -27,7 +27,8 @@
 			"muted": "已静音",
 			"unavailable": "不可用",
 			"volumeKnob": "点击选中 · 转动旋钮调节",
-			"jumpTo": "跳转到"
+			"jumpTo": "跳转到",
+			"brightnessKnob": "轻触后旋转旋钮"
 		},
 		"translationLanguages": {
 			"en": "英语",
@@ -145,7 +146,8 @@
 			"muted": "Muted",
 			"unavailable": "Unavailable",
 			"volumeKnob": "Tap to focus · turn knob to adjust",
-			"jumpTo": "Jump to"
+			"jumpTo": "Jump to",
+			"brightnessKnob": "Tap, then turn knob"
 		},
 		"translationLanguages": {
 			"en": "English",
@@ -244,7 +246,8 @@
 			"muted": "Silenciado",
 			"unavailable": "No disponible",
 			"volumeKnob": "Toca para enfocar · gira para ajustar",
-			"jumpTo": "Saltar a"
+			"jumpTo": "Saltar a",
+			"brightnessKnob": "Toca y gira la perilla"
 		},
 		"translationLanguages": {
 			"en": "Inglés",
@@ -362,7 +365,8 @@
 			"muted": "Muet",
 			"unavailable": "Indisponible",
 			"volumeKnob": "Touchez pour sélectionner · tournez pour régler",
-			"jumpTo": "Aller à"
+			"jumpTo": "Aller à",
+			"brightnessKnob": "Touchez, puis tournez"
 		},
 		"translationLanguages": {
 			"en": "Anglais",
@@ -480,7 +484,8 @@
 			"muted": "음소거",
 			"unavailable": "사용 불가",
 			"volumeKnob": "탭하여 선택 · 노브를 돌려 조절",
-			"jumpTo": "이동"
+			"jumpTo": "이동",
+			"brightnessKnob": "누른 후 노브 회전"
 		},
 		"translationLanguages": {
 			"en": "영어",
@@ -598,7 +603,8 @@
 			"muted": "Stumm",
 			"unavailable": "Nicht verfügbar",
 			"volumeKnob": "Zum Fokussieren tippen · Drehknopf zum Regeln",
-			"jumpTo": "Springen zu"
+			"jumpTo": "Springen zu",
+			"brightnessKnob": "Tippen, dann drehen"
 		},
 		"translationLanguages": {
 			"en": "Englisch",
@@ -697,7 +703,8 @@
 			"muted": "Muto",
 			"unavailable": "Non disponibile",
 			"volumeKnob": "Tocca per selezionare · ruota per regolare",
-			"jumpTo": "Vai a"
+			"jumpTo": "Vai a",
+			"brightnessKnob": "Tocca, poi ruota"
 		},
 		"translationLanguages": {
 			"en": "Inglese",
@@ -815,7 +822,8 @@
 			"muted": "ミュート",
 			"unavailable": "利用不可",
 			"volumeKnob": "タップで選択 · ノブを回して調整",
-			"jumpTo": "移動先"
+			"jumpTo": "移動先",
+			"brightnessKnob": "タップしてノブを回す"
 		},
 		"translationLanguages": {
 			"en": "英語",

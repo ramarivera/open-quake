@@ -169,8 +169,8 @@ describe("strip screen", () => {
 		expect(markupForTitle(shortcut, "Mission Control")).toContain(
 			'data-full-title="Mission Control"',
 		);
-		expect(markupForTitle(shortcut, "Lock Screen")).toContain(
-			'data-full-title="Lock Screen"',
+		expect(markupForTitle(shortcut, "Lock screen")).toContain(
+			'data-full-title="Lock screen"',
 		);
 		expect(markupForTitle(chat, "Content Writer")).toContain(
 			'data-full-title="Content Writer"',
@@ -669,4 +669,67 @@ it("renders persisted Chinese and Japanese Agent defaults in the English strip a
 			);
 		}
 	}
+});
+
+it("names brightness, explains knob operation and doesn't display stale disconnected values", () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!profile) throw Error("Quick missing");
+	const tile = stripLayout(profile, profile.pages[0]).tiles.find(
+		(t) => t.type === "luminance",
+	);
+	if (!tile) throw Error("Brightness missing");
+	const context = {
+		now: undefined,
+		hourFormat: "24h" as const,
+		voice: previewVoiceContext,
+	};
+	const hardware = {
+		serial: "fixture",
+		available: true,
+		preferenceStatus: "saved" as const,
+		session: "fixture",
+		preferences: {
+			knobLedAlwaysOn: true,
+			buzzerEnabled: true,
+			alertVolume: 84,
+		},
+		inputMode: "device" as const,
+		luminance: 128,
+	};
+	const live = renderToStaticMarkup(
+		createElement(GenericTile, { tile, context: { ...context, hardware } }),
+	);
+	expect(live).toContain("Screen brightness");
+	expect(live).toContain("50%");
+	expect(live).toContain("Tap, then turn knob");
+	const disconnected = renderToStaticMarkup(
+		createElement(GenericTile, {
+			tile,
+			context: { ...context, hardware: { ...hardware, available: false } },
+		}),
+	);
+	expect(disconnected).not.toContain("50%");
+	const customTile = {
+		...tile,
+		key: {
+			...tile.key,
+			config: {
+				...tile.key.config,
+				title: {
+					...tile.key.config.title,
+					text: "My light",
+					userModifiedStyle: true,
+					pos: "mid",
+				},
+			},
+		},
+	};
+	const custom = renderToStaticMarkup(
+		createElement(GenericTile, {
+			tile: customTile,
+			context: { ...context, hardware },
+		}),
+	);
+	expect(custom).toContain('data-full-title="My light"');
+	expect(custom).not.toContain("quick-brightness-state");
 });

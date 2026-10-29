@@ -52,3 +52,17 @@ Ambient SHALL retain existing media import, playlist and playback behavior. Addi
 #### Scenario: Existing background playlist
 - **WHEN** a saved Vivid background profile loads after the rename
 - **THEN** its default display name is Ambient and its media and actions remain unchanged
+
+### Requirement: Quick actions follow the current host
+Untouched built-in shortcut actions SHALL use the current host's platform defaults. Explicitly customized commands, labels, artwork and geometry SHALL remain unchanged. Quick labels SHALL use correct spelling and sentence case except proper product names.
+
+#### Scenario: A default Mac shortcut profile opens on Windows or Linux
+- **WHEN** a saved default shortcut still matches its recovered platform template
+- **THEN** its action and default label use the current host's counterpart without executing a macOS command on another host
+
+### Requirement: Device controls remain understandable and recoverable
+Device brightness SHALL retain its label and explain its knob interaction. A macOS overview opened from the device SHALL be dismissible from the device without executing an unrelated tile. A crashed renderer SHALL reload its existing panel document with bounded retries, without acquiring another hardware owner or changing saved profiles.
+
+#### Scenario: Device panel renderer crashes
+- **WHEN** Electron reports an unexpected renderer exit
+- **THEN** the same panel reloads and its controls become usable again, while intentional destruction does not restart it

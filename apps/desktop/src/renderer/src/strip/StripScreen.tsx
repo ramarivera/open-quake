@@ -240,15 +240,7 @@ function StripGrid({
 						/>
 						<KeyState
 							state={
-								tile.type === "luminance" &&
-								hardwareKeyState(tile.type, hardware)?.progress !== undefined &&
-								clockSelection
-									? {
-											...clockSelection,
-											keyCode: tile.keyCode,
-											progress: hardwareKeyState(tile.type, hardware)?.progress,
-										}
-									: runtime(tile.keyCode)
+								tile.type === "luminance" ? undefined : runtime(tile.keyCode)
 							}
 						/>
 						{tileOverlay?.(tile)}

@@ -2101,3 +2101,27 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"consumes an overview cancellation without activating the underlying key",
+	() => {
+		let dismiss = true;
+		const f = fixture({ type: "nextPage" }, false, 0, {
+			interceptDown: () =>
+				Effect.sync(() => {
+					const consumed = dismiss;
+					dismiss = false;
+					return consumed;
+				}),
+		});
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("one");
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("two");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

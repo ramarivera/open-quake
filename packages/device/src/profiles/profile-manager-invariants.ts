@@ -1,4 +1,5 @@
 import { Array as EffectArray, Option, Schema } from "effect";
+import { adaptHostShortcuts } from "./host-shortcuts.js";
 import {
 	builtinProfiles,
 	isBuiltinProfile,
@@ -79,7 +80,19 @@ export const installProfileCatalog = (
 	platform: ProfilePlatform,
 ): ProfileEnvelope => {
 	const state = managerState(envelope);
-	if (state.installed) return envelope;
+	if (state.installed) {
+		const profiles = envelope.profiles.map((profile) =>
+			adaptHostShortcuts(profile, platform),
+		);
+		if (
+			profiles.every((profile, index) => profile === envelope.profiles[index])
+		)
+			return envelope;
+		return {
+			...envelope,
+			profiles: [profiles[0] ?? envelope.profiles[0], ...profiles.slice(1)],
+		};
+	}
 	const profiles = [
 		...builtinProfiles(platform),
 		...envelope.profiles.filter((p) => !isBuiltinProfile(p.id)),

@@ -8,7 +8,12 @@ export interface PanelTarget {
 }
 const owners = new WeakMap<BrowserWindow, ReturnType<typeof manage>>();
 
-function manage(win: BrowserWindow, initial: PanelTarget, platform: string) {
+function manage(
+	win: BrowserWindow,
+	initial: PanelTarget,
+	platform: string,
+	report?: (state: "retry" | "exhausted", cause?: unknown) => void,
+) {
 	let target = initial;
 	let ready = !initial.isPanel;
 	let requested = false;
@@ -16,6 +21,7 @@ function manage(win: BrowserWindow, initial: PanelTarget, platform: string) {
 	let shield: BrowserWindow | undefined;
 	let hiddenBounds: Rectangle | undefined;
 	let closedBounds: Rectangle | undefined;
+	let recoveries: number[] = [];
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	const later = (ms: number, action: () => void) => {
 		const timer = setTimeout(() => {
@@ -67,7 +73,6 @@ function manage(win: BrowserWindow, initial: PanelTarget, platform: string) {
 	};
 	const show = () => {
 		if (disposed || win.isDestroyed()) return;
-		const wasRequested = requested;
 		requested = true;
 		if (!ready && !shield && target.isPanel && platform === "darwin") {
 			shield = new BrowserWindow({
@@ -93,7 +98,7 @@ function manage(win: BrowserWindow, initial: PanelTarget, platform: string) {
 			shield.setAlwaysOnTop(true, "screen-saver", 0);
 			shield.showInactive();
 		}
-		if (!wasRequested || !ready) reveal();
+		reveal();
 	};
 	const park = () => {
 		requested = false;
@@ -126,6 +131,20 @@ function manage(win: BrowserWindow, initial: PanelTarget, platform: string) {
 			}
 		}),
 	);
+	win.webContents.on("render-process-gone", (_event, details) => {
+		if (disposed || win.isDestroyed() || details.reason === "clean-exit")
+			return;
+		const now = Date.now();
+		recoveries = recoveries.filter((time) => now - time < 60_000);
+		if (recoveries.length >= 3) {
+			report?.("exhausted");
+			return;
+		}
+		report?.("retry");
+		recoveries.push(now);
+		ready = !target.isPanel;
+		later(250, () => win.webContents.reload());
+	});
 	win.webContents.on("did-start-loading", () => {
 		ready = !target.isPanel;
 	});
@@ -151,6 +170,7 @@ export function createPanelWindow(
 	target: PanelTarget,
 	development: boolean,
 	platform: string = process.platform,
+	report?: (state: "retry" | "exhausted", cause?: unknown) => void,
 ): BrowserWindow {
 	const win = new BrowserWindow({
 		...panelBounds(target.display, target.isPanel),
@@ -185,7 +205,7 @@ export function createPanelWindow(
 			win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
 		win.setOpacity(0);
 	}
-	owners.set(win, manage(win, target, platform));
+	owners.set(win, manage(win, target, platform, report));
 	return win;
 }
 export const placePanel = (win: BrowserWindow, target: PanelTarget): void =>

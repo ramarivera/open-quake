@@ -77,6 +77,8 @@ const isActionError = Schema.is(
 );
 export interface DesktopKeyRuntimeActions {
 	readonly keyboard?: KeyboardActionAdapter;
+	readonly dismissSystemOverview?: (deviceId: string) => Promise<boolean>;
+	readonly systemOverview?: (deviceId: string) => void;
 	readonly application?: NativeApplicationPort;
 	readonly screenshots?: ScreenshotPort;
 	readonly lock?: () => Promise<void>;
@@ -142,6 +144,21 @@ export const desktopKeyRuntimePort = (
 					}),
 				};
 			const keyboard = keyboardFor();
+			const overviewOpened = (chord: string, deviceId?: string) =>
+				Effect.sync(() => {
+					if (
+						platform() === "darwin" &&
+						deviceId &&
+						[
+							"control+up",
+							"control+down",
+							"command+alt+escape",
+							"command+space",
+							"command+shift+4",
+						].includes(chord)
+					)
+						runtimeActions.systemOverview?.(deviceId);
+				});
 			if (!mock && mediaActions?.observe) {
 				const changes = yield* Queue.sliding<{
 					readonly level: number;
@@ -314,6 +331,15 @@ export const desktopKeyRuntimePort = (
 				}),
 			};
 			return {
+				interceptDown: (deviceId) =>
+					runtimeActions.dismissSystemOverview
+						? Effect.tryPromise({
+								try: () =>
+									runtimeActions.dismissSystemOverview?.(deviceId) ??
+									Promise.resolve(false),
+								catch: (cause) => new HostActionFailed(cause),
+							})
+						: Effect.succeed(false),
 				validateSequenceAudio: (config) =>
 					validateSequenceAudio(config).pipe(
 						Effect.mapError(
@@ -446,6 +472,16 @@ export const desktopKeyRuntimePort = (
 							...adapters,
 							keyboard: Option.some(keyboardFor(deviceId)),
 						});
+						if (config.type === "hotkey")
+							yield* overviewOpened(config.actions[0].value, deviceId);
+						if (
+							config.type === "cmd" &&
+							platform() === "darwin" &&
+							deviceId &&
+							config.actions[0].value ===
+								"if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi"
+						)
+							runtimeActions.systemOverview?.(deviceId);
 					}),
 				executePlugin: runtimeActions.plugin ?? unavailablePluginAction,
 				...(runtimeActions.timerCompleted
@@ -487,12 +523,15 @@ export const desktopKeyRuntimePort = (
 							.snapshot()
 							.pipe(Effect.mapError((cause) => new HostActionFailed(cause)));
 						if (snapshot.inputMode === "host")
-							return yield* hostKeyboardAdapter().holdChord(chord);
+							return (yield* hostKeyboardAdapter().holdChord(chord)).pipe(
+								Effect.tap(() => overviewOpened(chord, activation.deviceId)),
+							);
 						const release = yield* session
 							.holdChord(chord)
 							.pipe(Effect.mapError((cause) => new HostActionFailed(cause)));
 						return release.pipe(
 							Effect.mapError((cause) => new HostActionFailed(cause)),
+							Effect.tap(() => overviewOpened(chord, activation.deviceId)),
 						);
 					}),
 				executeOwned: (key, activation) =>
