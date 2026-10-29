@@ -9,6 +9,9 @@ const native = vi.hoisted(() => ({
 	app: { getVersion: () => "0.0.0", getPath: () => "" },
 	BrowserWindow: class {
 		isDestroyed = () => false;
+		isMinimized = () => false;
+		isVisible = () => true;
+		focus = () => {};
 		webContents = {
 			getURL: () => "https://fixture.invalid",
 			executeJavaScript: async () => null,

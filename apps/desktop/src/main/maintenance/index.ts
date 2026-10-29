@@ -2,7 +2,7 @@ import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HardwareSession } from "@open-quake/device";
 import { Effect, Exit, Layer, Schema } from "effect";
-import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, type BrowserWindow, ipcMain, shell } from "electron";
 import {
 	FirmwarePort,
 	FirmwareUpdates,
@@ -53,6 +53,7 @@ import {
 import { firmwareSessionStore } from "./firmware-session";
 import { firmwareVersions } from "./firmware-versions";
 import { githubAppImageConfiguration, RELEASES_PAGE } from "./github-releases";
+import { maintenanceDialogs } from "./native-dialogs";
 import {
 	nativePermissionChecks,
 	nativePermissionRequest,
@@ -98,6 +99,7 @@ interface MaintenanceOptions {
 }
 export function prepareMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
+	const dialogs = maintenanceDialogs(options.management);
 	const nativeExit = options.exit ?? ((code = 0) => app.exit(code));
 	let requestedExit: number | undefined;
 	let replacement: (() => Promise<void>) | undefined;
@@ -162,7 +164,6 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			return reported;
 		});
 	const confirm = async (message: string, detail = ""): Promise<boolean> => {
-		const parent = options.management();
 		const config = {
 			type: "warning" as const,
 			message,
@@ -172,12 +173,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			cancelId: 0,
 			noLink: true,
 		};
-		return (
-			(parent && !parent.isDestroyed()
-				? await dialog.showMessageBox(parent, config)
-				: await dialog.showMessageBox(config)
-			).response === 1
-		);
+		return (await dialogs.message(config)).response === 1;
 	};
 	const doExport = Effect.fn("DesktopBackup.export")(
 		function* (): Effect.fn.Return<boolean, BackupFailed> {
@@ -188,13 +184,11 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						title: "Export",
 						defaultPath: join(
 							app.getPath("downloads"),
-							`DK-Suite_default_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}_export_resources.zip`,
+							`open-quake_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}_export_resources.zip`,
 						),
 						filters: [{ name: "Encrypted ZIP backup", extensions: ["zip"] }],
 					};
-					const selected = parent
-						? await dialog.showSaveDialog(parent, config)
-						: await dialog.showSaveDialog(config);
+					const selected = await dialogs.save(config);
 					if (selected.canceled || !selected.filePath || signal.aborted)
 						return false;
 					if (
@@ -379,7 +373,11 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 										},
 										clear: () => clearOwnedData(root),
 										report: (message) =>
-											dialog.showMessageBox({ message, buttons: ["Close"] }),
+											dialogs.message({
+												message,
+												buttons: ["Close"],
+												cancelId: 0,
+											}),
 										exit,
 									});
 							}),
@@ -522,7 +520,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									if (runningFirmware(yield* firmware.snapshot()))
 										return yield* new FirmwareTargetMismatch();
 									const selected = yield* io(() =>
-										dialog.showOpenDialog({
+										dialogs.open({
 											title: "Select firmware",
 											filters: [{ name: "UF2 firmware", extensions: ["uf2"] }],
 											properties: ["openFile"],
@@ -579,7 +577,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									yield* Effect.gen(function* () {
 										if (!mock && process.platform === "darwin") {
 											const selected = yield* io(() =>
-												dialog.showOpenDialog({
+												dialogs.open({
 													title: "Select the QUAKE DFU drive",
 													properties: ["openDirectory"],
 													securityScopedBookmarks: true,
@@ -631,7 +629,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									if (runningFirmware(yield* firmware.snapshot()))
 										return yield* new FirmwareTargetMismatch();
 									const selected = yield* io(() =>
-										dialog.showOpenDialog({
+										dialogs.open({
 											title: "Import",
 											filters: [
 												{ name: "Encrypted ZIP backup", extensions: ["zip"] },
@@ -679,7 +677,11 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 											},
 											commit: () => restored.commit(root),
 											report: (message) =>
-												dialog.showMessageBox({ message, buttons: ["Close"] }),
+												dialogs.message({
+													message,
+													buttons: ["Close"],
+													cancelId: 0,
+												}),
 											exit,
 										});
 									break;

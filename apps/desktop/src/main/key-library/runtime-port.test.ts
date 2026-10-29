@@ -31,6 +31,7 @@ import {
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
+import { KnobCapabilityUnavailable } from "../../../../../packages/device/src/knob/knob-errors.js";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
@@ -135,6 +136,7 @@ function layer(
 	owned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	runtimeActions: DesktopKeyRuntimeActions = {},
+	extraProfiles: readonly (typeof Profile.Encoded)[] = [],
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -172,6 +174,7 @@ function layer(
 										},
 									],
 								},
+								...extraProfiles,
 							],
 							activeByDevice: { device: { profileId: "p", pageId: "one" } },
 						}),
@@ -1691,3 +1694,110 @@ it.each([
 		);
 	},
 );
+
+it("publishes confirmed host brightness and clears a failed read through existing key feedback", async () => {
+	const key = builtinProfiles("darwin")
+		.find((p) => p.id === "1-2")
+		?.pages[0]?.keys.find((k) => k.config.type === "brightness");
+	if (!key) throw Error("Host brightness missing");
+	const events: { progress?: number }[] = [];
+	let supported = true;
+	const reading = Effect.suspend(() =>
+		supported
+			? Effect.succeed({ target: "test", percent: 42, quantum: 1 })
+			: Effect.fail(new HostActionFailed("unavailable")),
+	);
+	// The adapter uses the knob's catalog error identity at the native boundary.
+	const brightness = {
+		read: reading.pipe(
+			Effect.mapError(() => KnobCapabilityUnavailable.fromCause()),
+		),
+		write: () => Effect.void,
+	};
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				yield* KeyRuntimePort;
+				yield* Effect.promise(() =>
+					vi.waitFor(() => expect(events.at(-1)?.progress).toBe(42)),
+				);
+				supported = false;
+				yield* TestClock.adjust("3 seconds");
+				yield* Effect.promise(() =>
+					vi.waitFor(() => expect(events.at(-1)?.progress).toBe(-1)),
+				);
+			}).pipe(
+				Effect.provide(
+					layer(
+						true,
+						(state) =>
+							Effect.sync(() => {
+								events.push(state);
+							}),
+						undefined,
+						Schema.encodeSync(ProfileKey)({ ...key, keyCode: "1,1" }),
+						undefined,
+						() => ({}) as HardwareSession,
+						{ brightness },
+					),
+				),
+				Effect.provide(TestContext.TestContext),
+			),
+		),
+	);
+});
+
+it("publishes host brightness to inactive Studio profiles and pages on the connected device", async () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	const key = profile?.pages[0]?.keys.find(
+		(k) => k.config.type === "brightness",
+	);
+	if (!profile || !key) throw Error("Host brightness missing");
+	const inactive = Schema.encodeSync(Profile)({
+		...profile,
+		id: "inactive",
+		pages: [
+			{ ...profile.pages[0], id: "other", keys: [key] },
+			{ ...profile.pages[0], id: "other-page", keys: [key] },
+		],
+	});
+	const events: { profileId: string; pageId: string; progress?: number }[] = [];
+	const read = vi.fn(() => ({ target: "test", percent: 42, quantum: 1 }));
+	const brightness = { read: Effect.sync(read), write: () => Effect.void };
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				yield* KeyRuntimePort;
+				yield* Effect.promise(() =>
+					vi.waitFor(() => {
+						expect(
+							events
+								.filter((e) => e.profileId === "inactive")
+								.map((e) => [e.pageId, e.progress]),
+						).toEqual([
+							["other", 42],
+							["other-page", 42],
+						]);
+					}),
+				);
+				expect(read).toHaveBeenCalledOnce();
+			}).pipe(
+				Effect.provide(
+					layer(
+						true,
+						(e) =>
+							Effect.sync(() => {
+								events.push(e);
+							}),
+						undefined,
+						undefined,
+						undefined,
+						() => ({}) as HardwareSession,
+						{ brightness },
+						[inactive],
+					),
+				),
+			),
+		),
+	);
+});

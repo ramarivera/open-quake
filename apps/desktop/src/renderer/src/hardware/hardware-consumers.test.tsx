@@ -461,3 +461,169 @@ it("shows the selected QUAKE brightness in both inert Studio previews and drops 
 	).not.toContain("50%");
 	vi.unstubAllGlobals();
 });
+
+it("retains host brightness failure alerts while removing only its duplicate percentage overlay", async () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	const brightnessKey = profile?.pages[0]?.keys.find(
+		(k) => k.config.type === "brightness",
+	);
+	if (!profile || !brightnessKey) throw Error("Quick brightness missing");
+	Object.defineProperty(window, "quakeHardware", {
+		configurable: true,
+		value: {
+			request: async () => ({
+				_tag: "ready",
+				snapshot: state("A"),
+				mock: true,
+			}),
+		},
+	});
+	Object.defineProperty(window, "quakeKeyLibrary", {
+		configurable: true,
+		value: {
+			onRuntime: () => () => {},
+			onChanged: () => () => {},
+			request: async () => ({
+				_tag: "success",
+				states: [
+					{
+						deviceId: "A",
+						profileId: profile.id,
+						pageId: profile.pages[0].id,
+						keyCode: brightnessKey.keyCode,
+						revision: profile.revision,
+						progress: 42,
+						alert: 1,
+					},
+				],
+			}),
+		},
+	});
+	await act(async () =>
+		root.render(
+			<StripScreen
+				previewSerial="A"
+				hardwareSerial="A"
+				interactive={false}
+				profiles={{
+					_tag: "ready",
+					envelope: {
+						schemaVersion: 1,
+						profiles: [profile],
+						activeByDevice: {
+							A: { profileId: profile.id, pageId: profile.pages[0].id },
+						},
+						manager: Option.none(),
+					},
+				}}
+				showEmptyGridDashedBorder={false}
+			/>,
+		),
+	);
+	const slot = host.querySelector('[data-type="brightness"]')?.parentElement;
+	expect(slot?.querySelector('[data-kind="invalid"]')).not.toBeNull();
+	expect(slot?.querySelector("output")?.textContent).toBe("42%");
+	expect(slot?.querySelector('[role="progressbar"]')).toBeNull();
+});
+
+it("shows inactive host brightness in grid and selected previews, rejecting stale revisions and disconnects", async () => {
+	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+	vi.stubGlobal(
+		"ResizeObserver",
+		class {
+			observe() {}
+			disconnect() {}
+		},
+	);
+	const original = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!original) throw Error("Quick missing");
+	const profile = { ...original, id: "inactive", revision: 7 };
+	const page = profile.pages[0];
+	const tile = stripLayout(profile, page).tiles.find(
+		(t) => t.type === "brightness",
+	);
+	if (!tile) throw Error("Host brightness missing");
+	Object.defineProperty(window, "quakeHardware", {
+		configurable: true,
+		value: {
+			request: async (input: { serial?: string }) => ({
+				_tag: "ready",
+				snapshot: state(input.serial ?? "A", {
+					available: input.serial !== "B",
+				}),
+				mock: true,
+			}),
+		},
+	});
+	Object.defineProperty(window, "quakeKeyLibrary", {
+		configurable: true,
+		value: {
+			onRuntime: () => () => {},
+			onChanged: () => () => {},
+			request: async () => ({
+				_tag: "success",
+				states: [
+					{
+						deviceId: "A",
+						profileId: profile.id,
+						pageId: page.id,
+						keyCode: tile.keyCode,
+						revision: 7,
+						progress: 42,
+					},
+				],
+			}),
+		},
+	});
+	const preview = (serial: string, revision = 7) => (
+		<>
+			<div data-grid>
+				<StripScreen
+					previewSerial="editor-preview"
+					hardwareSerial={serial}
+					interactive={false}
+					profiles={{
+						_tag: "ready",
+						envelope: {
+							schemaVersion: 1,
+							profiles: [{ ...profile, revision }],
+							activeByDevice: {
+								"editor-preview": { profileId: profile.id, pageId: page.id },
+							},
+							manager: Option.none(),
+						},
+					}}
+					showEmptyGridDashedBorder={false}
+				/>
+			</div>
+			<SelectedKeyPreview
+				tile={tile}
+				serial={serial}
+				revision={revision}
+				target={{
+					profileId: profile.id,
+					pageId: page.id,
+					keyCode: tile.keyCode,
+				}}
+				beforeWrite={async () => true}
+				onSaved={async () => {}}
+				isCurrent={() => true}
+			/>
+		</>
+	);
+	for (const [serial, revision, expected] of [
+		["A", 7, "42%"],
+		["A", 8, "Unavailable"],
+		["B", 7, "Unavailable"],
+	] as const) {
+		await act(async () => root.render(preview(serial, revision)));
+		expect(
+			host.querySelector('[data-grid] [data-type="brightness"] output')
+				?.textContent,
+		).toBe(expected);
+		expect(
+			host.querySelector(".key-selected-preview output")?.textContent,
+		).toBe(expected);
+	}
+	vi.unstubAllGlobals();
+});

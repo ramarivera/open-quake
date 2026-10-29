@@ -2,9 +2,22 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { BrowserWindow } from "electron";
 import { expect, it, vi } from "vitest";
 import { AppUpdates } from "../../../../../packages/edge/src/maintenance/update-service";
 import { prepareMaintenance, registerMaintenance } from "./index";
+
+const managementWindow = {
+	isDestroyed: () => false,
+	isMinimized: () => false,
+	isVisible: () => true,
+	focus: () => {},
+	webContents: {
+		getURL: () => "https://app.invalid",
+		send: () => {},
+		executeJavaScript: async () => null,
+	},
+} as unknown as BrowserWindow;
 
 const native = vi.hoisted(() => ({
 	app: { getVersion: () => "1.0.0" },
@@ -49,7 +62,7 @@ it("routes the real manual check/download/approval/install request path through 
 		root,
 		mock: true,
 		renderer: "https://app.invalid",
-		management: () => undefined,
+		management: () => managementWindow,
 		hardware: () => undefined,
 		stopWriters: async () => {},
 		updater: {
@@ -121,7 +134,7 @@ it("MAIN-114 manual packages expose the owned releases page and distribution not
 		mock: false,
 		fixture: { roots: [], descriptors: [], bundledDirectories: [] },
 		renderer: "https://app.invalid",
-		management: () => undefined,
+		management: () => managementWindow,
 		hardware: () => undefined,
 		stopWriters: async () => {},
 	});
@@ -150,7 +163,7 @@ it.each(["rejected promise", "missing browser handler"] as const)(
 			mock: false,
 			fixture: { roots: [], descriptors: [], bundledDirectories: [] },
 			renderer: "https://app.invalid",
-			management: () => undefined,
+			management: () => managementWindow,
 			hardware: () => undefined,
 			stopWriters: async () => {},
 		});

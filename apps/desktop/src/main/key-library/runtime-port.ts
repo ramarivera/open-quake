@@ -52,6 +52,8 @@ import {
 	hostKeyboardAdapter,
 	hostKeyboardAvailable,
 } from "../hardware/host-keyboard";
+import { nativeBrightness } from "../knob/brightness";
+import type { BrightnessAdapter } from "../knob/brightness/controller";
 import {
 	type NativeApplicationPort,
 	runApplicationAction,
@@ -77,6 +79,7 @@ const isActionError = Schema.is(
 	),
 );
 export interface DesktopKeyRuntimeActions {
+	readonly brightness?: BrightnessAdapter;
 	readonly keyboard?: KeyboardActionAdapter;
 	readonly dismissSystemOverview?: (deviceId: string) => Promise<boolean>;
 	readonly systemOverview?: (deviceId: string) => void;
@@ -107,6 +110,56 @@ export const desktopKeyRuntimePort = (
 		KeyRuntimePort,
 		Effect.gen(function* () {
 			const profiles = yield* ProfileService;
+			const brightness =
+				runtimeActions.brightness ?? nativeBrightness(platform(), mock);
+			yield* Effect.forkScoped(
+				Effect.forever(
+					Effect.gen(function* () {
+						const { envelope } = yield* profiles.loadProfiles();
+						const keys = Object.keys(envelope.activeByDevice).flatMap(
+							(deviceId) => {
+								if (!hardware(deviceId)) return [];
+								// Host brightness belongs to the host, including inactive Studio previews.
+								return envelope.profiles.flatMap((profile) =>
+									profile.pages.flatMap((page) =>
+										page.keys
+											.filter(
+												(key) =>
+													key.config.display &&
+													key.config.type === "brightness",
+											)
+											.map((key) => ({
+												deviceId,
+												profileId: profile.id,
+												pageId: page.id,
+												revision: profile.revision,
+												keyCode: key.keyCode,
+											})),
+									),
+								);
+							},
+						);
+						if (!keys.length) return;
+						const percent = yield* brightness.read.pipe(
+							Effect.match({
+								onFailure: () => -1,
+								onSuccess: (reading) =>
+									Number.isFinite(reading.percent) &&
+									reading.percent >= 0 &&
+									reading.percent <= 100
+										? reading.percent
+										: -1,
+							}),
+						);
+						for (const key of keys)
+							if (hardware(key.deviceId))
+								publish({ ...key, progress: percent });
+					}).pipe(
+						Effect.catchAll((error) => Effect.logWarning(error)),
+						Effect.zipRight(Effect.sleep("3 seconds")),
+					),
+				),
+			);
 			const keyboardFor = (deviceId?: string): KeyboardActionAdapter =>
 				runtimeActions.keyboard ?? {
 					supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),

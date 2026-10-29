@@ -2,12 +2,25 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
+import type { BrowserWindow } from "electron";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FirmwareWriteFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
 import * as files from "./firmware-files";
 import * as sessions from "./firmware-session";
 import { prepareMaintenance } from "./index";
+
+const managementWindow = {
+	isDestroyed: () => false,
+	isMinimized: () => false,
+	isVisible: () => true,
+	focus: () => {},
+	webContents: {
+		getURL: () => "https://app.invalid",
+		send: () => {},
+		executeJavaScript: async () => null,
+	},
+} as unknown as BrowserWindow;
 
 const native = vi.hoisted(() => ({
 	app: {
@@ -123,7 +136,7 @@ for (const stage of [
 				fixture: { roots: [], descriptors: [] },
 				renderer: "https://fixture.invalid",
 				hardware: () => undefined,
-				management: () => undefined,
+				management: () => managementWindow,
 				stopWriters: async () => {},
 			});
 			const application = shared

@@ -14,6 +14,9 @@ const native = vi.hoisted(() => ({
 	app: { getVersion: () => "0.0.0", getPath: () => "" },
 	BrowserWindow: class {
 		isDestroyed = () => false;
+		isMinimized = () => false;
+		isVisible = () => true;
+		focus = () => {};
 		webContents = {
 			getURL: () => "https://fixture.invalid",
 			executeJavaScript: async () => null,
@@ -64,7 +67,7 @@ it("returns only the catalog BackupFailed reply through actual maintenance expor
 		expect(native.shell.showItemInFolder).not.toHaveBeenCalled();
 		const config = native.dialog.showSaveDialog.mock.calls[0]?.[1];
 		expect(config?.defaultPath).toMatch(
-			/^DK-Suite_default_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_export_resources\.zip$/,
+			/^open-quake_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_export_resources\.zip$/,
 		);
 		expect(config?.defaultPath).not.toMatch(/[:\\]/);
 	} finally {

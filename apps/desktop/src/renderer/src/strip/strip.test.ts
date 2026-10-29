@@ -753,5 +753,69 @@ it("gives host brightness the same tap-and-turn instruction without a fabricated
 	);
 	expect(html).toContain("Host brightness");
 	expect(html).toContain("Tap, then turn knob");
-	expect(html).not.toContain("<output>");
+	expect(html).toContain('data-unavailable="true"');
+	expect(html).toContain("Unavailable");
+});
+
+it("shows only confirmed host brightness percentages in the value area", () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!profile) throw Error("Quick missing");
+	const tile = stripLayout(profile, profile.pages[0]).tiles.find(
+		(t) => t.type === "brightness",
+	);
+	if (!tile) throw Error("Host brightness missing");
+	for (const [progress, expected] of [
+		[42, "42%"],
+		[-1, "Unavailable"],
+		[NaN, "Unavailable"],
+	] as const) {
+		const html = renderToStaticMarkup(
+			createElement(GenericTile, {
+				tile,
+				context: {
+					interactive: false,
+					now: undefined,
+					hourFormat: "24h",
+					voice: previewVoiceContext,
+					runtimeState: {
+						deviceId: "A",
+						profileId: profile.id,
+						pageId: profile.pages[0].id,
+						keyCode: tile.keyCode,
+						progress,
+					},
+				},
+			}),
+		);
+		expect(html).toContain(expected);
+	}
+});
+
+it("hides retained host brightness on a physical panel until hardware is explicitly available", () => {
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!profile) throw Error("Quick missing");
+	const tile = stripLayout(profile, profile.pages[0]).tiles.find(
+		(t) => t.type === "brightness",
+	);
+	if (!tile) throw Error("Host brightness missing");
+	const html = renderToStaticMarkup(
+		createElement(GenericTile, {
+			tile,
+			context: {
+				now: undefined,
+				hourFormat: "24h",
+				voice: previewVoiceContext,
+				interactive: true,
+				runtimeState: {
+					deviceId: "A",
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+					keyCode: tile.keyCode,
+					progress: 42,
+				},
+			},
+		}),
+	);
+	expect(html).not.toContain("42%");
+	expect(html).toContain("Unavailable");
 });

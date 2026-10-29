@@ -10,10 +10,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { Effect, Layer, ManagedRuntime } from "effect";
+import type { BrowserWindow } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDesktopDiagnostics } from "../diagnostics";
 import { clearOwnedData, prepareRestore } from "./backup-store";
 import { prepareMaintenance, registerMaintenance } from "./index";
+
+const managementWindow = {
+	isDestroyed: () => false,
+	isMinimized: () => false,
+	isVisible: () => true,
+	focus: () => {},
+	webContents: {
+		getURL: () => "https://app.invalid",
+		send: () => {},
+		executeJavaScript: async () => null,
+	},
+} as unknown as BrowserWindow;
 
 const native = vi.hoisted(() => ({
 	app: { getVersion: () => "0.0.0", exit: vi.fn() },
@@ -58,7 +71,7 @@ it("a concurrent read can't dispose reset's runtime before its owning request fi
 		root,
 		mock: true,
 		renderer: "https://app.invalid",
-		management: () => undefined,
+		management: () => managementWindow,
 		hardware: () => undefined,
 		stopWriters: async () => {},
 		diagnostics,
@@ -155,7 +168,7 @@ for (const stage of ["stop", "clear", "report"] as const) {
 			mock: true,
 			renderer: "https://app.invalid",
 			hardware: () => undefined,
-			management: () => undefined,
+			management: () => managementWindow,
 			stopWriters: stop,
 			exit,
 		});
@@ -188,7 +201,7 @@ it("cancelled reset starts neither shutdown nor clear", async () => {
 		mock: true,
 		renderer: "https://app.invalid",
 		hardware: () => undefined,
-		management: () => undefined,
+		management: () => managementWindow,
 		stopWriters: stop,
 		exit,
 	});
@@ -221,7 +234,7 @@ for (const state of ["malformed", "unreadable"] as const) {
 			mock: true,
 			renderer: "https://app.invalid",
 			hardware: () => undefined,
-			management: () => undefined,
+			management: () => managementWindow,
 			stopWriters: stop,
 			exit,
 			permissionFlow,
@@ -267,7 +280,7 @@ for (const backup of [false, true]) {
 			mock: true,
 			renderer: "https://app.invalid",
 			hardware: () => undefined,
-			management: () => undefined,
+			management: () => managementWindow,
 			stopWriters: stop,
 		});
 		try {
@@ -276,6 +289,7 @@ for (const backup of [false, true]) {
 				ok: true,
 			});
 			expect(native.dialog.showMessageBox).toHaveBeenCalledWith(
+				managementWindow,
 				expect.objectContaining({
 					message: backup
 						? "Back up, then clear all data and exit?"
@@ -324,7 +338,7 @@ it("finishes reset spans and runtime finalizers before closing diagnostics and f
 		root,
 		mock: true,
 		renderer: "https://app.invalid",
-		management: () => undefined,
+		management: () => managementWindow,
 		hardware: () => undefined,
 		stopWriters: async () => {},
 		diagnostics,
@@ -360,7 +374,7 @@ it.each(["reset", "import"] as const)(
 			mock: true,
 			renderer: "https://app.invalid",
 			hardware: () => undefined,
-			management: () => undefined,
+			management: () => managementWindow,
 			diagnostics,
 			stopWriters: async () => {
 				events.push("stop");
