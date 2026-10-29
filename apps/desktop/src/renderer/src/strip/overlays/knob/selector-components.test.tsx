@@ -244,7 +244,7 @@ describe("Scene Rail profile selection", () => {
 	it("preserves keyboard selection, dismissal and many-profile paging", async () => {
 		await render(picker(31, 15, "de"));
 		const next = host.querySelector<HTMLButtonElement>(
-			'button[aria-label="Nächste Seite"]',
+			'button[aria-label="Springen zu Profile 30"]',
 		);
 		await act(async () => next?.click());
 		expect(request).toHaveBeenCalledExactlyOnceWith({

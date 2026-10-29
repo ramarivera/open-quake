@@ -363,9 +363,37 @@ async function fixture({
 	vi.stubGlobal("quakeProfileManager", {
 		request: async (command: unknown) => {
 			managerCalls.push(command);
-			return (
-				profileManagerReply ?? { _tag: "success", view: { envelope: stored } }
-			);
+			if (profileManagerReply !== undefined) return profileManagerReply;
+			if (
+				typeof command === "object" &&
+				command !== null &&
+				"command" in command &&
+				typeof command.command === "object" &&
+				command.command !== null &&
+				"type" in command.command &&
+				command.command.type === "select" &&
+				"id" in command.command &&
+				typeof command.command.id === "string"
+			) {
+				const selected = command.command.id;
+				const profile = stored.profiles.find(
+					(candidate) => candidate.id === selected,
+				);
+				if (profile) {
+					for (const deviceId of new Set([
+						"desktop-preview",
+						...Object.keys(stored.activeByDevice),
+					]))
+						await runtime.runPromise(
+							ProfileService.selectProfile({
+								deviceId,
+								profileId: selected,
+								pageId: profile.pages[0].id,
+							}),
+						);
+				}
+			}
+			return { _tag: "success", view: { envelope: stored } };
 		},
 	});
 	vi.stubGlobal("quakeWallpaper", {
@@ -3315,6 +3343,9 @@ it("Console table selects the same real key, tracks edits, and saves through Key
 			f.host.querySelector('.keys-table td[data-edited="true"]')?.textContent,
 		).toBe("Edited"),
 	);
+	expect(f.host.querySelector(".keys-table tbody button")?.textContent).toBe(
+		"Console action",
+	);
 	await click(button(f.host, "Save"));
 	await settle(() =>
 		expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
@@ -3327,11 +3358,19 @@ it("Console table selects the same real key, tracks edits, and saves through Key
 it("creates and selects the Console preset without replacing an existing profile", async () => {
 	const f = await fixture();
 	const before = f.stored().profiles[0];
+	await f.device("connected-device");
 	await click(button(f.host, "Create console profile"));
 	await settle(() =>
 		expect(f.stored().activeByDevice["desktop-preview"]?.profileId).toBe(
 			"imported",
 		),
+	);
+	expect(f.managerCalls).toContainEqual({
+		type: "manage",
+		command: { type: "select", id: "imported" },
+	});
+	expect(f.stored().activeByDevice["connected-device"]?.profileId).toBe(
+		"imported",
 	);
 	expect(f.stored().profiles[0]).toEqual(before);
 	expect(
@@ -3341,4 +3380,23 @@ it("creates and selects the Console preset without replacing an existing profile
 	expect(
 		f.host.querySelectorAll('.keys-preview .strip-slot[data-state="tile"]'),
 	).toHaveLength(7);
+});
+
+it("keeps the active profile when Console delivery is rejected and retains the imported preset", async () => {
+	const f = await fixture();
+	const before = f.stored().activeByDevice;
+	f.setProfileManagerReply({ _tag: "rejected", reason: "delivery-failed" });
+	await click(button(f.host, "Create console profile"));
+	await settle(() =>
+		expect(f.host.textContent).toContain(
+			"This profile could not be made active on the device.",
+		),
+	);
+	expect(f.stored().activeByDevice).toEqual(before);
+	expect(f.stored().profiles.some((profile) => profile.id === "imported")).toBe(
+		true,
+	);
+	expect(f.calls.filter((command) => command.type === "select")).toHaveLength(
+		0,
+	);
 });

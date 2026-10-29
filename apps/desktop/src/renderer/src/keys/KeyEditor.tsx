@@ -543,6 +543,7 @@ export function KeyEditor({
 				(candidate) => candidate.id === reply.importedProfileId,
 			)?.pages[0].id;
 			if (!pageId) return;
+			if (!(await activateProfile(reply.importedProfileId))) return;
 			const selected = await window.quakeKeyLibrary.request({
 				type: "select",
 				deviceId: serial,
@@ -839,11 +840,18 @@ export function KeyEditor({
 							setStatus={setStatus}
 						/>
 						<KeyTable
-							page={
-								previewProfile.pages.find(
-									(candidate) => candidate.id === page.id,
-								) ?? page
-							}
+							page={{
+								...page,
+								keys: selection
+									? [
+											...page.keys.filter(
+												(candidate) =>
+													candidate.keyCode !== selection.key.keyCode,
+											),
+											selection.key,
+										]
+									: page.keys,
+							}}
 							locale={locale}
 							selected={key?.keyCode}
 							dirty={dirty}

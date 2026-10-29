@@ -24,6 +24,8 @@ export const CLOCK_STAGE = { width: 1920, height: 480 } as const;
 export interface ClockTileProps {
 	readonly widthPx: number;
 	readonly heightPx: number;
+	/** Intended tile geometry; preview scaling never changes the layout. */
+	readonly layout?: "strip" | "compact";
 	readonly now: Date;
 	/** Persisted theme: a theme id or "none". Unknown ids read as season. */
 	readonly theme: string;
@@ -58,6 +60,7 @@ function persistedTheme(theme: string): ThemeId | null {
 export function ClockTile({
 	widthPx,
 	heightPx,
+	layout = "strip",
 	now,
 	theme,
 	hourFormat = "24h",
@@ -96,18 +99,19 @@ export function ClockTile({
 	const strings = CLOCK_STRINGS[lang];
 	const digits = clockDigits(now, hourFormat, lang);
 	const name = active ? strings.themes[active] : "—";
+	const compact = layout === "compact";
 	return (
 		<div
 			className="oq-clock"
 			data-theme={active ?? "none"}
-			data-compact={widthPx < 960}
+			data-compact={compact}
 			data-motion={reduced ? "reduce" : "full"}
 			style={{ ...palette, width: widthPx, height: heightPx }}
 		>
 			<div
 				className="oq-clock-stage"
 				style={{
-					...(widthPx < 960
+					...(compact
 						? {}
 						: {
 								transform: `scale(${widthPx / CLOCK_STAGE.width}, ${heightPx / CLOCK_STAGE.height})`,

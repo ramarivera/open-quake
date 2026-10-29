@@ -17,7 +17,7 @@ import {
 	ProfileKey,
 	type ProfilePage,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
-import { effectiveSpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
+import { keySpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
 import { isUnsupportedProfileKey } from "../../../../../../packages/device/src/profiles/profile-function-contracts.js";
 import { occupiedCells } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
@@ -208,7 +208,7 @@ export function GridEditor({
 				key.config.display &&
 				occupiedCells(key).includes(code),
 		);
-		const size = effectiveSpan(source.key.config.type, source.key.config.size);
+		const size = keySpan(source.key.config);
 		const target =
 			source.library && source.key.config.type === "playAudio"
 				? "1,1"

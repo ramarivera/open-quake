@@ -3,6 +3,7 @@ import {
 	keyTitle,
 } from "../../../../../../packages/device/src/profiles/key-editing-invariants";
 import type { ProfilePage } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { keySpan } from "../../../../../../packages/device/src/profiles/profile-footprint";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts";
 import { useLocaleText } from "../i18n";
 
@@ -43,7 +44,7 @@ export function KeyTable({
 						const [row = 1, column = 1] = key.keyCode.split(",").map(Number);
 						const name =
 							keyTitle(key, locale) || keyText(key.config.type, locale);
-						const size = key.config.size;
+						const size = keySpan(key.config);
 						return (
 							<tr key={key.keyCode} data-selected={selected === key.keyCode}>
 								<td>

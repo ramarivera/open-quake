@@ -25,7 +25,8 @@
 			"autoSwitch": "自动切换",
 			"muted": "已静音",
 			"unavailable": "不可用",
-			"volumeKnob": "点击选中 · 转动旋钮调节"
+			"volumeKnob": "点击选中 · 转动旋钮调节",
+			"jumpTo": "跳转到"
 		},
 		"translationLanguages": {
 			"en": "英语",
@@ -141,7 +142,8 @@
 			"autoSwitch": "Automatic switch",
 			"muted": "Muted",
 			"unavailable": "Unavailable",
-			"volumeKnob": "Tap to focus · turn knob to adjust"
+			"volumeKnob": "Tap to focus · turn knob to adjust",
+			"jumpTo": "Jump to"
 		},
 		"translationLanguages": {
 			"en": "English",
@@ -238,7 +240,8 @@
 			"autoSwitch": "Cambio automático",
 			"muted": "Silenciado",
 			"unavailable": "No disponible",
-			"volumeKnob": "Toca para enfocar · gira para ajustar"
+			"volumeKnob": "Toca para enfocar · gira para ajustar",
+			"jumpTo": "Saltar a"
 		},
 		"translationLanguages": {
 			"en": "Inglés",
@@ -354,7 +357,8 @@
 			"autoSwitch": "Changement automatique",
 			"muted": "Muet",
 			"unavailable": "Indisponible",
-			"volumeKnob": "Touchez pour sélectionner · tournez pour régler"
+			"volumeKnob": "Touchez pour sélectionner · tournez pour régler",
+			"jumpTo": "Aller à"
 		},
 		"translationLanguages": {
 			"en": "Anglais",
@@ -470,7 +474,8 @@
 			"autoSwitch": "자동 전환",
 			"muted": "음소거",
 			"unavailable": "사용 불가",
-			"volumeKnob": "탭하여 선택 · 노브를 돌려 조절"
+			"volumeKnob": "탭하여 선택 · 노브를 돌려 조절",
+			"jumpTo": "이동"
 		},
 		"translationLanguages": {
 			"en": "영어",
@@ -586,7 +591,8 @@
 			"autoSwitch": "Automatischer Wechsel",
 			"muted": "Stumm",
 			"unavailable": "Nicht verfügbar",
-			"volumeKnob": "Zum Fokussieren tippen · Drehknopf zum Regeln"
+			"volumeKnob": "Zum Fokussieren tippen · Drehknopf zum Regeln",
+			"jumpTo": "Springen zu"
 		},
 		"translationLanguages": {
 			"en": "Englisch",
@@ -683,7 +689,8 @@
 			"autoSwitch": "Cambio automatico",
 			"muted": "Muto",
 			"unavailable": "Non disponibile",
-			"volumeKnob": "Tocca per selezionare · ruota per regolare"
+			"volumeKnob": "Tocca per selezionare · ruota per regolare",
+			"jumpTo": "Vai a"
 		},
 		"translationLanguages": {
 			"en": "Inglese",
@@ -799,7 +806,8 @@
 			"autoSwitch": "自動切り替え",
 			"muted": "ミュート",
 			"unavailable": "利用不可",
-			"volumeKnob": "タップで選択 · ノブを回して調整"
+			"volumeKnob": "タップで選択 · ノブを回して調整",
+			"jumpTo": "移動先"
 		},
 		"translationLanguages": {
 			"en": "英語",

@@ -112,6 +112,7 @@ function PassiveClockSlot({
 		<ClockTile
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
+			layout={tile.fullBleed ? "strip" : "compact"}
 			now={now}
 			theme={activeThemeOf(style)}
 			hourFormat="24h"
@@ -164,6 +165,7 @@ function LiveClockSlot({
 		<ClockTile
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
+			layout={tile.fullBleed ? "strip" : "compact"}
 			now={now}
 			theme={snapshot ? themeOf(snapshot) : activeThemeOf(style)}
 			hourFormat={hourFormat}
@@ -265,12 +267,21 @@ function MonitorSlot({ tile, context }: StripTileProps): React.JSX.Element {
 	);
 }
 
+/** The Console readout needs a two-by-two bank; compact saved keys keep their artwork. */
+function VolumeSlot(props: StripTileProps): React.JSX.Element {
+	return props.tile.footprint.width >= 2 && props.tile.footprint.height >= 2 ? (
+		<ConsoleVolumeTile {...props} />
+	) : (
+		<GenericTile {...props} />
+	);
+}
+
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
-		["vol", ConsoleVolumeTile],
+		["vol", VolumeSlot],
 		[
 			"pageNo",
 			({ context, tile }) => (

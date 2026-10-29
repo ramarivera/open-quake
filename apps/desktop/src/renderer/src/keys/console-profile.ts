@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { createActionDraft } from "../../../../../../packages/device/src/actions/action-registry";
 import {
 	keyText,
@@ -32,6 +32,7 @@ export function consoleProfile(locale: ProfileLocale, name: string): Profile {
 			...Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1")).config,
 			...createActionDraft("dkDesktopClock"),
 			size: [2, 2],
+			compatibility: { layout: "console" },
 			title: {
 				...EMPTY_PROFILE_TITLE,
 				text: keyText("dkDesktopClock", locale),
@@ -72,7 +73,14 @@ export function consoleProfile(locale: ProfileLocale, name: string): Profile {
 					{
 						...input,
 						keyCode: "1,5",
-						config: { ...input.config, size: [4, 1] as const },
+						config: {
+							...input.config,
+							size: [4, 1] as const,
+							compatibility: Option.some({
+								...Option.getOrElse(input.config.compatibility, () => ({})),
+								layout: "console",
+							}),
+						},
 					},
 					...routes.map((key, index) => ({
 						...localizedKey(key, locale),

@@ -1,6 +1,6 @@
 import { Option } from "effect";
 import type { ProfileKey } from "./profile-contracts.js";
-import { FORCED_TILE_SPANS } from "./profile-footprint.js";
+import { hasForcedSpan } from "./profile-footprint.js";
 
 /** Only these variable-span functions own a composite layout or meeting workflow. */
 const STRUCTURAL_TYPES = new Set([
@@ -26,8 +26,8 @@ export const keyEditable = (
 	const type = key.config.type;
 	if (field === "allowDelete" && UNDELETABLE_TYPES.has(type)) return false;
 	if (type === "colorfulScreen") return false;
-	if (field === "grid" && FORCED_TILE_SPANS.has(type)) return false;
-	if (!STRUCTURAL_TYPES.has(type) && !FORCED_TILE_SPANS.has(type)) return true;
+	if (field === "grid" && hasForcedSpan(key.config)) return false;
+	if (!STRUCTURAL_TYPES.has(type) && !hasForcedSpan(key.config)) return true;
 	return Option.match(key.config.basicEditableItems, {
 		onNone: () => true,
 		onSome: (policy) => policy[field],

@@ -84,7 +84,7 @@ export function ProfilePicker({
 							<button
 								type="button"
 								key={delta}
-								aria-label={t(delta < 0 ? "previousPage" : "nextPage")}
+								aria-label={`${t("jumpTo")} ${entries[Math.max(0, Math.min(Math.ceil(entries.length / 15) - 1, selector.page + delta)) * 15]?.name ?? ""}`}
 								disabled={
 									delta < 0
 										? selector.page === 0
@@ -98,9 +98,6 @@ export function ProfilePicker({
 								{delta < 0 ? "‹" : "›"}
 							</button>
 						))}
-						<span>
-							{selector.page + 1} / {Math.ceil(entries.length / 15)}
-						</span>
 					</div>
 				) : null}
 			</header>

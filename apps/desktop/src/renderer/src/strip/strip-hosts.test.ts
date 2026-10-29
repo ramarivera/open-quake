@@ -145,9 +145,7 @@ describe("MGMT-051/056/060 and WIDGETS-011: real strip hosts", () => {
 						expect(tile.style.left).toBe(
 							id === "1-1" ? "2px" : id === "1-3" ? "10px" : "12px",
 						);
-						expect(tile.style.borderRadius).toBe(
-							id === "1-1" ? "14px" : id === "1-3" ? "0px" : "28px",
-						);
+						expect(tile.style.borderRadius).toBe(id === "1-3" ? "0px" : "4px");
 						if (id === "1-2")
 							expect(required(tile, "img", HTMLImageElement).src).toBe(artwork);
 					}

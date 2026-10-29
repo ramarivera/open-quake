@@ -425,9 +425,9 @@ describe("generic tile", () => {
 		expect(markup).not.toContain("strip-tile-ring");
 		expect(markup).not.toContain("<filter");
 		expect(markup).not.toContain("--strip-accent-rgb");
-		expect(markup).toContain("width:92px;height:92px");
+		expect(markup).toContain("width:64px;height:64px");
 		expect(markup).toContain("font-size:24px;font-weight:550");
-		expect(markup).toContain("bottom:20px");
+		expect(markup).toContain("bottom:22px");
 		expect(markup).toContain(">Lock Screen</p>");
 		expect(markup).toContain('<img src="data:image/svg+xml,');
 	});
