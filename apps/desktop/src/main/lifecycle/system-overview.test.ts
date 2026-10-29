@@ -77,7 +77,7 @@ it("passes the next input after a witnessed host dismissal without sending Escap
 	const cancel = vi.fn(async () => {});
 	const overview = createSystemOverview(cancel, () => visible);
 	try {
-		overview.open("A", true);
+		overview.open("A", "windows");
 		await vi.advanceTimersByTimeAsync(500);
 		visible = true;
 		await vi.advanceTimersByTimeAsync(100);
@@ -98,10 +98,10 @@ it("keeps unwitnessed or failed observations armed without an expiry timeout", a
 	const cancel = vi.fn(async () => {});
 	const overview = createSystemOverview(cancel, () => visible);
 	try {
-		overview.open("A", true);
+		overview.open("A", "windows");
 		await vi.advanceTimersByTimeAsync(100000);
 		expect(await overview.tap("A")).toBe(true);
-		overview.open("B", true);
+		overview.open("B", "windows");
 		visible = true;
 		await vi.advanceTimersByTimeAsync(100);
 		visible = undefined;
@@ -122,7 +122,7 @@ it("retains the full cancellation contact when its native window disappears", as
 		() => visible,
 	);
 	try {
-		overview.open("A", true);
+		overview.open("A", "windows");
 		expect(overview.consume("A", down)).toBe(true);
 		visible = false;
 		await vi.advanceTimersByTimeAsync(100);
@@ -148,4 +148,56 @@ it("doesn't probe ordinary device input or unobservable overview modes", async (
 	expect(await overview.tap("A")).toBe(true);
 	expect(visible).not.toHaveBeenCalled();
 	overview.dispose();
+});
+
+it("observes each device's actual mode so an unrelated host overlay can't keep it armed", async () => {
+	vi.useFakeTimers();
+	const visible = {
+		windows: true,
+		search: true,
+		apps: true,
+		"force-quit": true,
+		screenshot: true,
+	};
+	const cancel = vi.fn(async () => {});
+	const overview = createSystemOverview(
+		cancel,
+		(mode: keyof typeof visible) => visible[mode],
+	);
+	try {
+		for (const mode of Object.keys(visible) as (keyof typeof visible)[])
+			overview.open(mode, mode);
+		visible.search = false;
+		visible.apps = false;
+		visible["force-quit"] = false;
+		visible.screenshot = false;
+		await vi.advanceTimersByTimeAsync(100);
+		for (const mode of ["search", "apps", "force-quit", "screenshot"])
+			expect(await overview.tap(mode)).toBe(false);
+		expect(cancel).not.toHaveBeenCalled();
+		expect(await overview.tap("windows")).toBe(true);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
+});
+
+it("keeps observing supported modes when another mode's native reader fails", async () => {
+	vi.useFakeTimers();
+	let visible = true;
+	const overview = createSystemOverview(
+		async () => {},
+		(mode) => (mode === "apps" ? undefined : visible),
+	);
+	try {
+		overview.open("A", "apps");
+		overview.open("B", "search");
+		visible = false;
+		await vi.advanceTimersByTimeAsync(100);
+		expect(await overview.tap("B")).toBe(false);
+		expect(await overview.tap("A")).toBe(true);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
 });

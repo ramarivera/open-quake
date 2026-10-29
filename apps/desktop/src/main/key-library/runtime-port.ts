@@ -54,6 +54,7 @@ import {
 } from "../hardware/host-keyboard";
 import { nativeBrightness } from "../knob/brightness";
 import type { BrightnessAdapter } from "../knob/brightness/controller";
+import type { SystemOverviewMode } from "../lifecycle/system-overview";
 import {
 	type NativeApplicationPort,
 	runApplicationAction,
@@ -78,11 +79,15 @@ const isActionError = Schema.is(
 		KeyFunctionUnavailable,
 	),
 );
+
 export interface DesktopKeyRuntimeActions {
 	readonly brightness?: BrightnessAdapter;
 	readonly keyboard?: KeyboardActionAdapter;
 	readonly dismissSystemOverview?: (deviceId: string) => Promise<boolean>;
-	readonly systemOverview?: (deviceId: string, observable?: boolean) => void;
+	readonly systemOverview?: (
+		deviceId: string,
+		mode?: SystemOverviewMode,
+	) => void;
 	readonly application?: NativeApplicationPort;
 	readonly screenshots?: ScreenshotPort;
 	readonly lock?: () => Promise<void>;
@@ -200,21 +205,16 @@ export const desktopKeyRuntimePort = (
 			const keyboard = keyboardFor();
 			const overviewOpened = (chord: string, deviceId?: string) =>
 				Effect.sync(() => {
-					if (
-						platform() === "darwin" &&
-						deviceId &&
-						[
-							"control+up",
-							"control+down",
-							"command+alt+escape",
-							"command+space",
-							"command+shift+4",
-						].includes(chord)
-					)
-						runtimeActions.systemOverview?.(
-							deviceId,
-							chord === "control+up" || chord === "control+down",
-						);
+					if (platform() !== "darwin" || !deviceId) return;
+					const modes: Readonly<Record<string, SystemOverviewMode>> = {
+						"control+up": "windows",
+						"control+down": "windows",
+						"command+alt+escape": "force-quit",
+						"command+space": "search",
+						"command+shift+4": "screenshot",
+					};
+					const mode = modes[chord];
+					if (mode) runtimeActions.systemOverview?.(deviceId, mode);
 				});
 			if (!mock && mediaActions?.observe) {
 				const changes = yield* Queue.sliding<{
@@ -615,7 +615,7 @@ export const desktopKeyRuntimePort = (
 											action.value === MAC_APPS_COMMAND,
 									)
 								)
-									runtimeActions.systemOverview?.(activation.deviceId);
+									runtimeActions.systemOverview?.(activation.deviceId, "apps");
 							}),
 						),
 						Effect.withSpan("DesktopKeys.executeOwned"),

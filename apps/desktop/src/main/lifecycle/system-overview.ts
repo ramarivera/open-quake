@@ -1,40 +1,50 @@
 import type { QuakeEvent } from "../../preload/quake";
 
+export type SystemOverviewMode =
+	| "windows"
+	| "apps"
+	| "search"
+	| "force-quit"
+	| "screenshot";
+
 /** An overview-cancel contact cannot activate the tile underneath it. */
 export function createSystemOverview(
 	cancel: (serial: string) => Promise<void>,
-	visibility?: () => boolean | undefined,
+	visibility?: (mode: SystemOverviewMode) => boolean | undefined,
 ) {
 	type Entry = {
 		phase: "armed" | "contact" | "released";
 		pending: boolean;
-		observable: boolean;
+		mode: SystemOverviewMode | undefined;
 		seen: boolean;
 	};
 	const state = new Map<string, Entry>();
 	let timer: ReturnType<typeof setInterval> | undefined;
 	const refresh = () => {
-		const observable = [...state.values()].some(
-			(entry) => entry.observable && entry.phase === "armed",
-		);
-		let visible: boolean | undefined;
-		if (observable) {
+		const readings = new Map<SystemOverviewMode, boolean | undefined>();
+		for (const entry of state.values()) {
+			if (!entry.mode || entry.phase !== "armed" || readings.has(entry.mode))
+				continue;
+			let visible: boolean | undefined;
 			try {
-				visible = visibility?.();
+				visible = visibility?.(entry.mode);
 			} catch {
 				/* An unavailable probe cannot prove dismissal. */
 			}
+			readings.set(entry.mode, visible);
 		}
-
 		for (const [serial, entry] of state) {
-			if (!entry.observable || entry.phase !== "armed") continue;
+			if (!entry.mode || entry.phase !== "armed") continue;
+			const visible = readings.get(entry.mode);
 			if (visible === true) entry.seen = true;
 			else if (visible === false && entry.seen) state.delete(serial);
 		}
 		if (
-			visible === undefined ||
 			![...state.values()].some(
-				(entry) => entry.observable && entry.phase === "armed",
+				(entry) =>
+					entry.mode &&
+					entry.phase === "armed" &&
+					readings.get(entry.mode) !== undefined,
 			)
 		) {
 			clearInterval(timer);
@@ -55,18 +65,18 @@ export function createSystemOverview(
 		}
 	};
 	return {
-		open: (serial: string, observable = false) => {
+		open: (serial: string, mode?: SystemOverviewMode) => {
 			state.set(serial, {
 				phase: "armed",
 				pending: false,
-				observable,
+				mode,
 				seen: false,
 			});
-			if (observable && visibility && !timer) {
+			if (mode && visibility && !timer) {
 				timer = setInterval(refresh, 100);
 				timer.unref();
 			}
-			if (observable) refresh();
+			if (mode) refresh();
 		},
 		tap: async (serial: string) => {
 			refresh();

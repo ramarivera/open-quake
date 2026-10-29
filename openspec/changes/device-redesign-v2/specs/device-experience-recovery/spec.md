@@ -97,10 +97,11 @@ Device brightness SHALL retain its label and explain its knob interaction. A mac
 - **WHEN** Electron reports an unexpected renderer exit
 - **THEN** the same panel reloads and its controls become usable again, while intentional destruction does not restart it
 
-#### Scenario: Host dismisses a witnessed macOS window overview
+#### Scenario: Host dismisses a witnessed macOS overlay
 
-- **WHEN** Mission Control or Exposé opened by the device has a supported visible native window and that window subsequently disappears
+- **WHEN** Mission Control, Exposé, Apps, Search, Force Quit or screenshot mode opened by the device has a supported visible native window and that window subsequently disappears
 - **THEN** the next device input reaches its intended control without sending an unrelated Escape
+- **AND** each device observes its own overlay mode and unrelated overlays do not hold cancellation armed
 - **AND** failed native reads, modes with no supported visibility signal and unwitnessed openings retain cancellation ownership without a guessed expiry
 - **AND** a device cancellation consumes its full contact even when dismissal removes the native window before touch release
 
