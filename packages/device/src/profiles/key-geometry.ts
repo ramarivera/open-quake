@@ -4,7 +4,7 @@ import {
 	keyStructurallyLocked,
 } from "./key-editing-invariants.js";
 import type { ProfileKey } from "./profile-contracts.js";
-import { effectiveSpan, FORCED_TILE_SPANS } from "./profile-footprint.js";
+import { hasForcedSpan, keySpan } from "./profile-footprint.js";
 import {
 	isEmptyCell,
 	keyFootprint,
@@ -41,7 +41,7 @@ export function editKeyLayout(
 	const destination =
 		requested !== key.keyCode &&
 		!geometry.placement &&
-		effectiveSpan(key.config.type, key.config.size).some((n) => n > 1)
+		keySpan(key.config).some((n) => n > 1)
 			? (keys.find(
 					(other) =>
 						// Its own footprint is a shift, not a swap with itself.
@@ -85,13 +85,12 @@ export function editKeyLayout(
 		const sizeChanged = original.config.size.some(
 			(n, i) => n !== key.config.size[i],
 		);
-		const footprintChanged = effectiveSpan(
-			original.config.type,
-			original.config.size,
-		).some((n, i) => n !== effectiveSpan(key.config.type, key.config.size)[i]);
+		const footprintChanged = keySpan(original.config).some(
+			(n, i) => n !== keySpan(key.config)[i],
+		);
 		if (
 			((sizeChanged || footprintChanged) && !keyEditable(original, "grid")) ||
-			(sizeChanged && FORCED_TILE_SPANS.has(original.config.type)) ||
+			(sizeChanged && hasForcedSpan(original.config)) ||
 			(requested !== key.keyCode && isEmptyCell(key)) ||
 			JSON.stringify(original.config.basicEditableItems) !==
 				JSON.stringify(key.config.basicEditableItems)
@@ -137,9 +136,7 @@ export function editKeyLayout(
 		if (
 			target &&
 			!isEmptyCell(target) &&
-			effectiveSpan(target.config.type, target.config.size).some(
-				(n, i) => n !== effectiveSpan(key.config.type, key.config.size)[i],
-			)
+			keySpan(target.config).some((n, i) => n !== keySpan(key.config)[i])
 		)
 			return { _tag: "rejected", reason: "sizeMismatch" };
 		next = next.map((k) =>

@@ -111,3 +111,21 @@
 		transform: translate(-50%, 6px);
 	}
 }
+
+.clawbot-input[data-horizontal="true"] .clawbot-input-body {
+	flex-direction: row;
+}
+.clawbot-input[data-horizontal="true"] .clawbot-input-box {
+	width: 62%;
+	min-width: 0;
+	flex: 1;
+	padding: 28px;
+}
+.clawbot-input[data-horizontal="true"] .clawbot-input-actions {
+	width: 36%;
+}
+.clawbot-input[data-horizontal="true"] .clawbot-input-button {
+	flex-direction: column;
+	height: 100%;
+	border-left: 1px solid var(--strip-hairline);
+}

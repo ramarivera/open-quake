@@ -5,8 +5,8 @@ import {
 import type { KeyGeometry } from "../../../../../../packages/device/src/profiles/key-geometry.js";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
-	effectiveSpan,
-	FORCED_TILE_SPANS,
+	hasForcedSpan,
+	keySpan,
 } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { Row } from "../ui/Form";
@@ -23,8 +23,8 @@ export function KeyGeometryControls({
 	readonly onChange: (key: ProfileKey, geometry: KeyGeometry) => void;
 }): React.JSX.Element {
 	const de = locale === "de";
-	const forced = FORCED_TILE_SPANS.has(keyValue.config.type);
-	const size = effectiveSpan(keyValue.config.type, keyValue.config.size);
+	const forced = hasForcedSpan(keyValue.config);
+	const size = keySpan(keyValue.config);
 	return (
 		<>
 			<Row

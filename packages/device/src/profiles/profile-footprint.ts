@@ -1,4 +1,5 @@
 import { Option } from "effect";
+import type { ProfileKey } from "./profile-contracts.js";
 import { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 
 export interface LogicalCell {
@@ -17,7 +18,9 @@ export interface Footprint {
 /**
  * DK-Suite 0.4.95 lays these types out at a fixed span and ignores
  * `config.size` (QuakeShortCutView getAreaSize/getCellStyle, Utils
- * getActualDisplaySize, monitorStyleContract). One table replaces DK's four
+ * getActualDisplaySize, monitorStyleContract). Explicit Console keys opt into
+ * saved sizes through their retained compatibility layout marker. Unmarked
+ * keys keep the legacy span. One table replaces DK's four
  * disagreeing copies (MGMT-065). A Map keeps `__proto__` and friends inert.
  */
 export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
@@ -37,6 +40,22 @@ export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
 
 export const effectiveSpan = (type: string, size: TileSpan): TileSpan =>
 	FORCED_TILE_SPANS.get(type) ?? size;
+
+/** The marker survives profile export/import without changing the storage schema. */
+export const usesSavedTileSize = (
+	type: string,
+	compatibility: unknown,
+): boolean =>
+	(type === "dkDesktopClock" || type === "quakeBotInput") &&
+	typeof compatibility === "object" &&
+	compatibility !== null &&
+	"layout" in compatibility &&
+	compatibility.layout === "console";
+export const hasForcedSpan = (config: ProfileKey["config"]): boolean =>
+	FORCED_TILE_SPANS.has(config.type) &&
+	!usesSavedTileSize(config.type, Option.getOrUndefined(config.compatibility));
+export const keySpan = (config: ProfileKey["config"]): TileSpan =>
+	hasForcedSpan(config) ? effectiveSpan(config.type, config.size) : config.size;
 
 const isSpanLength = (value: number, limit: number): boolean =>
 	Number.isInteger(value) && value >= 1 && value <= limit;

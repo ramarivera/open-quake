@@ -56,6 +56,22 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 		);
 	});
 
+	it.each([200, 400, 800, 960, 1920])(
+		"keeps the full-strip composition in a %ipx scaled preview",
+		(width) => {
+			const html = render({ widthPx: width, heightPx: width / 4 });
+			expect(html).toContain('data-compact="false"');
+			expect(html).toContain(
+				`transform:scale(${width / 1920}, ${width / 1920})`,
+			);
+		},
+	);
+	it("uses compact layout only when the owning tile requests it", () => {
+		const html = render({ widthPx: 456, heightPx: 456, layout: "compact" });
+		expect(html).toContain('data-compact="true"');
+		expect(html).not.toContain("transform:scale");
+	});
+
 	it("draws the theme's built-in art and name", () => {
 		const html = render({ theme: "cyber" });
 		expect(html).toContain('data-theme="cyber"');

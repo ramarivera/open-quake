@@ -20,6 +20,7 @@ export function ClawBotInputTile({
 	const voice = context.voice;
 	const { width, height } = tile.box;
 	const s = inputScale(width, height);
+	const horizontal = width / height > 3;
 	const state = voice.view.input;
 	const interactive = voice.surface === "panel";
 	const [text, setText] = useState("");
@@ -138,7 +139,8 @@ export function ClawBotInputTile({
 	return (
 		<div
 			className="clawbot-input"
-			style={{ width, height, borderRadius: tile.tileRadius || 24 }}
+			data-horizontal={horizontal}
+			style={{ width, height, borderRadius: tile.tileRadius }}
 		>
 			<div
 				className="clawbot-input-header"
@@ -163,9 +165,9 @@ export function ClawBotInputTile({
 			<div
 				className="clawbot-input-body"
 				style={{
-					padding: `${18 * s}px ${12 * s}px ${15 * s}px`,
-					marginTop: -8 * s,
-					gap: 10 * s,
+					padding: horizontal ? 0 : `${18 * s}px ${12 * s}px ${15 * s}px`,
+					marginTop: horizontal ? 0 : -8 * s,
+					gap: horizontal ? 0 : 10 * s,
 				}}
 			>
 				<textarea
@@ -185,23 +187,26 @@ export function ClawBotInputTile({
 					onChange={(event) => setText(event.target.value)}
 					style={{
 						minHeight: 120 * s,
-						borderRadius: 16 * s,
+						borderRadius: 3,
 						padding: `${16 * s}px ${20 * s}px`,
-						fontSize: 22 * s,
+						fontSize: horizontal ? 32 : 22 * s,
 					}}
 				/>
-				<div className="clawbot-input-actions" style={{ gap: 12 * s }}>
+				<div
+					className="clawbot-input-actions"
+					style={{ gap: horizontal ? 0 : 12 * s }}
+				>
 					{(
 						[
 							[
 								send,
-								"📤",
+								"↑",
 								"quakeBotInputIconView.quickActions.send.label",
 								onSend,
 							],
 							[
 								attach,
-								"📎",
+								"+",
 								"quakeBotInputIconView.quickActions.fileAttach.label",
 								onAttach,
 							],
@@ -220,8 +225,8 @@ export function ClawBotInputTile({
 							onClick={action}
 							style={{
 								minHeight: 48 * s,
-								borderRadius: 20 * s,
-								fontSize: 20 * s,
+								borderRadius: 3,
+								fontSize: horizontal ? 23 : 20 * s,
 								gap: 6 * s,
 							}}
 						>

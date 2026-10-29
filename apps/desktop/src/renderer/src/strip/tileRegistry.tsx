@@ -6,6 +6,7 @@ import {
 	normalizeClockStyle,
 } from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
+import type { KeyRuntimeState } from "../../../shared/key-library";
 import { GameModeTile } from "../hardware/GameModeTile";
 import type { PanelKeyTarget } from "../keys/panel-key-dispatch";
 import { EmojiTile } from "../management/emoji/EmojiTile";
@@ -22,6 +23,7 @@ import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
 import type { StripVoiceContext } from "./overlays/voice/voice-context";
 import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
+import { ConsoleVolumeTile } from "./tiles/ConsoleVolumeTile";
 import { ClawBotTile } from "./tiles/clawBot/ClawBotTile";
 import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { ClockTile } from "./tiles/clock/ClockTile";
@@ -53,6 +55,7 @@ import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
+	readonly runtimeState?: KeyRuntimeState | undefined;
 	readonly currentPage?: number | undefined;
 	readonly hardware?:
 		| import("../../../shared/hardware-contracts").HardwareSnapshot
@@ -109,6 +112,7 @@ function PassiveClockSlot({
 		<ClockTile
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
+			layout={tile.fullBleed ? "strip" : "compact"}
 			now={now}
 			theme={activeThemeOf(style)}
 			hourFormat="24h"
@@ -161,6 +165,7 @@ function LiveClockSlot({
 		<ClockTile
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
+			layout={tile.fullBleed ? "strip" : "compact"}
 			now={now}
 			theme={snapshot ? themeOf(snapshot) : activeThemeOf(style)}
 			hourFormat={hourFormat}
@@ -262,11 +267,21 @@ function MonitorSlot({ tile, context }: StripTileProps): React.JSX.Element {
 	);
 }
 
+/** The Console readout needs a two-by-two bank; compact saved keys keep their artwork. */
+function VolumeSlot(props: StripTileProps): React.JSX.Element {
+	return props.tile.footprint.width >= 2 && props.tile.footprint.height >= 2 ? (
+		<ConsoleVolumeTile {...props} />
+	) : (
+		<GenericTile {...props} />
+	);
+}
+
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
+		["vol", VolumeSlot],
 		[
 			"pageNo",
 			({ context, tile }) => (

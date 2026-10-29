@@ -220,6 +220,7 @@ function StripGrid({
 							tile={tile}
 							context={{
 								now,
+								runtimeState: runtime(tile.keyCode),
 								hourFormat,
 								voice,
 								currentPage,

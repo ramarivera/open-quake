@@ -23,8 +23,9 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	const fontStyle = metrics.italic ? "italic" : "normal";
 	const fontSize = metrics.fontSize;
 	const title = config.title.text;
-	const placement =
-		metrics.titleAnchor === "top"
+	const placement = !explicit
+		? { left: 24, bottom: 22, transform: "none", textAlign: "left" as const }
+		: metrics.titleAnchor === "top"
 			? { top: metrics.padding }
 			: metrics.titleAnchor === "mid"
 				? { top: "50%", transform: "translate(-50%, -50%)" }
@@ -44,14 +45,19 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 			data-type={tile.type}
 			style={{ borderRadius: tile.tileRadius }}
 		>
+			<span className="console-key-address" aria-hidden="true">
+				{tile.keyCode}
+			</span>
 			<div
 				ref={artwork.ref}
 				data-tile-artwork-state={artwork.state}
 				className="strip-tile-icon"
 				style={{
-					width: iconWidth,
-					height: iconHeight,
-					top: `calc(${fullArtwork ? 50 : metrics.iconCenter * 100}% - ${iconHeight / 2}px)`,
+					width: fullArtwork ? iconWidth : 64,
+					height: fullArtwork ? iconHeight : 64,
+					left: fullArtwork ? "50%" : 24,
+					transform: fullArtwork ? "translate(-50%, -50%)" : "none",
+					top: fullArtwork ? "50%" : 28,
 				}}
 			>
 				{artwork.src ? (
@@ -62,6 +68,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 				<p
 					className="strip-tile-title"
 					data-full-title={title}
+					data-custom-style={explicit}
 					style={{
 						fontSize,
 						fontWeight: metrics.fontWeight,
@@ -69,7 +76,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 						textDecoration:
 							explicit && styles.includes("underline") ? "underline" : "none",
 						color: explicit ? config.title.color : undefined,
-						width: metrics.titleWidth,
+						width: explicit ? metrics.titleWidth : "calc(100% - 48px)",
 						...placement,
 					}}
 				>

@@ -285,7 +285,7 @@ describe("DK-Suite geometry", () => {
 
 	it("lays the clock and player over the full canvas, square", () => {
 		for (const type of ["dkDesktopClock", "playAudio"]) {
-			const tile = layoutOf([key("2,4", type)]).tiles[0];
+			const tile = layoutOf([key("2,4", type, [8, 2])]).tiles[0];
 			expect(tile?.box).toEqual({ x: 0, y: 0, width: 1920, height: 480 });
 			expect(tile?.tileRadius).toBe(0);
 			expect(tile?.zIndex).toBe(1);

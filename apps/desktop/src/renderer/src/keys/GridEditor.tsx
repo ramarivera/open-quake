@@ -17,7 +17,7 @@ import {
 	ProfileKey,
 	type ProfilePage,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
-import { effectiveSpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
+import { keySpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
 import { isUnsupportedProfileKey } from "../../../../../../packages/device/src/profiles/profile-function-contracts.js";
 import { occupiedCells } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
@@ -208,7 +208,7 @@ export function GridEditor({
 				key.config.display &&
 				occupiedCells(key).includes(code),
 		);
-		const size = effectiveSpan(source.key.config.type, source.key.config.size);
+		const size = keySpan(source.key.config);
 		const target =
 			source.library && source.key.config.type === "playAudio"
 				? "1,1"
@@ -602,7 +602,6 @@ export function GridEditor({
 										height: `${rect.height / 4.8}%`,
 									}}
 									data-drop-code={code}
-									data-selected={key?.keyCode === anchor || undefined}
 									data-drop={
 										dropCode === code
 											? dropAllowed
@@ -623,6 +622,21 @@ export function GridEditor({
 								/>
 							);
 						})}
+						{layout.tiles
+							.filter((tile) => tile.keyCode === key?.keyCode)
+							.map((tile) => (
+								<div
+									key={tile.keyCode}
+									className="keys-selected-footprint"
+									data-selected="true"
+									style={{
+										left: `${tile.slot.x / 19.2}%`,
+										top: `${tile.slot.y / 4.8}%`,
+										width: `${tile.slot.width / 19.2}%`,
+										height: `${tile.slot.height / 4.8}%`,
+									}}
+								/>
+							))}
 					</div>
 				)}
 			</fieldset>

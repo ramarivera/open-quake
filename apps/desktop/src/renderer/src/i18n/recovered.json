@@ -12,7 +12,21 @@
 			"foregroundAccessibility": "自动切换配置需要辅助功能权限。请在系统设置 > 隐私与安全性 > 辅助功能中启用 open-quake。",
 			"profileClose": "关闭",
 			"profileReturn": "关闭并返回按键",
-			"profileAppSearch": "搜索应用"
+			"profileAppSearch": "搜索应用",
+			"scenes": "旋钮 · 场景",
+			"previous": "上一个",
+			"selected": "已选择",
+			"next": "下一个",
+			"keep": "按下 · 保留",
+			"switchTo": "按下 · 切换到",
+			"turnLeft": "向左转动",
+			"turnRight": "向右转动",
+			"closeWithoutSwitching": "关闭且不切换",
+			"autoSwitch": "自动切换",
+			"muted": "已静音",
+			"unavailable": "不可用",
+			"volumeKnob": "点击选中 · 转动旋钮调节",
+			"jumpTo": "跳转到"
 		},
 		"translationLanguages": {
 			"en": "英语",
@@ -81,7 +95,25 @@
 		},
 		"keysEditor": {
 			"active": "当前配置",
-			"activationFailed": "无法在设备上激活此配置。"
+			"activationFailed": "无法在设备上激活此配置。",
+			"layout": "屏幕布局",
+			"tiles": "此页按键",
+			"position": "位置",
+			"tile": "按键",
+			"kind": "类型",
+			"size": "尺寸",
+			"state": "状态",
+			"saved": "已保存",
+			"edited": "已编辑",
+			"empty": "空白",
+			"inspector": "所选按键",
+			"choose": "选择要编辑的按键。",
+			"pending": "未保存的更改",
+			"keyLanguage": "按键语言",
+			"console": "控制台",
+			"createConsole": "创建控制台配置",
+			"knobSettings": "此配置的旋钮",
+			"agentInput": "助手输入"
 		}
 	},
 	"en": {
@@ -97,7 +129,21 @@
 			"foregroundAccessibility": "Automatic profile switching needs Accessibility access. Enable open-quake in System Settings > Privacy & Security > Accessibility.",
 			"profileClose": "Close",
 			"profileReturn": "Close and return to Keys",
-			"profileAppSearch": "Search applications"
+			"profileAppSearch": "Search applications",
+			"scenes": "Knob · Scenes",
+			"previous": "Previous",
+			"selected": "Selected",
+			"next": "Next",
+			"keep": "Press · keep",
+			"switchTo": "Press · switch to",
+			"turnLeft": "Turn left",
+			"turnRight": "Turn right",
+			"closeWithoutSwitching": "Close without switching",
+			"autoSwitch": "Automatic switch",
+			"muted": "Muted",
+			"unavailable": "Unavailable",
+			"volumeKnob": "Tap to focus · turn knob to adjust",
+			"jumpTo": "Jump to"
 		},
 		"translationLanguages": {
 			"en": "English",
@@ -147,7 +193,25 @@
 		},
 		"keysEditor": {
 			"active": "Active on device",
-			"activationFailed": "This profile could not be made active on the device."
+			"activationFailed": "This profile could not be made active on the device.",
+			"layout": "Strip layout",
+			"tiles": "Tiles on this page",
+			"position": "Position",
+			"tile": "Tile",
+			"kind": "Kind",
+			"size": "Size",
+			"state": "State",
+			"saved": "Saved",
+			"edited": "Edited",
+			"empty": "Empty",
+			"inspector": "Selected tile",
+			"choose": "Select a key to edit.",
+			"pending": "Unsaved change",
+			"keyLanguage": "Key language",
+			"console": "Console",
+			"createConsole": "Create console profile",
+			"knobSettings": "Knob on this profile",
+			"agentInput": "Agent input"
 		}
 	},
 	"es": {
@@ -163,7 +227,21 @@
 			"foregroundAccessibility": "El cambio automático de perfiles necesita acceso de Accesibilidad. Activa open-quake en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.",
 			"profileClose": "Cerrar",
 			"profileReturn": "Cerrar y volver a Teclas",
-			"profileAppSearch": "Buscar aplicaciones"
+			"profileAppSearch": "Buscar aplicaciones",
+			"scenes": "Mando · Escenas",
+			"previous": "Anterior",
+			"selected": "Seleccionada",
+			"next": "Siguiente",
+			"keep": "Pulsar · mantener",
+			"switchTo": "Pulsar · cambiar a",
+			"turnLeft": "Girar a la izquierda",
+			"turnRight": "Girar a la derecha",
+			"closeWithoutSwitching": "Cerrar sin cambiar",
+			"autoSwitch": "Cambio automático",
+			"muted": "Silenciado",
+			"unavailable": "No disponible",
+			"volumeKnob": "Toca para enfocar · gira para ajustar",
+			"jumpTo": "Saltar a"
 		},
 		"translationLanguages": {
 			"en": "Inglés",
@@ -232,7 +310,25 @@
 		},
 		"keysEditor": {
 			"active": "Activo en el dispositivo",
-			"activationFailed": "No se pudo activar este perfil en el dispositivo."
+			"activationFailed": "No se pudo activar este perfil en el dispositivo.",
+			"layout": "Diseño de pantalla",
+			"tiles": "Teclas de esta página",
+			"position": "Posición",
+			"tile": "Tecla",
+			"kind": "Tipo",
+			"size": "Tamaño",
+			"state": "Estado",
+			"saved": "Guardado",
+			"edited": "Editado",
+			"empty": "Vacío",
+			"inspector": "Tecla seleccionada",
+			"choose": "Selecciona una tecla para editar.",
+			"pending": "Cambio sin guardar",
+			"keyLanguage": "Idioma de teclas",
+			"console": "Consola",
+			"createConsole": "Crear perfil de consola",
+			"knobSettings": "Mando en este perfil",
+			"agentInput": "Entrada del agente"
 		}
 	},
 	"fr": {
@@ -248,7 +344,21 @@
 			"foregroundAccessibility": "Le changement automatique de profil nécessite l’accès à Accessibilité. Activez open-quake dans Réglages Système > Confidentialité et sécurité > Accessibilité.",
 			"profileClose": "Fermer",
 			"profileReturn": "Fermer et revenir aux touches",
-			"profileAppSearch": "Rechercher des applications"
+			"profileAppSearch": "Rechercher des applications",
+			"scenes": "Molette · Scènes",
+			"previous": "Précédent",
+			"selected": "Sélectionné",
+			"next": "Suivant",
+			"keep": "Appuyer · garder",
+			"switchTo": "Appuyer · passer à",
+			"turnLeft": "Tourner à gauche",
+			"turnRight": "Tourner à droite",
+			"closeWithoutSwitching": "Fermer sans changer",
+			"autoSwitch": "Changement automatique",
+			"muted": "Muet",
+			"unavailable": "Indisponible",
+			"volumeKnob": "Touchez pour sélectionner · tournez pour régler",
+			"jumpTo": "Aller à"
 		},
 		"translationLanguages": {
 			"en": "Anglais",
@@ -317,7 +427,25 @@
 		},
 		"keysEditor": {
 			"active": "Actif sur l’appareil",
-			"activationFailed": "Impossible d’activer ce profil sur l’appareil."
+			"activationFailed": "Impossible d’activer ce profil sur l’appareil.",
+			"layout": "Disposition de l’écran",
+			"tiles": "Touches de cette page",
+			"position": "Position",
+			"tile": "Touche",
+			"kind": "Type",
+			"size": "Taille",
+			"state": "État",
+			"saved": "Enregistré",
+			"edited": "Modifié",
+			"empty": "Vide",
+			"inspector": "Touche sélectionnée",
+			"choose": "Sélectionnez une touche à modifier.",
+			"pending": "Modification non enregistrée",
+			"keyLanguage": "Langue des touches",
+			"console": "Console",
+			"createConsole": "Créer un profil console",
+			"knobSettings": "Molette de ce profil",
+			"agentInput": "Saisie Agent"
 		}
 	},
 	"ko": {
@@ -333,7 +461,21 @@
 			"foregroundAccessibility": "자동 프로필 전환에는 손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 open-quake를 활성화하세요.",
 			"profileClose": "닫기",
 			"profileReturn": "닫기 및 키로 돌아가기",
-			"profileAppSearch": "애플리케이션 검색"
+			"profileAppSearch": "애플리케이션 검색",
+			"scenes": "노브 · 장면",
+			"previous": "이전",
+			"selected": "선택됨",
+			"next": "다음",
+			"keep": "누르기 · 유지",
+			"switchTo": "누르기 · 전환",
+			"turnLeft": "왼쪽으로 돌리기",
+			"turnRight": "오른쪽으로 돌리기",
+			"closeWithoutSwitching": "전환하지 않고 닫기",
+			"autoSwitch": "자동 전환",
+			"muted": "음소거",
+			"unavailable": "사용 불가",
+			"volumeKnob": "탭하여 선택 · 노브를 돌려 조절",
+			"jumpTo": "이동"
 		},
 		"translationLanguages": {
 			"en": "영어",
@@ -402,7 +544,25 @@
 		},
 		"keysEditor": {
 			"active": "장치에서 활성 상태",
-			"activationFailed": "장치에서 이 프로필을 활성화하지 못했습니다."
+			"activationFailed": "장치에서 이 프로필을 활성화하지 못했습니다.",
+			"layout": "화면 레이아웃",
+			"tiles": "이 페이지의 키",
+			"position": "위치",
+			"tile": "키",
+			"kind": "유형",
+			"size": "크기",
+			"state": "상태",
+			"saved": "저장됨",
+			"edited": "편집됨",
+			"empty": "비어 있음",
+			"inspector": "선택한 키",
+			"choose": "편집할 키를 선택하세요.",
+			"pending": "저장되지 않은 변경",
+			"keyLanguage": "키 언어",
+			"console": "콘솔",
+			"createConsole": "콘솔 프로필 만들기",
+			"knobSettings": "이 프로필의 노브",
+			"agentInput": "에이전트 입력"
 		}
 	},
 	"de": {
@@ -418,7 +578,21 @@
 			"foregroundAccessibility": "Der automatische Profilwechsel benötigt Bedienungshilfen. Aktiviere open-quake unter Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen.",
 			"profileClose": "Schließen",
 			"profileReturn": "Schließen und zurück zu Tasten",
-			"profileAppSearch": "Anwendungen suchen"
+			"profileAppSearch": "Anwendungen suchen",
+			"scenes": "Drehknopf · Szenen",
+			"previous": "Zurück",
+			"selected": "Ausgewählt",
+			"next": "Weiter",
+			"keep": "Drücken · behalten",
+			"switchTo": "Drücken · wechseln zu",
+			"turnLeft": "Nach links drehen",
+			"turnRight": "Nach rechts drehen",
+			"closeWithoutSwitching": "Schließen ohne Wechsel",
+			"autoSwitch": "Automatischer Wechsel",
+			"muted": "Stumm",
+			"unavailable": "Nicht verfügbar",
+			"volumeKnob": "Zum Fokussieren tippen · Drehknopf zum Regeln",
+			"jumpTo": "Springen zu"
 		},
 		"translationLanguages": {
 			"en": "Englisch",
@@ -468,7 +642,25 @@
 		},
 		"keysEditor": {
 			"active": "Auf dem Gerät aktiv",
-			"activationFailed": "Dieses Profil konnte auf dem Gerät nicht aktiviert werden."
+			"activationFailed": "Dieses Profil konnte auf dem Gerät nicht aktiviert werden.",
+			"layout": "Displaylayout",
+			"tiles": "Tasten auf dieser Seite",
+			"position": "Position",
+			"tile": "Taste",
+			"kind": "Typ",
+			"size": "Größe",
+			"state": "Status",
+			"saved": "Gespeichert",
+			"edited": "Bearbeitet",
+			"empty": "Leer",
+			"inspector": "Ausgewählte Taste",
+			"choose": "Wähle eine Taste zum Bearbeiten.",
+			"pending": "Ungespeicherte Änderung",
+			"keyLanguage": "Tastensprache",
+			"console": "Konsole",
+			"createConsole": "Konsolenprofil erstellen",
+			"knobSettings": "Drehknopf in diesem Profil",
+			"agentInput": "Agent-Eingabe"
 		}
 	},
 	"it": {
@@ -484,7 +676,21 @@
 			"foregroundAccessibility": "Il cambio automatico del profilo richiede l’accesso ad Accessibilità. Abilita open-quake in Impostazioni di Sistema > Privacy e sicurezza > Accessibilità.",
 			"profileClose": "Chiudi",
 			"profileReturn": "Chiudi e torna ai tasti",
-			"profileAppSearch": "Cerca applicazioni"
+			"profileAppSearch": "Cerca applicazioni",
+			"scenes": "Manopola · Scene",
+			"previous": "Precedente",
+			"selected": "Selezionata",
+			"next": "Successiva",
+			"keep": "Premi · mantieni",
+			"switchTo": "Premi · passa a",
+			"turnLeft": "Ruota a sinistra",
+			"turnRight": "Ruota a destra",
+			"closeWithoutSwitching": "Chiudi senza cambiare",
+			"autoSwitch": "Cambio automatico",
+			"muted": "Muto",
+			"unavailable": "Non disponibile",
+			"volumeKnob": "Tocca per selezionare · ruota per regolare",
+			"jumpTo": "Vai a"
 		},
 		"translationLanguages": {
 			"en": "Inglese",
@@ -553,7 +759,25 @@
 		},
 		"keysEditor": {
 			"active": "Attivo sul dispositivo",
-			"activationFailed": "Impossibile attivare questo profilo sul dispositivo."
+			"activationFailed": "Impossibile attivare questo profilo sul dispositivo.",
+			"layout": "Layout schermo",
+			"tiles": "Tasti di questa pagina",
+			"position": "Posizione",
+			"tile": "Tasto",
+			"kind": "Tipo",
+			"size": "Dimensione",
+			"state": "Stato",
+			"saved": "Salvato",
+			"edited": "Modificato",
+			"empty": "Vuoto",
+			"inspector": "Tasto selezionato",
+			"choose": "Seleziona un tasto da modificare.",
+			"pending": "Modifica non salvata",
+			"keyLanguage": "Lingua dei tasti",
+			"console": "Console",
+			"createConsole": "Crea profilo console",
+			"knobSettings": "Manopola di questo profilo",
+			"agentInput": "Input Agent"
 		}
 	},
 	"ja": {
@@ -569,7 +793,21 @@
 			"foregroundAccessibility": "自動プロファイル切り替えにはアクセシビリティの許可が必要です。システム設定 > プライバシーとセキュリティ > アクセシビリティで open-quake を有効にしてください。",
 			"profileClose": "閉じる",
 			"profileReturn": "閉じる、キーに戻る",
-			"profileAppSearch": "アプリを検索"
+			"profileAppSearch": "アプリを検索",
+			"scenes": "ノブ · シーン",
+			"previous": "前へ",
+			"selected": "選択中",
+			"next": "次へ",
+			"keep": "押す · 維持",
+			"switchTo": "押す · 切り替え",
+			"turnLeft": "左に回す",
+			"turnRight": "右に回す",
+			"closeWithoutSwitching": "切り替えずに閉じる",
+			"autoSwitch": "自動切り替え",
+			"muted": "ミュート",
+			"unavailable": "利用不可",
+			"volumeKnob": "タップで選択 · ノブを回して調整",
+			"jumpTo": "移動先"
 		},
 		"translationLanguages": {
 			"en": "英語",
@@ -638,7 +876,25 @@
 		},
 		"keysEditor": {
 			"active": "デバイスで有効",
-			"activationFailed": "このプロファイルをデバイスで有効にできませんでした。"
+			"activationFailed": "このプロファイルをデバイスで有効にできませんでした。",
+			"layout": "画面レイアウト",
+			"tiles": "このページのキー",
+			"position": "位置",
+			"tile": "キー",
+			"kind": "種類",
+			"size": "サイズ",
+			"state": "状態",
+			"saved": "保存済み",
+			"edited": "編集済み",
+			"empty": "空",
+			"inspector": "選択したキー",
+			"choose": "編集するキーを選択してください。",
+			"pending": "未保存の変更",
+			"keyLanguage": "キーの言語",
+			"console": "コンソール",
+			"createConsole": "コンソール設定を作成",
+			"knobSettings": "この設定のノブ",
+			"agentInput": "エージェント入力"
 		}
 	}
 }

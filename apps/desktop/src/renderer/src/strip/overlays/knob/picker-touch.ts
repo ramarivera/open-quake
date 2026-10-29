@@ -9,12 +9,14 @@ export function mountPickerTouch(
 	page: number,
 	select: (target: PickerTarget) => void,
 	pressed: (index: number) => void,
+	targetAt: (x: number, y: number) => PickerTarget = (x, y) =>
+		pickerTarget(count, page, x, y),
 ): () => void {
 	let down: PickerTarget | undefined;
 	let cancelled = false;
 	let pointer: number | undefined;
 	const point = (position: Point, action: 0 | 1): void => {
-		const target = pickerTarget(count, page, position.x, position.y);
+		const target = targetAt(position.x, position.y);
 		if (action === 1) {
 			if (!down) {
 				down = target;

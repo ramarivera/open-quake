@@ -10,7 +10,9 @@ import {
 	type Footprint,
 	footprintAt,
 	footprintCells,
+	keySpan,
 	type LogicalCell,
+	usesSavedTileSize,
 } from "./profile-footprint.js";
 import { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 
@@ -55,7 +57,7 @@ export const isEmptyCell = (key: ProfileKey): boolean =>
 /** Shared by occupancy, the strip renderer, its preview and hit-testing. */
 export const keyFootprint = (key: ProfileKey): Option.Option<Footprint> =>
 	Option.flatMap(parseProfileCoordinate(key.keyCode), (anchor) =>
-		footprintAt(anchor, effectiveSpan(key.config.type, key.config.size)),
+		footprintAt(anchor, keySpan(key.config)),
 	);
 
 export const occupiedCells = (key: ProfileKey): readonly string[] =>
@@ -93,10 +95,13 @@ export function profileOverflow(input: unknown): readonly {
 			const code = typeof key.keyCode === "string" ? key.keyCode : "?";
 			const type = typeof config.type === "string" ? config.type : "";
 			const size = Array.isArray(config.size) ? config.size : [];
-			const [width, height] = effectiveSpan(type, [
+			const span = [
 				typeof size[0] === "number" ? size[0] : 1,
 				typeof size[1] === "number" ? size[1] : 1,
-			]);
+			] as const;
+			const [width, height] = usesSavedTileSize(type, config.compatibility)
+				? span
+				: effectiveSpan(type, span);
 			const footprint = Option.flatMap(parseProfileCoordinate(code), (anchor) =>
 				footprintAt(anchor, [width, height]),
 			);

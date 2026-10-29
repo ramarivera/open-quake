@@ -279,7 +279,10 @@ function placeTile(
 	meetingPage: boolean,
 ): StripTile {
 	const type = key.config.type;
-	const fullBleed = FULL_BLEED_TYPES.has(type);
+	const fullBleed =
+		FULL_BLEED_TYPES.has(type) &&
+		(type !== "dkDesktopClock" ||
+			(footprint.width === 8 && footprint.height === 2));
 	const localSound = soundboardConfigured(key.config);
 	const slot = fullBleed
 		? { x: 0, y: 0, ...STRIP_CANVAS }
