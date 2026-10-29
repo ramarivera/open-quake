@@ -882,6 +882,7 @@ export function KeyEditor({
 								{selectedTile && selection && (
 									<SelectedKeyPreview
 										tile={selectedTile}
+										serial={serial}
 										target={{
 											profileId: profile.id,
 											pageId: page.id,

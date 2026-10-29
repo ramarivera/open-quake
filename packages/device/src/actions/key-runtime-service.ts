@@ -95,6 +95,9 @@ export class KeyRuntimePort extends Context.Tag(
 		readonly timerCompleted?: (
 			activation: KeyActivation & { readonly keyCode: string },
 		) => Effect.Effect<void, ActionError>;
+		readonly interceptDown?: (
+			deviceId: string,
+		) => Effect.Effect<boolean, ActionError>;
 		readonly resetOwned?: (deviceId?: string) => Effect.Effect<void>;
 		/** Acquires a held chord and returns release bound to that keyboard session. */
 		readonly holdHotkey?: (
@@ -344,6 +347,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				Effect.Effect<void, ActionError> | undefined,
 				ActionError
 			> {
+				if (
+					kind === "down" &&
+					port.interceptDown &&
+					(yield* port.interceptDown(deviceId))
+				)
+					return;
 				const control = JSON.stringify([deviceId, keyCode]);
 				const reportInput = (result: "accepted" | "suppressed") =>
 					(kind === "down" || kind === "up"

@@ -4,7 +4,7 @@
 		"config": {
 			"type": "luminance",
 			"title": {
-				"text": "Luminance",
+				"text": "Screen brightness",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -88,7 +88,7 @@
 		"config": {
 			"type": "mic",
 			"title": {
-				"text": "Device Mic",
+				"text": "Device mic",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -97,7 +97,7 @@
 				"resourceId": 0
 			},
 			"alterTitle": {
-				"text": "Device Mic",
+				"text": "Device mic",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -135,7 +135,7 @@
 		"config": {
 			"type": "brightness",
 			"title": {
-				"text": "Brightness",
+				"text": "Host brightness",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -172,7 +172,7 @@
 		"config": {
 			"type": "vol",
 			"title": {
-				"text": "Vol",
+				"text": "Volume",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -388,7 +388,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "New Desktop",
+				"text": "New desktop",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -421,7 +421,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Task Center",
+				"text": "Task manager",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -454,7 +454,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Lock Screen",
+				"text": "Lock screen",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -487,7 +487,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Fast Control",
+				"text": "Quick settings",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -520,7 +520,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Clip Board",
+				"text": "Clipboard",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -553,7 +553,7 @@
 		"config": {
 			"type": "cmd",
 			"title": {
-				"text": "Control Panel",
+				"text": "Control panel",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",

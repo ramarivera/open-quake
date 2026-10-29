@@ -1,4 +1,6 @@
 import "../css-properties";
+import { luminancePercent } from "../../../../shared/hardware-contracts";
+import { useLocaleText } from "../../i18n";
 import { genericTileMetrics } from "../tileMetrics";
 import type { StripTileProps } from "../tileRegistry";
 import { useForegroundArtwork, useTileArtwork } from "../useTileArt";
@@ -8,11 +10,21 @@ import { useForegroundArtwork, useTileArtwork } from "../useTileArt";
  * bottom label. A user's explicit title style (colour, position, size, bold,
  * italic, underline) still wins. See independent-device-design.
  */
-export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
+export function GenericTile({
+	tile,
+	context,
+}: StripTileProps): React.JSX.Element {
 	const { config } = tile.key;
+	const t = useLocaleText("picker");
+	const luminance =
+		config.type === "luminance" && context.hardware?.available
+			? context.hardware.luminance
+			: undefined;
 	const foreground = useForegroundArtwork(config.type === "gameMode");
 	const artwork = useTileArtwork(foreground || config.icon, config.type);
 	const explicit = config.title.userModifiedStyle === true;
+	const brightness =
+		["luminance", "brightness"].includes(config.type) && !explicit;
 	const metrics = genericTileMetrics(tile.box, {
 		pos: config.title.pos,
 		style: config.title.style,
@@ -21,10 +33,12 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	});
 	const styles = config.title.style.split("|");
 	const fontStyle = metrics.italic ? "italic" : "normal";
-	const fontSize = metrics.fontSize;
+	const fontSize = brightness ? 18 : metrics.fontSize;
 	const title = config.title.text;
 	const placement = !explicit
-		? { left: 24, bottom: 22, transform: "none", textAlign: "left" as const }
+		? brightness
+			? { left: 68, top: 20, transform: "none", textAlign: "left" as const }
+			: { left: 24, bottom: 22, transform: "none", textAlign: "left" as const }
 		: metrics.titleAnchor === "top"
 			? { top: metrics.padding }
 			: metrics.titleAnchor === "mid"
@@ -42,7 +56,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 		config.type === "gameMode" ? Math.floor(tile.box.height * 0.95) : iconSize;
 	return (
 		<div
-			className="strip-tile"
+			className={`strip-tile${brightness ? " quick-brightness" : ""}`}
 			data-type={tile.type}
 			style={{ borderRadius: tile.tileRadius }}
 		>
@@ -58,21 +72,35 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 					...(artwork.monochrome && artwork.src
 						? { maskImage: `url("${artwork.src}")` }
 						: {}),
-					width: titleAware ? iconWidth : 64,
-					height: titleAware ? iconHeight : 64,
+					width: brightness ? 32 : titleAware ? iconWidth : 64,
+					height: brightness ? 32 : titleAware ? iconHeight : 64,
 					left: titleAware ? "50%" : 24,
 					transform: titleAware ? "translate(-50%, -50%)" : "none",
 					top: fullArtwork
 						? "50%"
 						: titleAware
 							? `${metrics.iconCenter * 100}%`
-							: 28,
+							: brightness
+								? 24
+								: 28,
 				}}
 			>
 				{artwork.src ? (
 					<img src={artwork.src} alt="" draggable={false} />
 				) : null}
 			</div>
+			{brightness ? (
+				<div className="quick-brightness-state">
+					{config.type === "luminance" ? (
+						<output data-unavailable={luminance === undefined}>
+							{luminance === undefined
+								? t("unavailable")
+								: `${luminancePercent(luminance)}%`}
+						</output>
+					) : null}
+					<span>{t("brightnessKnob")}</span>
+				</div>
+			) : null}
 			{config.title.display ? (
 				<p
 					className="strip-tile-title"
@@ -85,7 +113,11 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 						textDecoration:
 							explicit && styles.includes("underline") ? "underline" : "none",
 						color: explicit ? config.title.color : undefined,
-						width: explicit ? metrics.titleWidth : "calc(100% - 48px)",
+						width: brightness
+							? "calc(100% - 120px)"
+							: explicit
+								? metrics.titleWidth
+								: "calc(100% - 48px)",
 						...placement,
 					}}
 				>

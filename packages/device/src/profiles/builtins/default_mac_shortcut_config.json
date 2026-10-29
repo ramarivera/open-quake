@@ -4,7 +4,7 @@
 		"config": {
 			"type": "luminance",
 			"title": {
-				"text": "Luminance",
+				"text": "Screen brightness",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -88,7 +88,7 @@
 		"config": {
 			"type": "mic",
 			"title": {
-				"text": "Device Mic",
+				"text": "Device mic",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -97,7 +97,7 @@
 				"resourceId": 0
 			},
 			"alterTitle": {
-				"text": "Device Mic",
+				"text": "Device mic",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -135,7 +135,7 @@
 		"config": {
 			"type": "brightness",
 			"title": {
-				"text": "Brightness",
+				"text": "Host brightness",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -172,7 +172,7 @@
 		"config": {
 			"type": "vol",
 			"title": {
-				"text": "Vol",
+				"text": "Volume",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -355,7 +355,7 @@
 		"config": {
 			"type": "cmd",
 			"title": {
-				"text": "Launchpad",
+				"text": "Apps",
 				"pos": "bot",
 				"size": 18,
 				"color": "#FFFFFF",
@@ -370,7 +370,7 @@
 			"actions": [
 				{
 					"type": "text",
-					"value": "osascript -e 'tell application \"Launchpad\" to activate'"
+					"value": "if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi"
 				}
 			],
 			"basicEditableItems": {
@@ -421,7 +421,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Force Quit",
+				"text": "Force quit",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -454,7 +454,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Lock Screen",
+				"text": "Lock screen",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
@@ -520,7 +520,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Clip Board",
+				"text": "Clipboard",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",

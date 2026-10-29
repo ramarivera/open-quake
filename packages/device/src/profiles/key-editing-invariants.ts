@@ -71,6 +71,17 @@ export function keyTitle(
 	locale: ProfileLocale,
 	alternate = false,
 ): string {
+	if (
+		alternate &&
+		locale === "en" &&
+		key.config.type === "mic" &&
+		key.config.userModifiedAlterTitle !== true &&
+		Option.isSome(key.compatibility) &&
+		key.compatibility.value.catalog === true &&
+		Option.isSome(key.config.alterTitle) &&
+		key.config.alterTitle.value.text === "Device Mic"
+	)
+		return "Device mic";
 	if (alternate && Option.isSome(key.config.alterTitle))
 		return keyTitle(
 			{
@@ -88,6 +99,26 @@ export function keyTitle(
 	const agentTitle = localizedAgentTitle(key, locale);
 	if (agentTitle !== undefined) return agentTitle;
 	const text = key.config.title.text;
+	const quickLabels: Readonly<Record<string, string>> = {
+		"Clip Board": "Clipboard",
+		"Force Quit": "Force quit",
+		"Lock Screen": "Lock screen",
+		"Device Mic": "Device mic",
+		Luminance: "Screen brightness",
+		Brightness: "Host brightness",
+		Vol: "Volume",
+		"New Desktop": "New desktop",
+		"Task Center": "Task manager",
+		"Fast Control": "Quick settings",
+		"Control Panel": "Control panel",
+	};
+	if (
+		locale === "en" &&
+		Option.isSome(key.compatibility) &&
+		key.compatibility.value.catalog === true &&
+		quickLabels[text]
+	)
+		return quickLabels[text];
 	// Profiles installed before the Agent rename keep the old template titles.
 	const renamed = renamedAgentTitles[key.config.type];
 	if (renamed && text === renamed.from) return renamed.to;

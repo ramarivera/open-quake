@@ -7,8 +7,14 @@ import {
 
 /** One serial-specific read stream per mounted strip. Late replies cannot cross a profile/device switch. */
 export function useHardwareSnapshot(
-	serial: string | undefined,
+	requestedSerial: string | undefined,
 ): HardwareSnapshot | undefined {
+	// Editor/profile identities select documents, never a physical hardware owner.
+	const serial =
+		requestedSerial === "desktop-preview" ||
+		requestedSerial === "editor-preview"
+			? undefined
+			: requestedSerial;
 	const [state, setState] = useState<HardwareSnapshot>();
 	useEffect(() => {
 		let live = true;

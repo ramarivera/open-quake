@@ -13,11 +13,14 @@ const native = vi.hoisted(() => {
 	class Window {
 		static windows: Window[] = [];
 		destroyed = false;
-		listeners = new Map<string, () => void>();
+		listeners = new Map<string, (...args: unknown[]) => void>();
 		webContents = {
 			setZoomFactor: vi.fn(),
 			setAudioMuted: vi.fn(),
-			on: vi.fn((event: string, f: () => void) => this.listeners.set(event, f)),
+			reload: vi.fn(),
+			on: vi.fn((event: string, f: (...args: unknown[]) => void) =>
+				this.listeners.set(event, f),
+			),
 		};
 		setBounds = vi.fn();
 		setAlwaysOnTop = vi.fn();
@@ -31,7 +34,9 @@ const native = vi.hoisted(() => {
 		constructor(readonly options: BrowserWindowConstructorOptions) {
 			Window.windows.push(this);
 		}
-		on = vi.fn((event: string, f: () => void) => this.listeners.set(event, f));
+		on = vi.fn((event: string, f: (...args: unknown[]) => void) =>
+			this.listeners.set(event, f),
+		);
 		isDestroyed = () => this.destroyed;
 		destroy = vi.fn(() => {
 			this.destroyed = true;
@@ -150,6 +155,21 @@ describe("native panel owner", () => {
 		destroyPanel(panel);
 		expect(unrelated.isDestroyed()).toBe(false);
 	});
+	it("reloads crashed renderers, bounds a crash loop and cancels recovery on destruction", () => {
+		const panel = createPanelWindow(target, false, "darwin");
+		const win = current();
+		showPanel(panel);
+		for (let n = 0; n < 4; n++) {
+			win.listeners.get("render-process-gone")?.({}, { reason: "crashed" });
+			vi.advanceTimersByTime(250);
+		}
+		expect(win.webContents.reload).toHaveBeenCalledTimes(3);
+		vi.advanceTimersByTime(60_000);
+		win.listeners.get("render-process-gone")?.({}, { reason: "oom" });
+		destroyPanel(panel);
+		vi.advanceTimersByTime(250);
+		expect(win.webContents.reload).toHaveBeenCalledTimes(3);
+	});
 	it("keeps desktop preview interactive", () => {
 		createPanelWindow({ ...target, isPanel: false }, true, "linux");
 		expect(current().setIgnoreMouseEvents).not.toHaveBeenCalled();
@@ -159,4 +179,24 @@ describe("native panel owner", () => {
 			show: true,
 		});
 	});
+});
+it("recovers a parked crashed panel and reports the native exit details", () => {
+	const report = vi.fn();
+	const panel = createPanelWindow(target, false, "darwin", report),
+		win = current();
+	showPanel(panel);
+	win.listeners.get("render-process-gone")?.(
+		{},
+		{ reason: "crashed", exitCode: 9 },
+	);
+	parkPanel(panel);
+	vi.advanceTimersByTime(250);
+	expect(win.webContents.reload).toHaveBeenCalledOnce();
+	expect(report).toHaveBeenCalledWith("retry", {
+		reason: "crashed",
+		exitCode: 9,
+	});
+	win.listeners.get("did-finish-load")?.();
+	showPanel(panel);
+	expect(win.showInactive).toHaveBeenCalled();
 });

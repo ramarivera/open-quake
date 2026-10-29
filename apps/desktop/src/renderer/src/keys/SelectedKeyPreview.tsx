@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ClockTarget } from "../../../shared/clock-contracts";
 import { cycleTheme } from "../../../shared/clock-style";
+import { useHardwareSnapshot } from "../hardware/useHardwareSnapshot";
 import type { StripTile } from "../strip/geometry";
 import { previewVoiceContext } from "../strip/overlays/voice/voice-context";
 import { stripTileFor } from "../strip/tileRegistry";
@@ -13,16 +14,19 @@ import {
 export function SelectedKeyPreview({
 	tile,
 	target,
+	serial,
 	beforeWrite,
 	onSaved,
 	isCurrent,
 }: {
 	tile: StripTile;
+	serial?: string | undefined;
 	target: ClockTarget;
 	beforeWrite: () => Promise<boolean>;
 	onSaved: () => Promise<void>;
 	isCurrent: () => boolean;
 }): React.JSX.Element {
+	const hardware = useHardwareSnapshot(serial);
 	const frame = useRef<HTMLDivElement>(null);
 	const [side, setSide] = useState(80 * 0.85);
 	useLayoutEffect(() => {
@@ -76,6 +80,7 @@ export function SelectedKeyPreview({
 							tile={tile}
 							context={{
 								now: undefined,
+								hardware,
 								hourFormat: "24h",
 								voice: previewVoiceContext,
 								interactive: false,

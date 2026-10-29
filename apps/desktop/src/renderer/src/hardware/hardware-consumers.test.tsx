@@ -11,9 +11,11 @@ import {
 } from "../../../../../../packages/device/src/hardware/hardware-contracts";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import { ProfileJsonObject } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { SelectedKeyPreview } from "../keys/SelectedKeyPreview";
 import { SequenceEditor } from "../keys/SequenceEditor";
 import { stripLayout } from "../strip/geometry";
 import { previewVoiceContext } from "../strip/overlays/voice/voice-context";
+import { StripScreen } from "../strip/StripScreen";
 import { stripTileFor } from "../strip/tileRegistry";
 import { HardwareSettings } from "./HardwareSettings";
 import { hardwareKeyState } from "./key-state";
@@ -325,4 +327,137 @@ it("MGMT-363 MeetAI mic uses its serial hardware state and saved activation inst
 		),
 	);
 	expect(host.querySelector<HTMLButtonElement>("button")?.disabled).toBe(true);
+});
+
+it("shows the selected QUAKE brightness in both inert Studio previews and drops stale device values", async () => {
+	vi.useFakeTimers();
+	vi.stubGlobal("quakeKeyLibrary", {
+		onRuntime: () => () => {},
+		request: async () => ({ _tag: "success", states: [] }),
+	});
+	vi.stubGlobal(
+		"ResizeObserver",
+		class {
+			observe() {}
+			disconnect() {}
+		},
+	);
+	let live = state("A", { luminance: 255 });
+	const request = vi.fn(async () => ({
+		_tag: "ready",
+		snapshot: live,
+		mock: true,
+	}));
+	Object.defineProperty(window, "quakeHardware", {
+		configurable: true,
+		value: { request },
+	});
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!profile) throw Error("Quick missing");
+	const tile = stripLayout(profile, profile.pages[0]).tiles.find(
+		(t) => t.type === "luminance",
+	);
+	if (!tile) throw Error("Brightness missing");
+	const previews = (serial: string, previewProfile = profile) => (
+		<>
+			<div data-grid>
+				<StripScreen
+					previewSerial="editor-preview"
+					hardwareSerial={serial}
+					interactive={false}
+					profiles={{
+						_tag: "ready",
+						envelope: {
+							schemaVersion: 1,
+							profiles: [previewProfile],
+							activeByDevice: {
+								"editor-preview": {
+									profileId: profile.id,
+									pageId: profile.pages[0].id,
+								},
+							},
+							manager: Option.none(),
+						},
+					}}
+					showEmptyGridDashedBorder={false}
+				/>
+			</div>
+			<SelectedKeyPreview
+				tile={tile}
+				serial={serial}
+				target={{
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+					keyCode: tile.keyCode,
+				}}
+				beforeWrite={async () => true}
+				onSaved={async () => {}}
+				isCurrent={() => true}
+			/>
+		</>
+	);
+	await act(async () => root.render(previews("A")));
+	expect(request).toHaveBeenCalledWith({ _tag: "read", serial: "A" });
+	expect(request).not.toHaveBeenCalledWith({
+		_tag: "read",
+		serial: "editor-preview",
+	});
+	expect(
+		host.querySelector('[data-grid] [data-type="luminance"]')?.textContent,
+	).toContain("100%");
+	expect(host.querySelector(".key-selected-preview")?.textContent).toContain(
+		"100%",
+	);
+	await act(async () => root.render(previews("desktop-preview")));
+	expect(request).toHaveBeenCalledWith({ _tag: "read" });
+	expect(request).not.toHaveBeenCalledWith({
+		_tag: "read",
+		serial: "desktop-preview",
+	});
+	expect(
+		host.querySelector('[data-grid] [data-type="luminance"]')?.textContent,
+	).toContain("100%");
+
+	live = state("B", { luminance: 128 });
+	await act(async () => root.render(previews("B")));
+	expect(host.querySelector(".key-selected-preview")?.textContent).toContain(
+		"50%",
+	);
+	expect(
+		host.querySelector('[data-grid] [data-type="luminance"]')?.textContent,
+	).toContain("50%");
+	const customProfile = {
+		...profile,
+		pages: [
+			{
+				...profile.pages[0],
+				keys: profile.pages[0].keys.map((key) =>
+					key.config.type === "luminance"
+						? {
+								...key,
+								config: {
+									...key.config,
+									title: { ...key.config.title, userModifiedStyle: true },
+								},
+							}
+						: key,
+				),
+			},
+		] as typeof profile.pages,
+	};
+	await act(async () => root.render(previews("B", customProfile)));
+	expect(
+		host
+			.querySelector('[data-grid] [role="progressbar"]')
+			?.getAttribute("aria-valuenow"),
+	).toBe("50");
+	live = state("B", { luminance: 128, available: false });
+	await act(async () => vi.advanceTimersByTimeAsync(500));
+	expect(
+		host.querySelector(".key-selected-preview")?.textContent,
+	).not.toContain("50%");
+	expect(
+		host.querySelector('[data-grid] [data-type="luminance"]')?.textContent,
+	).not.toContain("50%");
+	vi.unstubAllGlobals();
 });

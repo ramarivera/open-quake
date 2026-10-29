@@ -80,6 +80,7 @@ import {
 	launchProfileCommand,
 	profileApplicationDialog,
 } from "./native-actions";
+import { confirmProfileAction } from "./native-dialog";
 import {
 	makeProfileController,
 	type ProfileSelectionScope,
@@ -413,20 +414,14 @@ export function prepareProfiles(
 										.catch(() => []);
 						return installed;
 					},
-					confirm: async (message, detail) =>
-						(
-							await dialog.showMessageBox({
-								type: "warning",
-								message,
-								detail,
-								buttons: ["Confirm", "Cancel"],
-								defaultId: 1,
-								cancelId: 1,
-							})
-						).response === 0,
+					confirm: (message, detail) =>
+						confirmProfileAction(management(), message, detail),
 					execute: (command) => launchProfileCommand(platform, command),
 					chooseApp: async () => {
+						const owner = management();
+						if (!owner || owner.isDestroyed()) return Option.none();
 						const result = await dialog.showOpenDialog(
+							owner,
 							profileApplicationDialog(platform),
 						);
 						const path = result.canceled ? undefined : result.filePaths[0];

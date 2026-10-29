@@ -112,6 +112,11 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 				Effect.gen(function* () {
 					if (error._tag === "KnobSessionStale") return;
 					yield* emit({ notice: error.code });
+					yield* schedule(
+						"notice",
+						3000,
+						Effect.suspend(() => emit({ notice: "" })),
+					);
 					if (ports.alert)
 						yield* ports.alert(error.code).pipe(
 							Effect.matchEffect({
@@ -205,6 +210,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 				preserveVoice = false,
 			): Effect.Effect<void, KnobError> =>
 				Effect.gen(function* () {
+					yield* stop("notice");
 					contextGeneration++;
 					configured = true;
 					yield* stopBrightness;

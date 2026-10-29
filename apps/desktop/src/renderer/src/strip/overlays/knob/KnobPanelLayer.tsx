@@ -1,7 +1,8 @@
 import { Schema } from "effect";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { selectorProfiles } from "../../../../../shared/knob-contracts";
 import { VoiceSurfaceEvent } from "../../../../../shared/voice-surface";
+import { useLocaleText } from "../../../i18n";
 import { stripLayout } from "../../geometry";
 import { useStripProfiles } from "../../useStripProfiles";
 import { useStripMotion } from "../voice/voice-context";
@@ -15,6 +16,7 @@ import "./knob.css";
 /** SVG child of the strip canvas, so rotation/scaling match the base panel. */
 export function KnobPanelLayer(): React.JSX.Element | null {
 	const { snapshot, notice, request } = useKnob();
+	const t = useLocaleText("picker");
 	const motion = useStripMotion();
 	const profiles = useStripProfiles();
 	const capture = useRef<
@@ -87,6 +89,15 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 	const { context, selector, focus, volume } = snapshot;
 	const sessionId = context.session.sessionId;
 	const entries = selectorProfiles(snapshot);
+	const focusedKind =
+		focus._tag === "tile"
+			? context.keys.find((key) => key.keyCode === focus.keyCode)?.kind
+			: undefined;
+	const errorMessage =
+		snapshot.notice === "QUAKE.KNOB.CAPABILITY_UNAVAILABLE" &&
+		focusedKind === "brightness"
+			? t("hostBrightnessUnsupported")
+			: notice || (snapshot.notice ? t("controlUnavailable") : "");
 	const profile =
 		profiles._tag === "ready"
 			? profiles.envelope.profiles.find(
@@ -169,12 +180,32 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 						motion={motion}
 					/>
 				) : null}
-				{notice || snapshot.notice ? (
-					<div className="knob-notice" role="status">
-						{notice || "This control is unavailable"}
-					</div>
-				) : null}
+				<KnobNotice message={errorMessage} />
 			</div>
 		</foreignObject>
 	);
+}
+
+function KnobNotice({
+	message,
+}: {
+	message: string;
+}): React.JSX.Element | null {
+	const [view, setView] = useState({ text: message, exiting: false });
+	useEffect(() => {
+		if (message) {
+			setView({ text: message, exiting: false });
+			return;
+		}
+		setView((current) =>
+			current.text ? { ...current, exiting: true } : current,
+		);
+		const timer = setTimeout(() => setView({ text: "", exiting: false }), 240);
+		return () => clearTimeout(timer);
+	}, [message]);
+	return view.text ? (
+		<div className="knob-notice" role="status" data-exiting={view.exiting}>
+			{view.text}
+		</div>
+	) : null;
 }

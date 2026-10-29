@@ -24,6 +24,7 @@ import {
 } from "../../useStripProfiles";
 import { previewVoiceContext } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
+import { KnobPanelLayer } from "./KnobPanelLayer";
 import { ProfilePicker } from "./ProfilePicker";
 import { scenePageRect, sceneSlots, sceneTarget } from "./scene-rail";
 import { useKnob } from "./useKnob";
@@ -744,4 +745,69 @@ it("SCREEN-094: physical page controls retain their boundaries and disable the u
 			);
 		}
 	}
+});
+
+it("explains unsupported host display brightness without mislabeling QUAKE brightness", async () => {
+	const initial = snapshot(1);
+	let current: KnobModelSnapshot = {
+		...initial,
+		selector: { ...initial.selector, mode: "closed" },
+		focus: { _tag: "tile", keyCode: "2,1", angle: 0 },
+		context: {
+			...initial.context,
+			keys: [
+				{
+					keyCode: "2,1",
+					kind: "brightness",
+					visible: true,
+					supportKnob: true,
+				},
+			],
+		},
+		notice: "QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+	};
+	let receive: ((value: unknown) => void) | undefined;
+	window.quakeKnob = {
+		onSnapshot: (fn) => {
+			receive = fn;
+			return () => {};
+		},
+		request: async () => ({ _tag: "success", snapshot: current }),
+	};
+	await render(
+		<svg aria-label="Knob overlay test">
+			<KnobPanelLayer />
+		</svg>,
+	);
+	await act(async () => vi.advanceTimersByTimeAsync(20));
+	expect(host.querySelector(".knob-notice")?.textContent).toBe(
+		recovered.en.picker.hostBrightnessUnsupported,
+	);
+	current = {
+		...current,
+		revision: current.revision + 1,
+		context: {
+			...current.context,
+			keys: [
+				{ keyCode: "2,1", kind: "luminance", visible: true, supportKnob: true },
+			],
+		},
+	};
+	await act(async () => {
+		receive?.(current);
+		await vi.advanceTimersByTimeAsync(20);
+	});
+	expect(host.querySelector(".knob-notice")?.textContent).toBe(
+		recovered.en.picker.controlUnavailable,
+	);
+	current = { ...current, revision: current.revision + 1, notice: "" };
+	await act(async () => {
+		receive?.(current);
+		await vi.advanceTimersByTimeAsync(20);
+	});
+	expect(host.querySelector(".knob-notice")?.getAttribute("data-exiting")).toBe(
+		"true",
+	);
+	await act(async () => vi.advanceTimersByTimeAsync(240));
+	expect(host.querySelector(".knob-notice")).toBeNull();
 });

@@ -331,3 +331,26 @@
 .management-window .nav-item[aria-current="page"] .icon {
 	color: var(--oq-selection);
 }
+
+.quick-brightness-state {
+	position: absolute;
+	top: 88px;
+	left: 24px;
+	right: 16px;
+	color: var(--strip-text);
+}
+.quick-brightness-state output {
+	font-size: 42px;
+	font-variant-numeric: tabular-nums;
+}
+.quick-brightness-state span {
+	display: block;
+	font-size: 14px;
+	color: var(--strip-muted);
+	margin-top: 5px;
+}
+
+.quick-brightness-state output[data-unavailable="true"] {
+	font-size: 20px;
+	overflow-wrap: anywhere;
+}

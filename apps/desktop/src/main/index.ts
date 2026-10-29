@@ -6,7 +6,7 @@ import {
 	QuakeDevice,
 } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
-import { Effect, Fiber, Layer, Stream } from "effect";
+import { Effect, Option as EffectOption, Fiber, Layer, Stream } from "effect";
 import {
 	app,
 	BrowserWindow,
@@ -21,6 +21,7 @@ import {
 	shell,
 } from "electron";
 import { KeyRuntime } from "../../../../packages/device/src/actions/key-runtime-service";
+import { hardwareKeyboardAdapter } from "../../../../packages/device/src/hardware/hardware-keyboard";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { assistantSettingsFromActions } from "../../../../packages/device/src/profiles/assistant-contracts";
 import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
@@ -63,6 +64,7 @@ import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import {
 	closeHostKeyboard,
+	hostKeyboardAdapter,
 	hostKeyboardAvailable,
 } from "./hardware/host-keyboard";
 import { hardwarePreferencesLive } from "./hardware/preferences";
@@ -94,6 +96,7 @@ import {
 } from "./lifecycle/panel-window";
 import { makePowerOwner } from "./lifecycle/power-owner";
 import { registerLifecycle } from "./lifecycle/registration";
+import { createSystemOverview } from "./lifecycle/system-overview";
 import { prepareMaintenance } from "./maintenance";
 import {
 	readNativeTheme,
@@ -223,7 +226,25 @@ if (!app.requestSingleInstanceLock()) {
 								: { display: screen.getPrimaryDisplay(), isPanel: false };
 						};
 						let panelTarget = getPanelTarget();
-						let panelWin = createPanelWindow(panelTarget, isDev);
+						const panelRecovery = (
+							state: "retry" | "exhausted",
+							cause?: unknown,
+						) => {
+							Effect.runFork(
+								Effect.logWarning(
+									state === "retry"
+										? "panel.renderer.retry"
+										: "panel.renderer.exhausted",
+									cause,
+								).pipe(Effect.provide(diagnostics.layer)),
+							);
+						};
+						let panelWin = createPanelWindow(
+							panelTarget,
+							isDev,
+							process.platform,
+							panelRecovery,
+						);
 						const stripWindows = new Map<
 							string,
 							{ win: BrowserWindow; target: PanelTarget }
@@ -297,6 +318,30 @@ if (!app.requestSingleInstanceLock()) {
 							bus?.device
 								? bus.device(serial)?.hardware?.()
 								: bus?.hardware?.();
+						const systemOverview = createSystemOverview(async (serial) => {
+							const session = currentHardware(serial);
+							if (!session) return;
+							await Effect.runPromise(
+								hardwareKeyboardAdapter(
+									session,
+									hostKeyboardAvailable()
+										? EffectOption.some(hostKeyboardAdapter())
+										: EffectOption.none(),
+								)
+									.pressChord("escape")
+									.pipe(
+										Effect.tap(() =>
+											Effect.logInfo("panel.overview.dismissed"),
+										),
+										Effect.tapError((error) =>
+											Effect.logWarning("panel.overview.failed", error),
+										),
+										Effect.provide(diagnostics.layer),
+									),
+							);
+							const window = stripWindows.get(serial)?.win ?? panelWin;
+							showPanel(window);
+						});
 						let settingsSerial: string | undefined;
 						let settingsHardware: ReturnType<typeof currentHardware>;
 						const selectedHardware = () =>
@@ -542,7 +587,11 @@ if (!app.requestSingleInstanceLock()) {
 							mediaActions,
 							speech.resetSoundKeys,
 							panelSerial,
-							{ management: (tab) => desktopShell.open(tab) },
+							{
+								management: (tab) => desktopShell.open(tab),
+								systemOverview: (serial) => systemOverview.open(serial),
+								dismissSystemOverview: (serial) => systemOverview.tap(serial),
+							},
 						);
 						const localAgentState = createLocalAgentState(
 							join(app.getPath("userData"), "channel-runtime-v1"),
@@ -1373,6 +1422,7 @@ if (!app.requestSingleInstanceLock()) {
 													event,
 													serial = owner.serial?.() ?? activeDeviceId(),
 												) => {
+													if (systemOverview.consume(serial, event)) return;
 													// Gate new holds synchronously and cancel in main before
 													// renderer touch teardown can synthesize a normal release.
 													if (event.kind === "status")
@@ -1490,7 +1540,12 @@ if (!app.requestSingleInstanceLock()) {
 								target.isPanel !== previous.isPanel
 							) {
 								const old = win;
-								win = createPanelWindow(target, isDev);
+								win = createPanelWindow(
+									target,
+									isDev,
+									process.platform,
+									panelRecovery,
+								);
 								loadSurface(
 									win,
 									"panel",

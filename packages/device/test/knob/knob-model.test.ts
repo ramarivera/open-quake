@@ -481,7 +481,7 @@ describe("knob model uses the real domain ports", () => {
 			return Effect.gen(function* () {
 				yield* KnobModel.configure(modelContext());
 				yield* send({ _tag: "Rotate", delta: 1 });
-				yield* TestClock.adjust(5000);
+				yield* TestClock.adjust(200);
 				const snapshot = yield* KnobModel.snapshot();
 				expect(snapshot.context.session.profileId).toBe("p0");
 				expect(snapshot.notice).toBe(error.code);
@@ -837,6 +837,30 @@ it.effect(
 				session: { ...active.session, revision: 2 },
 			});
 			expect((yield* KnobModel.snapshot()).volume.phase).toBe("inactive");
+		}).pipe(Effect.provide(h.layer));
+	},
+);
+it.effect(
+	"expires unavailable-control notices three seconds after the latest failure",
+	() => {
+		const h = harness(modelContext(), {
+			focusedTurn: () => Effect.fail(KnobCapabilityUnavailable.fromCause()),
+		});
+		return Effect.gen(function* () {
+			yield* KnobModel.configure(modelContext());
+			yield* send({ _tag: "TapTile", keyCode: "1,3" });
+			yield* send({ _tag: "Rotate", delta: 1 }).pipe(Effect.ignore);
+			expect((yield* KnobModel.snapshot()).notice).toBe(
+				"QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+			);
+			yield* TestClock.adjust(2000);
+			yield* send({ _tag: "Rotate", delta: 1 }).pipe(Effect.ignore);
+			yield* TestClock.adjust(1500);
+			expect((yield* KnobModel.snapshot()).notice).toBe(
+				"QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+			);
+			yield* TestClock.adjust(1500);
+			expect((yield* KnobModel.snapshot()).notice).toBe("");
 		}).pipe(Effect.provide(h.layer));
 	},
 );
