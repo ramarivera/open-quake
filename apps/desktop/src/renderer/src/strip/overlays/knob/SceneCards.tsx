@@ -47,7 +47,7 @@ export function SceneCards({
 						</div>
 						<div className="scene-card-action">
 							{selected
-								? t(current ? "keep" : "switchTo")
+								? t("apply")
 								: t(
 										slot.position === "previous" ? "turnLeft" : "turnRight",
 									)}{" "}

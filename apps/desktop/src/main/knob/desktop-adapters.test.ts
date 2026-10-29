@@ -48,6 +48,36 @@ const source = (): EncodedProfileEnvelope => ({
 
 describe("desktop knob integration", () => {
 	it.effect(
+		"localizes legacy agent names in knob menus without renaming saved profiles",
+		() =>
+			Effect.gen(function* () {
+				for (const name of ["DKClaw", "DK Claw", "DK龙虾", "My Agent"]) {
+					const envelope = {
+						...source(),
+						profiles: [{ ...source().profiles[0], id: "1-8", name }],
+					};
+					let writes = 0;
+					const adapters = desktopKnobAdapters(
+						"/unused",
+						{ locale: () => "en" },
+						{
+							read: async () => envelope,
+							write: async () => {
+								writes++;
+							},
+						},
+					);
+					const context = yield* adapters.load;
+					expect(context.profiles[0]?.name).toBe(
+						name === "My Agent" ? name : "Agent",
+					);
+					expect(envelope.profiles[0]?.name).toBe(name);
+					expect(writes).toBe(0);
+				}
+			}),
+	);
+
+	it.effect(
 		"recognizes the manager catalog's Vivid profile as the double-press target",
 		() => {
 			const envelope = encodeProfileEnvelope(

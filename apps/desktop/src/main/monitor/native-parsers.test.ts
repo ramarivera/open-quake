@@ -314,6 +314,35 @@ describe("qualified platform fixtures", () => {
 		await Effect.runPromise(c.collect("disk"));
 		expect(run).toHaveBeenCalledTimes(3);
 	});
+	it.each([0, 2])(
+		"reads macOS device_connected with %i connections",
+		async (count) => {
+			const collector = nativeCollector("darwin", async () =>
+				JSON.stringify({
+					SPBluetoothDataType: [
+						{ device_connected: Array.from({ length: count }, () => ({})) },
+					],
+				}),
+			);
+			expect(await Effect.runPromise(collector.collect("bluetooth"))).toEqual({
+				state: "available",
+				values: { connected: count },
+			});
+		},
+	);
+	it("prefers device_connected when both Bluetooth fields are present", async () => {
+		const collector = nativeCollector("darwin", async () =>
+			JSON.stringify({
+				SPBluetoothDataType: [
+					{ device_connected: [{}], devices_connected: [{}, {}] },
+				],
+			}),
+		);
+		expect(await Effect.runPromise(collector.collect("bluetooth"))).toEqual({
+			state: "available",
+			values: { connected: 1 },
+		});
+	});
 	it("qualifies macOS optional GPU and Bluetooth without inventing temperature", async () => {
 		const c = nativeCollector(
 			"darwin",

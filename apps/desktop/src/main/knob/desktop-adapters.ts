@@ -16,7 +16,10 @@ import type {
 } from "../../../../../packages/device/src/knob/model/contracts.js";
 import { volumeStep } from "../../../../../packages/device/src/knob/model/invariants.js";
 import type { KnobModelPort } from "../../../../../packages/device/src/knob/model/ports.js";
-import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
+import {
+	profileLabel,
+	translateProfile,
+} from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
 	type Profile,
@@ -161,7 +164,7 @@ export function desktopKnobAdapters(
 			pageId,
 			profiles: visible.map((p) => ({
 				id: p.id,
-				name: p.name,
+				name: profileLabel(p, locale),
 				colorful: colorful(p),
 				thumbnailKey: profileThumbnailKey(
 					translateProfile(p, locale),

@@ -307,20 +307,24 @@ export function nativeCollector(
 				Schema.Struct({
 					SPBluetoothDataType: Schema.Array(
 						Schema.Struct({
+							device_connected: Schema.optional(Schema.Array(Schema.Unknown)),
 							devices_connected: Schema.optional(Schema.Array(Schema.Unknown)),
 						}),
 					),
 				}),
 			)(raw);
 			const records = decoded.SPBluetoothDataType.filter(
-				(v) => v.devices_connected !== undefined,
+				(v) =>
+					v.device_connected !== undefined || v.devices_connected !== undefined,
 			);
 			return records.length
 				? {
 						state: "available",
 						values: {
 							connected: records.reduce(
-								(sum, v) => sum + (v.devices_connected?.length ?? 0),
+								(sum, v) =>
+									sum +
+									(v.device_connected ?? v.devices_connected ?? []).length,
 								0,
 							),
 						},

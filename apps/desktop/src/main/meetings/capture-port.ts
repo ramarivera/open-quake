@@ -37,6 +37,7 @@ export function createCapturePort(options: {
 	microphone?:
 		| (() => Effect.Effect<MicrophoneIdentity | undefined>)
 		| undefined;
+	managementId?: (() => number | undefined) | undefined;
 	onLost: (id: string) => void;
 	onNoWindows: () => void;
 }) {
@@ -314,9 +315,33 @@ export function createCapturePort(options: {
 						(cause) => cause.originalCause instanceof SystemAudioUnavailable,
 						() =>
 							Effect.gen(function* () {
+								const ownerId = options.managementId?.();
+								const owner = BrowserWindow.getAllWindows().find(
+									(win) => !win.isDestroyed() && win.webContents.id === ownerId,
+								);
+								// On macOS an unparented alert runs a native modal loop and
+								// stops JS timers, IPC and even the abort signal.
+								if (!owner) {
+									yield* Effect.logWarning(
+										"Meeting fallback has no management window",
+									).pipe(
+										Effect.annotateLogs("code", "QUAKE.MEETING.CAPTURE_FAILED"),
+									);
+									return yield* meetingError("CaptureFailed");
+								}
+								yield* Effect.try({
+									try: () => {
+										if (!owner.isVisible() || owner.isMinimized()) {
+											if (owner.isMinimized()) owner.restore();
+											owner.show();
+											owner.focus();
+										}
+									},
+									catch: (cause) => meetingError("CaptureFailed", cause),
+								});
 								const choice = yield* Effect.tryPromise({
 									try: (signal) =>
-										dialog.showMessageBox({
+										dialog.showMessageBox(owner, {
 											signal,
 											type: "question",
 											message: "System audio is unavailable",
@@ -327,7 +352,12 @@ export function createCapturePort(options: {
 											cancelId: 1,
 										}),
 									catch: (cause) => meetingError("CaptureFailed", cause),
-								});
+								}).pipe(
+									Effect.timeoutFail({
+										duration: "60 seconds",
+										onTimeout: () => meetingError("Timeout"),
+									}),
+								);
 								if (choice.response !== 0)
 									return yield* meetingError("CaptureFailed");
 								lastConfig = { ...config, systemAudio: false };
