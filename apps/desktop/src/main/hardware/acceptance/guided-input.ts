@@ -8,7 +8,7 @@ import { app, BrowserWindow, dialog, globalShortcut, shell } from "electron";
 import { encodeProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type { OpenQuakeBridge } from "../../../preload/quake";
 import { guidedProfileEnvelope } from "./guided-profile";
-import { finishGuidedCapture } from "./guided-shutdown";
+import { boundedCaptureWait, finishGuidedCapture } from "./guided-shutdown";
 import {
 	createGuidedCapture,
 	GuidedArrival,
@@ -261,8 +261,10 @@ async function run() {
 			const step = capture.current();
 			if (step && step.id !== currentPrompt) {
 				currentPrompt = step.id;
-				await panel.webContents.executeJavaScript(
-					`window.__guidedCapture.prompt(${JSON.stringify(step.prompt)}, ${JSON.stringify(step.id)})`,
+				await boundedCaptureWait(
+					panel.webContents.executeJavaScript(
+						`window.__guidedCapture.prompt(${JSON.stringify(step.prompt)}, ${JSON.stringify(step.id)})`,
+					),
 				);
 				await writeFile(
 					join(directory, "capture.json"),
@@ -314,8 +316,10 @@ async function run() {
 		}
 		if (aborted) capture.stop("aborted");
 		if (panel && !panel.isDestroyed()) {
-			await panel.webContents.executeJavaScript(
-				'window.__guidedCapture.prompt("Capture finished. Physical target accuracy and cursor behavior still need confirmation.")',
+			await boundedCaptureWait(
+				panel.webContents.executeJavaScript(
+					'window.__guidedCapture.prompt("Capture finished. Physical target accuracy and cursor behavior still need confirmation.")',
+				),
 			);
 			await delay(100);
 			await writeFile(
@@ -335,9 +339,9 @@ async function run() {
 			{ mode: 0o600 },
 		);
 		if (panel && !panel.isDestroyed())
-			await panel.webContents
-				.executeJavaScript("window.__guidedCapture?.close()")
-				.catch(() => {});
+			await boundedCaptureWait(
+				panel.webContents.executeJavaScript("window.__guidedCapture?.close()"),
+			).catch(() => {});
 		captureFinished = true;
 		app.quit();
 	}

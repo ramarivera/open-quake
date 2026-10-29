@@ -1,10 +1,10 @@
 import { Effect, Schema } from "effect";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { KnobResource } from "../../../../../../packages/device/src/knob/knob-contracts";
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { pinKnobProfile } from "../../knob/voice-route";
 import { guidedProfileEnvelope } from "./guided-profile";
-import { finishGuidedCapture } from "./guided-shutdown";
+import { boundedCaptureWait, finishGuidedCapture } from "./guided-shutdown";
 import { createGuidedCapture, GUIDED_STEPS } from "./guided-state";
 
 const touch = (action: 0 | 1, x = 100, y = 100) => ({
@@ -151,51 +151,86 @@ it("retains queued gestures without answering a prompt that was not shown", () =
 	);
 	expect(c.current()?.id).toBe("right");
 });
-it("tracks a replacement contact in one frame without treating two fingers as movement", () => {
-	const toSwipe = () => {
-		const c = createGuidedCapture(() => 0);
-		c.accept(touch(1));
-		c.accept(touch(0));
-		for (const direction of [-1, 1])
-			for (let i = 0; i < 5; i++) c.accept({ kind: "rotate", direction });
-		for (let i = 0; i < 3; i++) {
-			c.accept({ kind: "press", state: 1 });
-			c.accept({ kind: "press", state: 0 });
-		}
-		for (let i = 0; i < 4; i++) {
+it.each([false, true])(
+	"tracks contact replacement without false movement, reverse order %s",
+	(reverse) => {
+		const toSwipe = () => {
+			const c = createGuidedCapture(() => 0);
 			c.accept(touch(1));
 			c.accept(touch(0));
-		}
-		return c;
-	};
-	const c = toSwipe();
-	c.accept(touch(1, 100));
-	c.accept({
-		kind: "touch",
-		points: [
+			for (const direction of [-1, 1])
+				for (let i = 0; i < 5; i++) c.accept({ kind: "rotate", direction });
+			for (let i = 0; i < 3; i++) {
+				c.accept({ kind: "press", state: 1 });
+				c.accept({ kind: "press", state: 0 });
+			}
+			for (let i = 0; i < 4; i++) {
+				c.accept(touch(1));
+				c.accept(touch(0));
+			}
+			return c;
+		};
+		const c = toSwipe();
+		c.accept(touch(1, 100));
+		const points = [
 			{ action: 0, x: 100, y: 100 },
 			{ action: 1, x: 300, y: 100 },
-		],
-	});
-	c.accept(touch(1, 350));
-	c.accept(touch(0, 350));
-	expect(c.current()?.id).toBe("unplug");
-	const multi = toSwipe();
-	multi.accept({
-		kind: "touch",
-		points: [
-			{ action: 1, x: 100, y: 100 },
-			{ action: 1, x: 300, y: 100 },
-		],
-	});
-	multi.accept({
-		kind: "touch",
-		points: [
-			{ action: 0, x: 100, y: 100 },
-			{ action: 0, x: 300, y: 100 },
-		],
-	});
-	expect(multi.current()?.id).toBe("swipe");
+		];
+		if (reverse) points.reverse();
+		c.accept({
+			kind: "touch",
+			points,
+		});
+		expect(c.current()?.id).toBe("swipe");
+		c.accept(touch(1, 350));
+		c.accept(touch(0, 350));
+		expect(c.current()?.id).toBe("unplug");
+		const stationary = toSwipe();
+		stationary.accept(touch(1, 100));
+		stationary.accept({ kind: "touch", points });
+		stationary.accept(touch(0, 300));
+		expect(stationary.current()?.id).toBe("swipe");
+		const multi = toSwipe();
+		multi.accept({
+			kind: "touch",
+			points: [
+				{ action: 1, x: 100, y: 100 },
+				{ action: 1, x: 300, y: 100 },
+			],
+		});
+		multi.accept({
+			kind: "touch",
+			points: [
+				{ action: 0, x: 100, y: 100 },
+				{ action: 0, x: 300, y: 100 },
+			],
+		});
+		expect(multi.current()?.id).toBe("swipe");
+	},
+);
+it("bounds stalled renderer paint and permits failure cleanup without retaining timers", async () => {
+	vi.useFakeTimers();
+	try {
+		let closed = 0;
+		const pending = boundedCaptureWait(new Promise<void>(() => {}));
+		const result = finishGuidedCapture(
+			pending,
+			async () => {
+				closed++;
+			},
+			0,
+		);
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(await result).toBe(1);
+		expect(closed).toBe(1);
+		expect(vi.getTimerCount()).toBe(0);
+		expect(await boundedCaptureWait(Promise.resolve("painted"))).toBe(
+			"painted",
+		);
+		expect(vi.getTimerCount()).toBe(0);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 it("attempts cleanup after finalization failure and rejects success on either failure", async () => {
 	for (const failed of ["capture", "cleanup", "both", "neither"]) {

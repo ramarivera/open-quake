@@ -102,7 +102,11 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 				moved = false;
 				continue;
 			}
-			for (const point of event.points) {
+			// End the previous contact before beginning its replacement, regardless
+			// of the device's point order in a mixed release/press frame.
+			for (const point of [...event.points].sort(
+				(a, b) => a.action - b.action,
+			)) {
 				if (point.action === 1) {
 					if (!start) start = point;
 					else if (point.x !== start.x || point.y !== start.y) moved = true;

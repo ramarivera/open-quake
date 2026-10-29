@@ -16,3 +16,23 @@ export async function finishGuidedCapture(
 	}
 	return code;
 }
+/** A renderer that stops painting must not hold capture shutdown open forever. */
+export async function boundedCaptureWait<T>(
+	pending: Promise<T>,
+	timeoutMs = 5000,
+): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			pending,
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(
+					() => reject(new Error("Guided renderer wait timed out")),
+					timeoutMs,
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
