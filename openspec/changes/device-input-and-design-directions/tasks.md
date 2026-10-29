@@ -7,9 +7,13 @@
 - [x] 5 In the next PR, avoid hidden diagnostic expiry work and add a dedicated development diagnostic launch control. Bead open-quake-mr7.4, implemented in the follow-up branch after PR165.
 
 - [x] 6 Implement Instrument Console device presentation and Studio mirror/table/inspector with Scene Rail selector and knob overlay. Preserve real profile/actions, localization and input geometry. Bead open-quake-mr7.5.
-- [ ] 7 Verify selected hybrid with device-first interaction regressions, management selection/save coverage and actual rendered screens; deliver through one review addressing round. Bead open-quake-mr7.5.
+- [x] 7 Verify selected hybrid with device-first interaction regressions, management selection/save coverage and actual rendered screens; deliver through one review addressing round. Bead open-quake-mr7.5.
 
-- [ ] 8 In the next PR, share Scene Rail page-control constants and remove the unused close rectangle. Current hit rectangles match rendered controls. Bead open-quake-mr7.6.
+- [x] 8 In the next PR, share Scene Rail page-control constants and remove the unused close rectangle. Current hit rectangles match rendered controls. Bead open-quake-mr7.6.
+
+- [x] 9 Keep artwork clear of explicitly styled top titles in device and editor previews. Bead open-quake-mr7.7.
+
+- [ ] 10 Deliver title/artwork and shared Scene Rail geometry follow-up through focused checks and one addressing round. Beads open-quake-mr7.6 and open-quake-mr7.7.
 
 ## Implementation evidence
 
@@ -45,4 +49,14 @@ Studio retains the existing inspector and save machinery, adds the key table, an
 
 The single addressing round activates the preset through the profile manager and preserves the previous selection on rejected delivery. Volume keys retain hidden and styled headings, and smaller saved keys keep their icon/title layout instead of the two-by-two readout. Compact clocks use explicit tile geometry; scaled full-strip previews retain their full composition. A retained Console compatibility marker selects saved sizing without changing the storage schema, while unmarked clock/input keys keep legacy spans and editing rules. Studio table rows reflect unsaved names. The three-card rail labels jump controls with the actual destination profile instead of a misleading page count.
 
-Profile regressions, mounted editor interactions, selector navigation, clock previews, volume titles and the original hosted validation failures pass locally. Both owning typechecks, Biome and the production build pass. Hosted validation on the fix-round head remains pending; no second bot addressing round is authorized.
+Profile regressions, mounted editor interactions, selector navigation, clock previews, volume titles and the original hosted validation failures pass locally. Both owning typechecks, Biome and the production build pass. PR167 fix head `61014082` passed hosted validation and the complete download matrix, then squash merged as `8efcf903703678fa6edbd5ebc9626aa8ea8c4256`. The watch stopped after merge. The later P2 title/artwork overlap belongs to the next PR under the one-round cap, tracked in open-quake-mr7.7.
+
+## Carried follow-up milestone
+
+Explicitly styled generic keys again position and size artwork using the title-aware metrics. The default Console icon/title arrangement remains unchanged. The regression failed on the merged PR167 source and passes after the fix for wrapping top/bottom titles at device scale and half-scale preview. Scene Rail page buttons now render from the same rectangles used for physical hit tests, and the model and renderer share the 15-profile page size. Mounted tests exercise first, middle and last pages. The unused close rectangle is removed because blank-area touches already dismiss the picker.
+
+Focused follow-up verification passes 73 renderer tests and 27 knob-model tests, both owning typechecks, Biome and production build. A hidden render with loaded sample artwork confirms separation at device scale and half scale. This remains software evidence; no physical input or live-provider acceptance is claimed.
+
+## Follow-up single review round
+
+The PR168 initial Codex and Devin findings reproduced centered text/artwork overlap and hidden titles changing artwork layout. Only visible explicit headings now request title-aware artwork placement. Centered headings reserve an icon area above their two-line text block. Full-screen regressions cover size-8 and size-12 titles at top/middle/bottom at device and half scale, plus hidden-heading stability. Both defects failed before the fix. All 35 owning renderer tests, desktop typecheck, Biome and production build pass, and an updated hidden render was inspected with all sample artwork loaded. No rereview is requested; later findings carry into the next PR.

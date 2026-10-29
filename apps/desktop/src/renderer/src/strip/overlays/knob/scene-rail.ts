@@ -1,3 +1,4 @@
+import { KNOB_PROFILE_PAGE_SIZE } from "../../../../../shared/knob-contracts";
 import { inside, type PickerTarget, type Rect } from "./geometry";
 
 export interface SceneSlot {
@@ -5,7 +6,13 @@ export interface SceneSlot {
 	readonly position: "previous" | "selected" | "next";
 	readonly rect: Rect;
 }
-export const sceneCloseRect: Rect = { x: 36, y: 372, width: 390, height: 96 };
+/** Logical canvas coordinates also position .scene-pages buttons in knob.css. */
+export const scenePageRect = (delta: -1 | 1): Rect => ({
+	x: delta === -1 ? 36 : 142,
+	y: 288,
+	width: 90,
+	height: 48,
+});
 /** Unique neighbours, including one/two-profile menus and wraparound. */
 export function sceneSlots(
 	count: number,
@@ -45,10 +52,14 @@ export function sceneTarget(
 	x: number,
 	y: number,
 ): PickerTarget {
-	if (count > 15 && y >= 288 && y < 336) {
-		const page = Math.floor(index / 15);
-		if (page > 0 && x >= 36 && x < 126) return { kind: "page", delta: -1 };
-		if (page < Math.ceil(count / 15) - 1 && x >= 142 && x < 232)
+	if (count > KNOB_PROFILE_PAGE_SIZE) {
+		const page = Math.floor(index / KNOB_PROFILE_PAGE_SIZE);
+		if (page > 0 && inside(scenePageRect(-1), x, y))
+			return { kind: "page", delta: -1 };
+		if (
+			page < Math.ceil(count / KNOB_PROFILE_PAGE_SIZE) - 1 &&
+			inside(scenePageRect(1), x, y)
+		)
 			return { kind: "page", delta: 1 };
 	}
 	for (const slot of sceneSlots(count, index))

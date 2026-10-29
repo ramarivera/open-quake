@@ -25,7 +25,7 @@ import {
 import { previewVoiceContext } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
 import { ProfilePicker } from "./ProfilePicker";
-import { sceneSlots, sceneTarget } from "./scene-rail";
+import { scenePageRect, sceneSlots, sceneTarget } from "./scene-rail";
 import { useKnob } from "./useKnob";
 import { useProfileFrame } from "./useProfileFrame";
 
@@ -119,6 +119,52 @@ afterEach(async () => {
 });
 
 describe("Scene Rail profile selection", () => {
+	it.each([0, 15, 30])(
+		"shares rendered page rectangles with physical navigation at selected index %i",
+		async (index) => {
+			await render(picker(31, index));
+			const buttons = host.querySelectorAll<HTMLButtonElement>(
+				".scene-pages button",
+			);
+			expect(buttons).toHaveLength(2);
+			for (const [i, delta] of ([-1, 1] as const).entries()) {
+				const button = buttons[i];
+				if (!button) throw new Error("Missing page button");
+				const rect = scenePageRect(delta);
+				expect([
+					button.style.left,
+					button.style.top,
+					button.style.width,
+					button.style.height,
+				]).toEqual([
+					`${rect.x}px`,
+					`${rect.y}px`,
+					`${rect.width}px`,
+					`${rect.height}px`,
+				]);
+				if (button.disabled) continue;
+				request.mockClear();
+				for (const action of [1, 0])
+					await act(async () => {
+						host.dispatchEvent(
+							new CustomEvent("quake-strip-overlay-touch", {
+								detail: {
+									x: rect.x + rect.width / 2,
+									y: rect.y + rect.height / 2,
+									action,
+								},
+							}),
+						);
+					});
+				expect(request).toHaveBeenCalledExactlyOnceWith({
+					_tag: "Page",
+					sessionId: "s1",
+					delta,
+				});
+			}
+		},
+	);
+
 	for (const locale of Object.keys(recovered).filter(
 		(key): key is keyof typeof recovered => key in recovered,
 	)) {

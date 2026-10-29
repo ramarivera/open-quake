@@ -39,13 +39,22 @@ export function genericTileMetrics(
 			: title.pos === "mid"
 				? "mid"
 				: "bottom";
-	// The icon centres in the space the label leaves free.
+	// The icon centres in the space the label leaves free. Middle headings
+	// reserve a separate area above their centered two-line text block.
 	// The title can wrap to two lines at the rendered size. Keep a gap
 	// between that block and the artwork, including explicit large titles.
-	const label = (fontSize * 1.2 * 2 + padding + 8) / box.height;
-	const freeHeight = Math.max(0, box.height * (1 - label));
+	const titleHeight = fontSize * 1.2 * 2;
+	const label = (titleHeight + padding + 8) / box.height;
+	const freeHeight = Math.max(
+		0,
+		titleAnchor === "mid"
+			? (box.height - titleHeight) / 2 - padding - 8
+			: box.height * (1 - label),
+	);
+	const iconSize = Math.min(base * 0.42, 168, freeHeight);
 	return {
-		iconSize: Math.round(Math.min(base * 0.42, 168, freeHeight)),
+		iconSize:
+			titleAnchor === "mid" ? Math.floor(iconSize) : Math.round(iconSize),
 		padding,
 		fontSize,
 		titleAnchor,
@@ -57,7 +66,7 @@ export function genericTileMetrics(
 				? (1 - label) / 2
 				: titleAnchor === "top"
 					? (1 + label) / 2
-					: 0.5,
+					: (padding + freeHeight / 2) / box.height,
 	};
 }
 

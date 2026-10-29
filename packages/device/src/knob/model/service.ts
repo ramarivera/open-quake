@@ -14,6 +14,7 @@ import {
 	KnobSessionStale,
 } from "../knob-errors.js";
 import {
+	KNOB_PROFILE_PAGE_SIZE,
 	KNOB_TIMING,
 	KnobModelContext,
 	KnobModelInput,
@@ -434,7 +435,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						selector: {
 							mode: "ring",
 							index,
-							page: Math.floor(index / 15),
+							page: Math.floor(index / KNOB_PROFILE_PAGE_SIZE),
 							progress: 0,
 							ringVisible: true,
 							direction: delta,
@@ -525,7 +526,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							const page = Math.max(
 								0,
 								Math.min(
-									Math.ceil(count / 15) - 1,
+									Math.ceil(count / KNOB_PROFILE_PAGE_SIZE) - 1,
 									state.selector.page + event.delta,
 								),
 							);
@@ -533,7 +534,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							yield* emit({
 								selector: {
 									...state.selector,
-									index: page * 15,
+									index: page * KNOB_PROFILE_PAGE_SIZE,
 									page,
 									progress: 0,
 									ringVisible: false,
@@ -723,7 +724,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 														mode: "closed",
 														ringVisible: true,
 														index,
-														page: Math.floor(index / 15),
+														page: Math.floor(index / KNOB_PROFILE_PAGE_SIZE),
 													},
 												});
 												yield* schedule(
@@ -750,7 +751,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 														mode: "ring",
 														ringVisible: true,
 														index,
-														page: Math.floor(index / 15),
+														page: Math.floor(index / KNOB_PROFILE_PAGE_SIZE),
 														progress: 0,
 													},
 												});
