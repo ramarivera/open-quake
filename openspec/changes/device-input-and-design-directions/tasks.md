@@ -13,7 +13,7 @@
 
 - [x] 9 Keep artwork clear of explicitly styled top titles in device and editor previews. Bead open-quake-mr7.7.
 
-- [ ] 10 Deliver title/artwork and shared Scene Rail geometry follow-up through focused checks and one addressing round. Beads open-quake-mr7.6 and open-quake-mr7.7.
+- [x] 10 Deliver title/artwork and shared Scene Rail geometry follow-up through focused checks and one addressing round. Beads open-quake-mr7.6 and open-quake-mr7.7.
 
 ## Implementation evidence
 
@@ -60,3 +60,7 @@ Focused follow-up verification passes 73 renderer tests and 27 knob-model tests,
 ## Follow-up single review round
 
 The PR168 initial Codex and Devin findings reproduced centered text/artwork overlap and hidden titles changing artwork layout. Only visible explicit headings now request title-aware artwork placement. Centered headings reserve an icon area above their two-line text block. Full-screen regressions cover size-8 and size-12 titles at top/middle/bottom at device and half scale, plus hidden-heading stability. Both defects failed before the fix. All 35 owning renderer tests, desktop typecheck, Biome and production build pass, and an updated hidden render was inspected with all sample artwork loaded. No rereview is requested; later findings carry into the next PR.
+
+## Delivery complete
+
+PR168 fix head `5589518cc4a691507996b72c24f739c9da82df49` passed hosted validation and the complete download matrix. Codex reviewed that head with no findings; no unresolved review threads remained. PR168 squash merged as `d08a143f8ca95df18ae9e837205f035109653921`, and its owned watch stopped. The initial two findings were addressed in exactly one fixing round without requesting another review or buying review capacity. Physical touch, visible illumination and live-provider acceptance remain outside this software completion record.
