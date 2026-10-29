@@ -330,6 +330,19 @@ describe("qualified platform fixtures", () => {
 			});
 		},
 	);
+	it("prefers device_connected when both Bluetooth fields are present", async () => {
+		const collector = nativeCollector("darwin", async () =>
+			JSON.stringify({
+				SPBluetoothDataType: [
+					{ device_connected: [{}], devices_connected: [{}, {}] },
+				],
+			}),
+		);
+		expect(await Effect.runPromise(collector.collect("bluetooth"))).toEqual({
+			state: "available",
+			values: { connected: 1 },
+		});
+	});
 	it("qualifies macOS optional GPU and Bluetooth without inventing temperature", async () => {
 		const c = nativeCollector(
 			"darwin",

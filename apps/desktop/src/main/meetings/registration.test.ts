@@ -14,6 +14,7 @@ import {
 	type MeetingConfig,
 	MeetingStore,
 } from "../../../../../packages/edge/src/meetings/meeting-contracts";
+import { MeetingRepository } from "../../../../../packages/edge/src/meetings/meeting-repository";
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
 	CAPTURE_CHUNK,
@@ -30,13 +31,19 @@ const ipc = vi.hoisted(() => ({
 	on: vi.fn(),
 	removeListener: vi.fn(),
 	reveal: vi.fn(),
+	exportDialog: vi.fn(async () => ({ canceled: true })),
 	confirmSetup: vi.fn(async () => ({ response: 0 })),
 	selectSetup: vi.fn(async () => ({
 		canceled: true,
 		filePaths: [] as string[],
 	})),
 	app: { on: vi.fn(), removeListener: vi.fn(), quit: vi.fn() },
-	windows: [] as { isDestroyed: () => boolean; webContents: { id: number } }[],
+	windows: [] as {
+		isDestroyed: () => boolean;
+		isVisible: () => boolean;
+		isMinimized: () => boolean;
+		webContents: { id: number; send: (...args: unknown[]) => void };
+	}[],
 }));
 const capture = vi.hoisted(() => ({
 	id: "",
@@ -76,7 +83,11 @@ vi.mock("electron", () => ({
 		getAllWindows: () => ipc.windows,
 		fromWebContents: () => ({}),
 	},
-	dialog: { showMessageBox: ipc.confirmSetup, showOpenDialog: ipc.selectSetup },
+	dialog: {
+		showMessageBox: ipc.confirmSetup,
+		showOpenDialog: ipc.selectSetup,
+		showSaveDialog: ipc.exportDialog,
+	},
 	shell: { showItemInFolder: ipc.reveal },
 }));
 vi.mock("./capture-port", () => ({
@@ -816,7 +827,12 @@ it("AI-283 authenticates the setup handler and keeps mock install requests away 
 });
 
 it("AI-283 native confirmation and package selection read the current saved EN/DE locale", async () => {
-	const management = { isDestroyed: () => false, webContents: { id: 42 } };
+	const management = {
+		isDestroyed: () => false,
+		isVisible: () => true,
+		isMinimized: () => false,
+		webContents: { id: 42, send: vi.fn() },
+	};
 	ipc.windows = [management];
 	const platform = Object.getOwnPropertyDescriptor(process, "platform");
 	Object.defineProperty(process, "platform", { value: "darwin" });
@@ -871,3 +887,70 @@ it("AI-283 native confirmation and package selection read the current saved EN/D
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it.each(["hidden", "minimized", "visible"])(
+	"guards meeting export with a %s management owner",
+	async (state) => {
+		const root = await mkdtemp(join(tmpdir(), "oq-export-owner-"));
+		const renderer = "file:///synthetic-meetings/index.html";
+		const management = {
+			isDestroyed: () => false,
+			isVisible: () => state !== "hidden",
+			isMinimized: () => state === "minimized",
+			webContents: { id: 42, send: vi.fn() },
+		};
+		ipc.windows = [management];
+		ipc.exportDialog.mockClear();
+		const meetings = registerMeetings({
+			userData: root,
+			renderer,
+			mock: true,
+			hardware: () => undefined,
+			management: () => management,
+		});
+		const frame = {};
+		const event = {
+			command: true,
+			senderFrame: frame,
+			sender: { mainFrame: frame, getURL: () => renderer },
+		};
+		try {
+			await meetings.ready;
+			const record = (
+				await meetings.runtime.runPromise(
+					MeetingService.action("meetingMinutes"),
+				)
+			).records[0];
+			if (!record) throw new Error("Missing fixture meeting");
+			await meetings.runtime.runPromise(
+				MeetingRepository.update((records) =>
+					records.map((r) => ({ ...r, minutes: "Fixture summary" })),
+				),
+			);
+			const result = Schema.decodeUnknownSync(MeetingReply)(
+				await ipc.handlers.get(MEETING_REQUEST)?.(event, {
+					_tag: "export",
+					id: record.id,
+					artifact: "summary",
+				}),
+			);
+			if (state === "visible") {
+				expect(result._tag).toBe("ready");
+				expect(ipc.exportDialog).toHaveBeenCalledExactlyOnceWith(
+					management,
+					expect.objectContaining({ defaultPath: expect.any(String) }),
+				);
+			} else {
+				expect(result).toMatchObject({
+					_tag: "failure",
+					code: "QUAKE.MEETING.EXPORT_FAILED",
+				});
+				expect(ipc.exportDialog).not.toHaveBeenCalled();
+			}
+		} finally {
+			ipc.windows = [];
+			await meetings.dispose();
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);

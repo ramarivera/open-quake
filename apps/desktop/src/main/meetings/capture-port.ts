@@ -329,6 +329,16 @@ export function createCapturePort(options: {
 									);
 									return yield* meetingError("CaptureFailed");
 								}
+								yield* Effect.try({
+									try: () => {
+										if (!owner.isVisible() || owner.isMinimized()) {
+											if (owner.isMinimized()) owner.restore();
+											owner.show();
+											owner.focus();
+										}
+									},
+									catch: (cause) => meetingError("CaptureFailed", cause),
+								});
 								const choice = yield* Effect.tryPromise({
 									try: (signal) =>
 										dialog.showMessageBox(owner, {

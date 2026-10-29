@@ -129,7 +129,11 @@ export function prepareMeetings(
 	const managementWindow = (): BrowserWindow | undefined => {
 		const id = options.management?.()?.webContents.id;
 		return BrowserWindow.getAllWindows().find(
-			(win) => !win.isDestroyed() && win.webContents.id === id,
+			(win) =>
+				!win.isDestroyed() &&
+				win.isVisible() &&
+				!win.isMinimized() &&
+				win.webContents.id === id,
 		);
 	};
 	const renderer =

@@ -31,6 +31,17 @@ const native = vi.hoisted(() => {
 		static windows: Window[] = [];
 		static getAllWindows = () => Window.windows.filter((win) => !win.destroyed);
 		destroyed = false;
+		visible = true;
+		minimized = false;
+		isVisible = () => this.visible;
+		isMinimized = () => this.minimized;
+		show = vi.fn(() => {
+			this.visible = true;
+		});
+		restore = vi.fn(() => {
+			this.minimized = false;
+		});
+		focus = vi.fn();
 		url = "";
 		frame = { url: "" };
 		webContents = Object.assign(new Events(), {
@@ -359,3 +370,41 @@ it("aborts a stalled parented fallback after its timeout and releases the captur
 		vi.useRealTimers();
 	}
 });
+
+it.each(["hidden", "minimized"])(
+	"makes a %s fallback owner reachable before prompting",
+	async (state) => {
+		native.reply.failSystem = true;
+		try {
+			const management = new native.Window();
+			management.visible = state !== "hidden";
+			management.minimized = state === "minimized";
+			native.prompt.mockImplementationOnce(async () => {
+				expect(management.isVisible()).toBe(true);
+				expect(management.isMinimized()).toBe(false);
+				expect(management.focus).toHaveBeenCalledOnce();
+				return { response: 1, checkboxChecked: false };
+			});
+			const { capture } = setup(() => management.webContents.id);
+			await Effect.runPromise(
+				capture.port
+					.start(
+						MeetingId.make(crypto.randomUUID()),
+						{ ...defaultMeetingConfig, systemAudio: true },
+						undefined,
+					)
+					.pipe(Effect.either),
+			);
+			expect(management.show).toHaveBeenCalledOnce();
+			expect(management.restore).toHaveBeenCalledTimes(
+				state === "minimized" ? 1 : 0,
+			);
+			expect(native.prompt).toHaveBeenCalledWith(
+				management,
+				expect.objectContaining({ cancelId: 1 }),
+			);
+		} finally {
+			native.reply.failSystem = false;
+		}
+	},
+);
