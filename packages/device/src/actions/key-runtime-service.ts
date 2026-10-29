@@ -345,6 +345,15 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				ActionError
 			> {
 				const control = JSON.stringify([deviceId, keyCode]);
+				const reportInput = (result: "accepted" | "suppressed") =>
+					(kind === "down" || kind === "up"
+						? Effect.logInfo("panel.input", {
+								keyCode,
+								action: kind === "down" ? 0 : 1,
+								result,
+							})
+						: Effect.void
+					).pipe(Effect.as(undefined));
 				if (kind === "up" || kind === "cancel") {
 					if (kind === "cancel") {
 						for (const [identity, entry] of running) {
@@ -360,7 +369,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						}
 					}
 					const contact = contacts.get(control);
-					if (!contact) return;
+					if (!contact) return yield* reportInput("suppressed");
+					yield* reportInput("accepted");
 					if (contact.release) {
 						yield* contact.release;
 						contacts.delete(control);
@@ -386,7 +396,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					if (Either.isLeft(pressed)) return yield* Effect.fail(pressed.left);
 					return releaseWork ?? pressed.right;
 				}
-				if (kind === "down" && contacts.has(control)) return;
+				if (kind === "down" && contacts.has(control))
+					return yield* reportInput("suppressed");
 				if (kind === "release") {
 					if (!held.delete(control)) return;
 				} else if (kind === "press") {
@@ -401,13 +412,15 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						expected.pageId !== page.id ||
 						expected.revision !== profile.revision)
 				)
-					return;
+					return yield* reportInput("suppressed");
 				const key = page.keys.find(
 					(k) => k.keyCode === keyCode && k.config.display,
 				);
-				if (!key || isUnsupportedProfileKey(key)) return;
+				if (!key || isUnsupportedProfileKey(key))
+					return yield* reportInput("suppressed");
 				if (kind === "down") {
-					if (key.config.type === "hotkey" && key.config.supportKnob) return;
+					if (key.config.type === "hotkey" && key.config.supportKnob)
+						return yield* reportInput("suppressed");
 					const activation = {
 						deviceId,
 						profileId: profile.id,
@@ -422,7 +435,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						const release = yield* port.holdHotkey(key, activation);
 						contacts.set(control, { key, activation, release });
 					} else contacts.set(control, { key, activation });
-					return;
+					return yield* reportInput("accepted");
 				}
 				const identity = JSON.stringify([
 					deviceId,

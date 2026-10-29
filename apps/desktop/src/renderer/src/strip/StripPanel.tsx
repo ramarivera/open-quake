@@ -415,7 +415,17 @@ function ActiveStripPanel(): React.JSX.Element {
 						</>
 					}
 				>
-					<PanelFeedbackLayer view={feedback} />
+					<PanelFeedbackLayer
+						view={feedback}
+						inputDiagnostics={
+							window.quakeSettings?.development === true &&
+							new URLSearchParams(location.search).get("inputDiagnostics") ===
+								"1"
+						}
+						rotation={Number(
+							new URLSearchParams(location.search).get("rotation") ?? 0,
+						)}
+					/>
 					<KnobPanelLayer />
 				</StripScreen>
 			</StripViewport>

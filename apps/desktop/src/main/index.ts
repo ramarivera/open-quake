@@ -1582,6 +1582,14 @@ if (!app.requestSingleInstanceLock()) {
 											serial,
 											keyCode,
 											action === 0 ? "down" : "up",
+										).pipe(
+											Effect.tapError(() =>
+												Effect.logWarning("panel.input", {
+													keyCode,
+													action,
+													result: "failed",
+												}),
+											),
 										),
 									);
 								},

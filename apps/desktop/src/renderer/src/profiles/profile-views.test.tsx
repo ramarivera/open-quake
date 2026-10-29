@@ -52,6 +52,7 @@ afterEach(async () => {
 async function fixture(
 	platform: "darwin" | "win32" | "linux" = "win32",
 	navigation = false,
+	legacyAgentName = false,
 ) {
 	vi.spyOn(navigator, "platform", "get").mockReturnValue(
 		platform === "darwin"
@@ -66,7 +67,12 @@ async function fixture(
 		// Other preset contents are irrelevant to these manager interactions.
 		profile.id === "1-2"
 			? profile
-			: { ...profile, pages: base.profiles[0].pages },
+			: {
+					...profile,
+					name:
+						legacyAgentName && profile.id === "1-8" ? "DKClaw" : profile.name,
+					pages: base.profiles[0].pages,
+				},
 	);
 	let saved = encodeProfileEnvelope({
 		...base,
@@ -286,6 +292,18 @@ async function fixture(
 		},
 	};
 }
+
+it("shows persisted DKClaw as Agent in the manager and selected settings without rewriting storage", async () => {
+	const f = await fixture("darwin", false, true);
+	await click(button(f.host, "Agent"));
+	expect(
+		f.host.querySelector(".profile-settings legend")?.textContent,
+	).toContain("Agent");
+	expect(f.host.textContent).not.toMatch(/DK[- ]?Claw/i);
+	expect(f.saved().profiles.find((p) => p.id === "1-8")?.name).toBe("DKClaw");
+	await input(query(f.host, "header select", HTMLSelectElement), "de");
+	expect(f.host.textContent).not.toMatch(/DK[- ]?Claw/i);
+});
 
 for (const platform of ["darwin", "win32", "linux"] as const)
 	it(`MGMT-315 renders every default on ${platform}, localizes labels and exposes the selected profile settings`, async () => {

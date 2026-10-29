@@ -93,6 +93,44 @@ afterEach(async () => {
 });
 
 describe("production Effect diagnostics", () => {
+	it("persists bounded panel tile identities through Effect and Pino without private payloads", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		await app.runPromise(
+			Effect.gen(function* () {
+				yield* Effect.logInfo("panel.input", {
+					keyCode: "2,8",
+					action: 0,
+					result: "accepted",
+					serial: "private-serial",
+					text: "private-input",
+				});
+				yield* Effect.logInfo("panel.input", {
+					keyCode: "2,8",
+					action: 1,
+					result: "suppressed",
+				});
+				yield* Effect.logWarning("panel.input", {
+					keyCode: "private-profile",
+					action: 1,
+					result: "failed",
+				});
+			}),
+		);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		const entries = lines.filter((line) => line.event === "panel.input");
+		expect(entries[0]).toMatchObject({
+			input: { keyCode: "2,8", action: 0, result: "accepted" },
+		});
+		expect(entries[1]).toMatchObject({
+			input: { keyCode: "2,8", action: 1, result: "suppressed" },
+		});
+		expect(entries[2]).not.toHaveProperty("input");
+		expect(JSON.stringify(lines)).not.toMatch(
+			/private-serial|private-input|private-profile/,
+		);
+	});
 	it("MAIN-036 persists closed touch counters and states without native payloads", async () => {
 		const { directory, diagnostics } = await fixture();
 		const app = runtime(diagnostics);

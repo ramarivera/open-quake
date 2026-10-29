@@ -208,9 +208,23 @@ export function safeLogEvent(messages: readonly unknown[]): string {
 	);
 }
 
-/** Closed projection for the touch owner's periodic counters. No native text. */
-export function safeTouchLog(messages: readonly unknown[]): object {
+/** Closed projection for input outcomes and touch counters. No native text. */
+export function safeInputLog(messages: readonly unknown[]): object {
 	const event = messages[0];
+	if (event === "panel.input") {
+		const data = messages[1];
+		const keyCode = field(data, "keyCode");
+		const action = field(data, "action");
+		const result = field(data, "result");
+		if (
+			typeof keyCode !== "string" ||
+			!/^(?:0,1|[1-4],[1-8])$/.test(keyCode) ||
+			(action !== 0 && action !== 1 && action !== 2 && action !== 3) ||
+			(result !== "accepted" && result !== "suppressed" && result !== "failed")
+		)
+			return {};
+		return { input: { keyCode, action, result } };
+	}
 	if (event !== "touch.health" && event !== "touch.state") return {};
 	const data = messages[1];
 	const state = field(data, "state");

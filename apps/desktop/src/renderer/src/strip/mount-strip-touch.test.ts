@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
+import { Option } from "effect";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { createEmptyProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type { QuakeEvent } from "../../../preload/quake";
 import { mount, required } from "../test/mount";
 import { TestResizeObserver } from "../test/resize-observer";
@@ -436,3 +438,122 @@ it("open-quake-l86.22: vendor takeover cancels a DOM touchstart contact without 
 		await panel.close();
 	}
 });
+
+it.each([0, 90])(
+	"maps visible pointer positions to the same tiles as vendor input at rotation %i",
+	async (rotation) => {
+		vi.useFakeTimers();
+		const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+		if (!profile) throw Error("Missing profile");
+		const page = {
+			...profile.pages[0],
+			keys: Array.from({ length: 16 }, (_, i) => {
+				const key = createEmptyProfileKey(
+					`${Math.floor(i / 8) + 1},${(i % 8) + 1}`,
+				);
+				return {
+					...key,
+					childrenName: Option.some("pageNo"),
+					config: { ...key.config, type: "pageNo" },
+				};
+			}),
+		};
+		const layout = stripLayout(profile, page);
+		const view = await mount(
+			createElement("div", { className: "strip-slot" }, "Tile"),
+		);
+		const slot = required(view.container, ".strip-slot", HTMLDivElement);
+		const bounds =
+			rotation === 90
+				? new DOMRect(20, 30, 240, 960)
+				: new DOMRect(20, 30, 960, 240);
+		vi.spyOn(view.container, "getBoundingClientRect").mockReturnValue(bounds);
+		let input: (event: QuakeEvent) => void = () => {};
+		let now = performance.now();
+		vi.spyOn(performance, "now").mockImplementation(() => now);
+		const key = vi.fn();
+		const dispose = mountStripTouch(
+			view.container,
+			{
+				version: "test",
+				onQuakeEvent: (cb) => {
+					input = cb;
+					return () => {};
+				},
+			},
+			rotation,
+			() => layout,
+			key,
+		);
+		try {
+			for (const row of [1, 2]) {
+				now += 700;
+				const tile = layout.tiles.find((tile) =>
+					tile.keyCode.startsWith(`${row},`),
+				);
+				if (!tile) throw Error("Missing row tile");
+				const x = tile.slot.x + tile.slot.width / 2,
+					y = tile.slot.y + tile.slot.height / 2;
+				const clientX =
+					bounds.x +
+					(rotation === 90
+						? (1 - y / 480) * bounds.width
+						: (x / 1920) * bounds.width);
+				const clientY =
+					bounds.y +
+					(rotation === 90
+						? (x / 1920) * bounds.height
+						: (y / 480) * bounds.height);
+				key.mockClear();
+				for (const type of ["pointerdown", "pointerup"]) {
+					const event = new Event(type, { bubbles: true, cancelable: true });
+					Object.assign(event, { button: 0, pointerId: 1, clientX, clientY });
+					slot.dispatchEvent(event);
+				}
+				await vi.advanceTimersByTimeAsync(200);
+				expect(
+					key.mock.calls.map(([event]) => [event.keyCode, event.keyAction]),
+				).toEqual([
+					[tile.keyCode, 0],
+					[tile.keyCode, 1],
+				]);
+				input({
+					source: "hid",
+					kind: "status",
+					state: "disconnected",
+					reason: "scope-closed",
+				});
+				key.mockClear();
+				for (const action of [1, 0] as const)
+					input({
+						source: "hid",
+						kind: "touch",
+						points: [
+							{
+								x: rotation === 90 ? 1920 - x : x,
+								y: rotation === 90 ? y : 480 - y,
+								action,
+							},
+						],
+					});
+				await vi.advanceTimersByTimeAsync(200);
+				expect(
+					key.mock.calls.map(([event]) => [event.keyCode, event.keyAction]),
+				).toEqual([
+					[tile.keyCode, 0],
+					[tile.keyCode, 1],
+				]);
+				input({
+					source: "hid",
+					kind: "status",
+					state: "disconnected",
+					reason: "scope-closed",
+				});
+			}
+		} finally {
+			dispose();
+			await view.unmount();
+			vi.useRealTimers();
+		}
+	},
+);

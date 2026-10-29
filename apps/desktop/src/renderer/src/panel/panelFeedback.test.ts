@@ -33,6 +33,7 @@ const layer = (state: PanelFeedback, now: number): string =>
 	renderToStaticMarkup(
 		createElement(PanelFeedbackLayer, {
 			view: viewPanelFeedback(state, now),
+			inputDiagnostics: true,
 		}),
 	);
 
@@ -237,3 +238,38 @@ describe("panel feedback layer", () => {
 		).toBe(preview);
 	});
 });
+
+it("keeps raw knob counters and touch markers out of the ordinary device screen", () => {
+	const state = fold([
+		connected,
+		{ source: "hid", kind: "rotate", direction: 1 },
+		{ source: "hid", kind: "touch", points: [{ action: 1, x: 100, y: 80 }] },
+	]);
+	const markup = renderToStaticMarkup(
+		createElement(PanelFeedbackLayer, { view: viewPanelFeedback(state, 0) }),
+	);
+	expect(markup).not.toContain("panel-knob");
+	expect(markup).not.toContain("panel-touch");
+});
+
+it.each([0, 90, 180, 270])(
+	"aligns opt-in diagnostic touch marks with tile coordinates at rotation %i",
+	(rotation) => {
+		const state = fold([
+			connected,
+			{ source: "hid", kind: "touch", points: [{ action: 1, x: 100, y: 80 }] },
+		]);
+		const markup = renderToStaticMarkup(
+			createElement(PanelFeedbackLayer, {
+				view: viewPanelFeedback(state, 0),
+				inputDiagnostics: true,
+				rotation,
+			}),
+		);
+		const expected =
+			rotation === 90 || rotation === 180
+				? { x: 1820, y: 80 }
+				: { x: 100, y: 400 };
+		expect(markup).toContain(`cx="${expected.x}" cy="${expected.y}"`);
+	},
+);

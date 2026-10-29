@@ -158,6 +158,7 @@ export const builtinProfiles = (
 };
 // Display-only aliases for installed catalogs. Stored names and IDs stay untouched.
 const agentProfileDefaultNames = new Set([
+	"DKClaw",
 	"DK Claw",
 	"DK-Claw",
 	"DK龙虾",

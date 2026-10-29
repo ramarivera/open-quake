@@ -745,6 +745,7 @@ describe("Agent profile display compatibility", () => {
 			ko: "에이전트",
 		} as const;
 		for (const storedName of [
+			"DKClaw",
 			"DK Claw",
 			"DK-Claw",
 			"DK龙虾",
