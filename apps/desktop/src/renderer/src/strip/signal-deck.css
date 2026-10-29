@@ -334,20 +334,26 @@
 
 .quick-brightness-state {
 	position: absolute;
-	top: 88px;
+	top: 82px;
+	bottom: 22px;
 	left: 24px;
 	right: 16px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 14px;
 	color: var(--strip-text);
 }
 .quick-brightness-state output {
 	font-size: 42px;
+	line-height: 1.1;
 	font-variant-numeric: tabular-nums;
 }
 .quick-brightness-state span {
 	display: block;
 	font-size: 14px;
 	color: var(--strip-muted);
-	margin-top: 5px;
+	line-height: 1.25;
 }
 
 .quick-brightness-state output[data-unavailable="true"] {

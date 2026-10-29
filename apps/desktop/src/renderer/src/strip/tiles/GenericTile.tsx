@@ -20,6 +20,20 @@ export function GenericTile({
 		config.type === "luminance" && context.hardware?.available
 			? context.hardware.luminance
 			: undefined;
+	const hostPercent = context.runtimeState?.progress;
+	const percent =
+		config.type === "luminance"
+			? luminance === undefined
+				? undefined
+				: luminancePercent(luminance)
+			: config.type === "brightness" &&
+					context.hardware?.available !== false &&
+					hostPercent !== undefined &&
+					Number.isFinite(hostPercent) &&
+					hostPercent >= 0 &&
+					hostPercent <= 100
+				? Math.round(hostPercent)
+				: undefined;
 	const foreground = useForegroundArtwork(config.type === "gameMode");
 	const artwork = useTileArtwork(foreground || config.icon, config.type);
 	const explicit = config.title.userModifiedStyle === true;
@@ -91,13 +105,9 @@ export function GenericTile({
 			</div>
 			{brightness ? (
 				<div className="quick-brightness-state">
-					{config.type === "luminance" ? (
-						<output data-unavailable={luminance === undefined}>
-							{luminance === undefined
-								? t("unavailable")
-								: `${luminancePercent(luminance)}%`}
-						</output>
-					) : null}
+					<output data-unavailable={percent === undefined}>
+						{percent === undefined ? t("unavailable") : `${percent}%`}
+					</output>
 					<span>{t("brightnessKnob")}</span>
 				</div>
 			) : null}

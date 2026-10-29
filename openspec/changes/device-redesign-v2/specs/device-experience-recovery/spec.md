@@ -80,3 +80,13 @@ A control-error notice SHALL expire three seconds after the latest failure and f
 #### Scenario: Repeated unavailable control
 - **WHEN** a second failure occurs before the first notice expires
 - **THEN** expiry restarts from the new failure and unrelated snapshot updates do not keep the notice visible
+
+#### Scenario: Maintenance dialog has no management owner
+- **WHEN** a maintenance confirmation, error report, import picker or export picker has no live management window
+- **THEN** it cancels without an unowned native dialog or destructive continuation
+- **AND** owned message prompts have a 60-second abort limit and accept earlier caller cancellation
+
+#### Scenario: Host brightness readback and tile spacing
+- **WHEN** the active connected host exposes a confirmed brightness percentage
+- **THEN** its tile displays that percentage in a dedicated value region and places its interaction hint at the bottom
+- **AND** failed or unsupported readings clear the previous percentage to Unavailable

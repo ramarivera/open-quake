@@ -9,6 +9,7 @@ import {
 	themeOf,
 	useClockSettings,
 } from "../strip/tiles/clock/useClockSettings";
+import { useKeyRuntime } from "./useKeyRuntime";
 
 /** The same tile renderer as the strip, scaled inside a bounded selected card. */
 export function SelectedKeyPreview({
@@ -27,6 +28,17 @@ export function SelectedKeyPreview({
 	isCurrent: () => boolean;
 }): React.JSX.Element {
 	const hardware = useHardwareSnapshot(serial);
+	const runtimeStates = useKeyRuntime();
+	const runtimeState = hardware?.available
+		? runtimeStates.get(
+				JSON.stringify([
+					hardware.serial,
+					target.profileId,
+					target.pageId,
+					tile.keyCode,
+				]),
+			)
+		: undefined;
 	const frame = useRef<HTMLDivElement>(null);
 	const [side, setSide] = useState(80 * 0.85);
 	useLayoutEffect(() => {
@@ -81,6 +93,7 @@ export function SelectedKeyPreview({
 							context={{
 								now: undefined,
 								hardware,
+								runtimeState,
 								hourFormat: "24h",
 								voice: previewVoiceContext,
 								interactive: false,

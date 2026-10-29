@@ -252,7 +252,10 @@ function StripGrid({
 													?.progress,
 											}
 										: undefined
-									: runtime(tile.keyCode)
+									: tile.type === "brightness" &&
+											tile.key.config.title.userModifiedStyle !== true
+										? undefined
+										: runtime(tile.keyCode)
 							}
 						/>
 						{tileOverlay?.(tile)}
@@ -460,7 +463,7 @@ export function StripScreen({
 		if (!selection) return undefined;
 		const state = runtimeStates.get(
 			JSON.stringify([
-				serial ?? "desktop-preview",
+				hardware?.available ? hardware.serial : (serial ?? "desktop-preview"),
 				selection.profile.id,
 				selection.page.id,
 				keyCode,
