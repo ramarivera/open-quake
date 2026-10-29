@@ -442,6 +442,7 @@ it("open-quake-l86.22: vendor takeover cancels a DOM touchstart contact without 
 it.each([0, 90])(
 	"maps visible pointer positions to the same tiles as vendor input at rotation %i",
 	async (rotation) => {
+		vi.useFakeTimers();
 		const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
 		if (!profile) throw Error("Missing profile");
 		const page = {
@@ -509,10 +510,13 @@ it.each([0, 90])(
 					Object.assign(event, { button: 0, pointerId: 1, clientX, clientY });
 					slot.dispatchEvent(event);
 				}
-				expect(key.mock.calls[0]?.[0]).toMatchObject({
-					keyCode: tile.keyCode,
-					keyAction: 0,
-				});
+				await vi.advanceTimersByTimeAsync(200);
+				expect(
+					key.mock.calls.map(([event]) => [event.keyCode, event.keyAction]),
+				).toEqual([
+					[tile.keyCode, 0],
+					[tile.keyCode, 1],
+				]);
 				input({
 					source: "hid",
 					kind: "status",
@@ -532,10 +536,13 @@ it.each([0, 90])(
 							},
 						],
 					});
-				expect(key.mock.calls[0]?.[0]).toMatchObject({
-					keyCode: tile.keyCode,
-					keyAction: 0,
-				});
+				await vi.advanceTimersByTimeAsync(200);
+				expect(
+					key.mock.calls.map(([event]) => [event.keyCode, event.keyAction]),
+				).toEqual([
+					[tile.keyCode, 0],
+					[tile.keyCode, 1],
+				]);
 				input({
 					source: "hid",
 					kind: "status",
@@ -546,6 +553,7 @@ it.each([0, 90])(
 		} finally {
 			dispose();
 			await view.unmount();
+			vi.useRealTimers();
 		}
 	},
 );

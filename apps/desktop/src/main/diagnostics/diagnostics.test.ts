@@ -105,6 +105,11 @@ describe("production Effect diagnostics", () => {
 					serial: "private-serial",
 					text: "private-input",
 				});
+				yield* Effect.logInfo("panel.input", {
+					keyCode: "2,8",
+					action: 1,
+					result: "suppressed",
+				});
 				yield* Effect.logWarning("panel.input", {
 					keyCode: "private-profile",
 					action: 1,
@@ -118,7 +123,10 @@ describe("production Effect diagnostics", () => {
 		expect(entries[0]).toMatchObject({
 			input: { keyCode: "2,8", action: 0, result: "accepted" },
 		});
-		expect(entries[1]).not.toHaveProperty("input");
+		expect(entries[1]).toMatchObject({
+			input: { keyCode: "2,8", action: 1, result: "suppressed" },
+		});
+		expect(entries[2]).not.toHaveProperty("input");
 		expect(JSON.stringify(lines)).not.toMatch(
 			/private-serial|private-input|private-profile/,
 		);

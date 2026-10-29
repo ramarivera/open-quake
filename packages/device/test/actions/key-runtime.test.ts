@@ -4,6 +4,7 @@ import {
 	Array as EffectArray,
 	Fiber,
 	Layer,
+	Logger,
 	Option,
 	Schema,
 	TestClock,
@@ -131,6 +132,37 @@ const press = Effect.gen(function* () {
 	yield* runtime.activate("device", "1,1", "press");
 	yield* runtime.activate("device", "1,1", "release");
 });
+it.effect(
+	"logs admitted and suppressed panel contacts at the runtime decision",
+	() => {
+		const f = fixture({ type: "pageNo" });
+		const records: unknown[] = [];
+		const logger = Logger.make(({ message }) => {
+			records.push(message);
+		});
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* r.activate("private-device", "2,8", "down");
+			yield* r.activate("private-device", "1,1", "up");
+			yield* r.activate("private-device", "1,1", "down");
+			yield* r.activate("private-device", "1,1", "down");
+			yield* r.activate("private-device", "1,1", "up");
+			yield* r.activate("private-device", "1,1", "up");
+			expect(records).toEqual([
+				["panel.input", { keyCode: "2,8", action: 0, result: "suppressed" }],
+				["panel.input", { keyCode: "1,1", action: 1, result: "suppressed" }],
+				["panel.input", { keyCode: "1,1", action: 0, result: "accepted" }],
+				["panel.input", { keyCode: "1,1", action: 0, result: "suppressed" }],
+				["panel.input", { keyCode: "1,1", action: 1, result: "accepted" }],
+				["panel.input", { keyCode: "1,1", action: 1, result: "suppressed" }],
+			]);
+			expect(JSON.stringify(records)).not.toContain("private-device");
+		}).pipe(
+			Effect.provide(f.layer),
+			Effect.provide(Logger.replace(Logger.defaultLogger, logger)),
+		);
+	},
+);
 it.effect(
 	"alternates exactly once per press and preserves state across revisions",
 	() => {

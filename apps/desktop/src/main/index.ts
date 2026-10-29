@@ -1583,13 +1583,6 @@ if (!app.requestSingleInstanceLock()) {
 											keyCode,
 											action === 0 ? "down" : "up",
 										).pipe(
-											Effect.tap(() =>
-												Effect.logInfo("panel.input", {
-													keyCode,
-													action,
-													result: "accepted",
-												}),
-											),
 											Effect.tapError(() =>
 												Effect.logWarning("panel.input", {
 													keyCode,

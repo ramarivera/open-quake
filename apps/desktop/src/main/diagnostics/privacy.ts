@@ -220,7 +220,7 @@ export function safeInputLog(messages: readonly unknown[]): object {
 			typeof keyCode !== "string" ||
 			!/^(?:0,1|[1-4],[1-8])$/.test(keyCode) ||
 			(action !== 0 && action !== 1 && action !== 2 && action !== 3) ||
-			(result !== "accepted" && result !== "failed")
+			(result !== "accepted" && result !== "suppressed" && result !== "failed")
 		)
 			return {};
 		return { input: { keyCode, action, result } };
