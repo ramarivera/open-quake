@@ -28,7 +28,7 @@
 	justify-content: center;
 	gap: 28px;
 	overflow: hidden;
-	background: rgba(11, 12, 13, 0.95);
+	background: var(--strip-scrim);
 }
 .voice-overlay[data-bar="true"] .voice-backdrop {
 	padding-bottom: 72px;

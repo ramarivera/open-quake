@@ -81,7 +81,14 @@ export function createMonitoringStateBridge(ipc: ChatRendererIPC) {
 				),
 			)
 			.then((result) =>
-				result._tag === "Right" ? result.right : Promise.reject(result.left),
+				result._tag === "Right"
+					? result.right
+					: Promise.reject({
+							// Effect errors carry prototype/symbol state that contextBridge cannot clone.
+							_tag: "RpcClientError",
+							reason: "Protocol",
+							message: "Monitoring transport unavailable",
+						}),
 			);
 	const subscriptions = new Set<() => void>();
 	return {

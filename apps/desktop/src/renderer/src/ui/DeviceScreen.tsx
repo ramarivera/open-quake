@@ -37,7 +37,7 @@ export function DeviceScreen({
 			</div>
 			<figcaption className="visually-hidden">
 				{view === "vivid"
-					? "Preview of the QUAKE's vivid screen, 1920 × 480"
+					? "Preview of the QUAKE's Ambient screen, 1920 × 480"
 					: "Preview of the QUAKE screen, 1920 × 480"}
 			</figcaption>
 		</figure>

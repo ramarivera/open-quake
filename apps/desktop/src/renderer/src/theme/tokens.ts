@@ -1,9 +1,4 @@
-/**
- * The semantic color contract. Each token becomes a `--quake-<token>` custom
- * property and is the only thing a custom theme may override. Surfaces,
- * hairlines and tints are derived from these in styles.css, so an imported
- * palette stays coherent without naming every shade.
- */
+/** Semantic roles shared by Studio, device views and user-imported themes. */
 export const themeTokenNames = [
 	"background",
 	"surface",
@@ -14,79 +9,213 @@ export const themeTokenNames = [
 	"accent-text",
 	"success",
 	"warning",
+	"selection",
+	"danger",
 ] as const;
-
 export type ThemeToken = (typeof themeTokenNames)[number];
 export type ThemeTokens = Readonly<Record<ThemeToken, string>>;
-export type BuiltinTheme = "dark" | "light" | "grey";
-
-/**
- * open-quake's own palettes (nyd.2, superseding the recovered DK-Suite values).
- * Neutral surfaces with one jade accent for primary action, selection and
- * focus; green/amber stay state colours. Ids are stable stored values; the
- * user-facing names live in themeLabels.
- */
+/** Stable stored IDs retain old appearance records; new presets use the same v2 format. */
 export const themes = {
-	dark: {
-		background: "#0f1011",
-		surface: "#17181a",
-		foreground: "#f0efec",
-		muted: "#9f9e99",
-		border: "#67686b",
-		accent: "#5fcab5",
-		"accent-text": "#062520",
-		success: "#62c98a",
-		warning: "#e7b153",
-	},
 	grey: {
-		background: "#1c1d1f",
-		surface: "#242528",
-		foreground: "#ecebe8",
-		muted: "#a6a5a0",
-		border: "#727274",
-		accent: "#5fcab5",
-		"accent-text": "#062520",
-		success: "#62c98a",
-		warning: "#e7b153",
+		background: "#080d1a",
+		surface: "#101830",
+		foreground: "#f2f5ff",
+		muted: "#a3aecc",
+		border: "#6c7da2",
+		accent: "#c3ee3a",
+		"accent-text": "#172000",
+		success: "#9cdb78",
+		warning: "#f2b640",
+		selection: "#69bcff",
+		danger: "#ff929b",
+	},
+	dark: {
+		background: "#0b1020",
+		surface: "#131c31",
+		foreground: "#f2f5ff",
+		muted: "#aab7d1",
+		border: "#7183a6",
+		accent: "#b4dc39",
+		"accent-text": "#142000",
+		success: "#8bd49c",
+		warning: "#f3be66",
+		selection: "#7fbbff",
+		danger: "#ff969b",
 	},
 	light: {
-		background: "#f5f4f1",
+		background: "#f3f5f9",
 		surface: "#ffffff",
-		foreground: "#1c1b19",
-		muted: "#5d5c57",
-		border: "#8c8b85",
-		accent: "#0b7466",
+		foreground: "#172033",
+		muted: "#526078",
+		border: "#7c899b",
+		accent: "#426200",
 		"accent-text": "#ffffff",
-		success: "#1d7a3e",
-		warning: "#8a5a00",
+		success: "#176b36",
+		warning: "#855100",
+		selection: "#175fba",
+		danger: "#b42336",
 	},
-} as const satisfies Record<BuiltinTheme, ThemeTokens>;
-
+	"catppuccin-mocha": {
+		background: "#1e1e2e",
+		surface: "#181825",
+		foreground: "#cdd6f4",
+		muted: "#a6adc8",
+		border: "#7f849c",
+		accent: "#cba6f7",
+		"accent-text": "#1e1e2e",
+		success: "#a6e3a1",
+		warning: "#f9e2af",
+		selection: "#89b4fa",
+		danger: "#f38ba8",
+	},
+	"catppuccin-latte": {
+		background: "#eff1f5",
+		surface: "#e6e9ef",
+		foreground: "#44475f",
+		muted: "#5c5f77",
+		border: "#7c7f93",
+		accent: "#8030e0",
+		"accent-text": "#ffffff",
+		success: "#2c660b",
+		warning: "#8c5100",
+		selection: "#1555ce",
+		danger: "#c00e33",
+	},
+	"github-dark": {
+		background: "#0d1117",
+		surface: "#161b22",
+		foreground: "#e6edf3",
+		muted: "#a1aab5",
+		border: "#6e7681",
+		accent: "#58a6ff",
+		"accent-text": "#07111d",
+		success: "#7ee787",
+		warning: "#e3b341",
+		selection: "#a5b9ff",
+		danger: "#ff7b72",
+	},
+	"github-light": {
+		background: "#f6f8fa",
+		surface: "#ffffff",
+		foreground: "#1f2328",
+		muted: "#59636e",
+		border: "#7e8791",
+		accent: "#0969da",
+		"accent-text": "#ffffff",
+		success: "#1a7f37",
+		warning: "#8a5700",
+		selection: "#8250df",
+		danger: "#cf222e",
+	},
+	superhuman: {
+		background: "#17151d",
+		surface: "#221f2a",
+		foreground: "#f2eef8",
+		muted: "#b1a9c0",
+		border: "#80758c",
+		accent: "#d5b6ff",
+		"accent-text": "#211235",
+		success: "#93d9b5",
+		warning: "#eec27b",
+		selection: "#9dc7ff",
+		danger: "#f5a1ad",
+	},
+	codex: {
+		background: "#121715",
+		surface: "#1b2420",
+		foreground: "#e7f1e9",
+		muted: "#a3b6a9",
+		border: "#71877a",
+		accent: "#9cdda6",
+		"accent-text": "#102016",
+		success: "#a9d4b6",
+		warning: "#e7c27a",
+		selection: "#9cbfee",
+		danger: "#f49e9e",
+	},
+	linear: {
+		background: "#17181b",
+		surface: "#202127",
+		foreground: "#f3f3f5",
+		muted: "#a9abb7",
+		border: "#737685",
+		accent: "#b5adff",
+		"accent-text": "#1a1638",
+		success: "#9bd8b0",
+		warning: "#eac285",
+		selection: "#8ec5ff",
+		danger: "#f7a4a4",
+	},
+	"notion-light": {
+		background: "#f7f7f5",
+		surface: "#ffffff",
+		foreground: "#37352f",
+		muted: "#6b6860",
+		border: "#918e85",
+		accent: "#3c5f88",
+		"accent-text": "#ffffff",
+		success: "#376f45",
+		warning: "#8c5900",
+		selection: "#7453a3",
+		danger: "#ac3737",
+	},
+	"notion-dark": {
+		background: "#191919",
+		surface: "#242424",
+		foreground: "#eeeeec",
+		muted: "#b1b0aa",
+		border: "#7b7b75",
+		accent: "#a7c7e7",
+		"accent-text": "#182431",
+		success: "#a3cfb2",
+		warning: "#dfc18b",
+		selection: "#c9b0ee",
+		danger: "#eaa6a3",
+	},
+} as const satisfies Record<string, ThemeTokens>;
+export type BuiltinTheme = keyof typeof themes;
 export const themeLabels: Readonly<Record<BuiltinTheme, string>> = {
-	grey: "Graphite",
+	grey: "Signal Deck",
 	dark: "Midnight",
-	light: "Paper",
+	light: "Signal Light",
+	"catppuccin-mocha": "Catppuccin Mocha",
+	"catppuccin-latte": "Catppuccin Latte",
+	"github-dark": "GitHub Dark",
+	"github-light": "GitHub Light",
+	superhuman: "Superhuman",
+	codex: "Codex",
+	linear: "Linear",
+	"notion-light": "Notion Light",
+	"notion-dark": "Notion Dark",
 };
-
-/** Display order for theme pickers: default first, then dark to light. */
 export const builtinThemeOrder: ReadonlyArray<BuiltinTheme> = [
 	"grey",
 	"dark",
 	"light",
+	"catppuccin-mocha",
+	"catppuccin-latte",
+	"github-dark",
+	"github-light",
+	"superhuman",
+	"codex",
+	"linear",
+	"notion-light",
+	"notion-dark",
 ];
-
+export const lightThemes: ReadonlyArray<BuiltinTheme> = [
+	"light",
+	"catppuccin-latte",
+	"github-light",
+	"notion-light",
+];
+export const isLightTheme = (theme: BuiltinTheme): boolean =>
+	lightThemes.includes(theme);
+export const isBuiltinTheme = (value: unknown): value is BuiltinTheme =>
+	typeof value === "string" && Object.hasOwn(themes, value);
 export function toThemeProperties(
 	tokens: ThemeTokens,
 ): Readonly<Record<`--quake-${ThemeToken}`, string>> {
-	return {
-		"--quake-background": tokens.background,
-		"--quake-surface": tokens.surface,
-		"--quake-foreground": tokens.foreground,
-		"--quake-muted": tokens.muted,
-		"--quake-border": tokens.border,
-		"--quake-accent": tokens.accent,
-		"--quake-accent-text": tokens["accent-text"],
-		"--quake-success": tokens.success,
-		"--quake-warning": tokens.warning,
-	};
+	return Object.fromEntries(
+		themeTokenNames.map((name) => [`--quake-${name}`, tokens[name]]),
+	) as Record<`--quake-${ThemeToken}`, string>;
 }

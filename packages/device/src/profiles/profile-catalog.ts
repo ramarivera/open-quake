@@ -164,12 +164,26 @@ const agentProfileDefaultNames = new Set([
 	"DK龙虾",
 	...Object.values(locales).map((copy) => copy.DKClaw),
 ]);
+const ambientProfileDefaultNames = new Set([
+	"Vivid",
+	"BB",
+	"Lebendig",
+	"Vif",
+	"Vivace",
+	"Vívido",
+	"炫彩屏幕",
+	"鮮やか",
+	"생생한",
+	...Object.values(locales).map((copy) => copy.colorfulScreen),
+]);
 export const profileLabel = (
 	profile: Profile,
 	locale: ProfileLocale,
 ): string => {
 	const entry = BUILTIN_PROFILES.find((p) => p.id === profile.id);
 	if (entry?.id === "1-8" && !agentProfileDefaultNames.has(profile.name))
+		return profile.name;
+	if (entry?.id === "1-4" && !ambientProfileDefaultNames.has(profile.name))
 		return profile.name;
 	return entry ? profileText(entry.title, locale) : profile.name;
 };

@@ -102,7 +102,10 @@ export function ThemeSettings({
 
 	return (
 		<div className="page">
-			<PageHeader title="Appearance" description="Changes apply right away." />
+			<PageHeader
+				title="Appearance"
+				description="Signal Deck controls, in a palette that feels familiar. Themes apply to Studio and the device."
+			/>
 
 			<Group
 				title="Theme"

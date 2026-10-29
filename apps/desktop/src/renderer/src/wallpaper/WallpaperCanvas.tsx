@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fillGeometry, PANEL_CANVAS } from "../../../shared/display";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { AmbientBackdrop } from "./AmbientBackdrop";
+import { useAmbientStyle } from "./ambient-appearance";
+import {
+	type AmbientAudio,
+	idleAmbientAudio,
+	observeAmbientAudio,
+} from "./ambient-audio";
 import { type WallpaperLayer, WallpaperLayers } from "./layer-player";
 import "./wallpaper.css";
 
@@ -8,10 +15,14 @@ function MediaLayer({
 	layer,
 	sound,
 	player,
+	reactive,
+	onAudio,
 }: {
 	layer: WallpaperLayer;
 	sound: boolean;
 	player: WallpaperLayers;
+	reactive: boolean;
+	onAudio: (value: AmbientAudio) => void;
 }): React.JSX.Element | null {
 	const video = useRef<HTMLVideoElement>(null);
 	const loaded = useCallback(() => player.loaded(layer.id), [player, layer.id]);
@@ -82,6 +93,17 @@ function MediaLayer({
 			});
 		};
 	}, [audible, serial, revision, layer.id]);
+	useEffect(() => {
+		if (!active) return;
+		const element = video.current;
+		onAudio(idleAmbientAudio);
+		if (!reactive || !audible || !element) return;
+		const stop = observeAmbientAudio(element, onAudio);
+		return () => {
+			stop();
+			onAudio(idleAmbientAudio);
+		};
+	}, [active, audible, reactive, onAudio]);
 	if (asset._tag !== "ready") return null;
 	const geometry = fillGeometry(
 		layer.snapshot.saved.settings.bgFillMode,
@@ -139,6 +161,9 @@ export function WallpaperCanvas({
 	snapshot?: WallpaperSnapshot | undefined;
 	sound?: boolean;
 }): React.JSX.Element {
+	const { style } = useAmbientStyle(snapshot?.saved.serial);
+	const [audio, setAudio] = useState<AmbientAudio>(idleAmbientAudio);
+	const reactive = style === "lava" || style === "ambilight";
 	const initial: readonly WallpaperLayer[] =
 		snapshot?.asset._tag === "ready" && !snapshot.saved.settings.isTransparent
 			? [
@@ -218,14 +243,24 @@ export function WallpaperCanvas({
 			{!transparent ? (
 				<>
 					<rect width="1920" height="480" className="wallpaper-neutral" />
-					{layers.map((layer) => (
-						<MediaLayer
-							key={layer.id}
-							layer={layer}
-							sound={sound}
-							player={player}
-						/>
-					))}
+					<g
+						opacity={style === "media" ? 1 : 0}
+						aria-hidden={style !== "media"}
+					>
+						{(style === "media" || reactive ? layers : []).map((layer) => (
+							<MediaLayer
+								key={layer.id}
+								layer={layer}
+								sound={sound}
+								player={player}
+								reactive={reactive}
+								onAudio={setAudio}
+							/>
+						))}
+					</g>
+					{style !== "media" ? (
+						<AmbientBackdrop style={style} audio={audio} />
+					) : null}
 				</>
 			) : null}
 		</svg>

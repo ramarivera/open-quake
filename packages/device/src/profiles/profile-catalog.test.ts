@@ -29,7 +29,7 @@ import {
 	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
-	type Profile,
+	Profile,
 	ProfileEnvelope,
 } from "./profile-contracts.js";
 import {
@@ -909,4 +909,25 @@ it("preserves an unmarked custom Discord title equal to another locale default",
 	expect(
 		translateProfile(input, "en").pages[0].keys[0]?.config.title.text,
 	).toBe("Stumm");
+});
+
+it("renames only known Ambient defaults and preserves saved profiles, custom labels and geometry", () => {
+	const source = builtinProfiles("darwin").find((p) => p.id === "1-4");
+	if (!source) throw new Error("Missing Ambient");
+	expect(source.name).toBe("Ambient");
+	for (const name of [
+		"Vivid",
+		"BB",
+		"炫彩屏幕",
+		"Lebendig",
+		"鮮やか",
+		"Ambient",
+	]) {
+		const saved = { ...source, name };
+		const before = JSON.stringify(Schema.encodeSync(Profile)(saved));
+		expect(profileLabel(saved, "en")).toBe("Ambient");
+		expect(translateProfile(saved, "en").pages).toEqual(saved.pages);
+		expect(JSON.stringify(Schema.encodeSync(Profile)(saved))).toBe(before);
+	}
+	expect(profileLabel({ ...source, name: "My stage" }, "en")).toBe("My stage");
 });

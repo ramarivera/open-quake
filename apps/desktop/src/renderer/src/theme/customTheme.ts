@@ -1,5 +1,4 @@
 import {
-	type BuiltinTheme,
 	type ThemeToken,
 	type ThemeTokens,
 	themes,
@@ -11,7 +10,7 @@ export const MAX_THEME_BYTES = 16_384;
 export type CustomTheme = {
 	readonly version: 1;
 	readonly name: string;
-	readonly base: BuiltinTheme;
+	readonly base: "dark" | "light";
 	readonly colors: Readonly<Partial<Record<ThemeToken, string>>>;
 };
 

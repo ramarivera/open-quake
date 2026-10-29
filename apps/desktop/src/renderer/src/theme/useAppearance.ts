@@ -13,7 +13,7 @@ import {
 	validateAppearance,
 } from "./appearance";
 import { type CustomTheme, customThemeTokens } from "./customTheme";
-import { themes, toThemeProperties } from "./tokens";
+import { isLightTheme, themes, toThemeProperties } from "./tokens";
 
 type AppearanceState = { appearance: Appearance; notice: string };
 
@@ -134,14 +134,14 @@ export function useAppearance() {
 		for (const [property, value] of Object.entries(toThemeProperties(tokens))) {
 			root.style.setProperty(property, value);
 		}
-		root.style.colorScheme = base === "light" ? "light" : "dark";
+		root.style.colorScheme = isLightTheme(base) ? "light" : "dark";
 		root.dataset.fontScale = appearance.fontScale;
 		root.style.setProperty(
 			"--mc-sidebar-width",
 			`${appearance.sidebarWidth ?? 218}px`,
 		);
 		const payload = {
-			base: base === "light" ? ("light" as const) : ("dark" as const),
+			base: isLightTheme(base) ? ("light" as const) : ("dark" as const),
 			background: tokens.background,
 			titlebar: tokens.background,
 			symbol: tokens.foreground,

@@ -26,6 +26,7 @@ import { selectStripPage } from "./selection";
 import { stripTileFor } from "./tileRegistry";
 import type { StripProfiles } from "./useStripProfiles";
 import "./strip.css";
+import "./signal-deck.css";
 
 const palette = stripPaletteProperties();
 
@@ -63,7 +64,11 @@ export function KeyState({
 			{countdown !== undefined ? (
 				<span
 					data-kind="countdown"
-					style={{ fontSize: 48, fontWeight: 700, color: "#0000ff" }}
+					style={{
+						fontSize: 48,
+						fontWeight: 700,
+						color: "var(--strip-selection)",
+					}}
 				>
 					{formatCountdown(countdown)}
 				</span>
@@ -78,8 +83,8 @@ export function KeyState({
 						zIndex: 1,
 						width: 50,
 						height: 50,
-						background: "rgb(255,255,100)",
-						color: "black",
+						background: "var(--strip-warning)",
+						color: "var(--strip-canvas)",
 						fontSize: 42,
 						textAlign: "center",
 					}}
@@ -98,7 +103,7 @@ export function KeyState({
 						position: "absolute",
 						zIndex: 0,
 						inset: 0,
-						background: "#0a0a1a",
+						background: "var(--strip-surface)",
 						overflow: "hidden",
 					}}
 				>
@@ -107,8 +112,8 @@ export function KeyState({
 							display: "block",
 							height: "100%",
 							width: `${progress}%`,
-							background: "linear-gradient(45deg,#00f7ff,#0066ff)",
-							borderRight: "4px solid #00f7ff",
+							background: "var(--strip-accent-soft)",
+							borderRight: "4px solid var(--strip-accent)",
 						}}
 					/>
 					<span
@@ -116,7 +121,7 @@ export function KeyState({
 							position: "absolute",
 							bottom: 8,
 							right: 8,
-							color: "#00ff9d",
+							color: "var(--strip-text)",
 							fontSize: 20,
 							width: "auto",
 							height: "auto",
@@ -487,7 +492,7 @@ export function StripScreen({
 					: {}),
 			}}
 		>
-			{vivid && wallpaper?.asset._tag === "ready" ? (
+			{vivid && wallpaper ? (
 				<div className="strip-wallpaper">
 					<WallpaperCanvas snapshot={wallpaper} sound={wallpaperSound} />
 				</div>
@@ -527,6 +532,14 @@ export function StripScreen({
 							: undefined
 					}
 				/>
+			) : null}
+			{profiles._tag === "loading" && view === "active" ? (
+				<div className="strip-status" role="status">
+					<p className="strip-status-title">Loading profiles</p>
+					<p className="strip-status-code">
+						Waiting for the local profile service
+					</p>
+				</div>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (
 				<div className="strip-status" role="status">

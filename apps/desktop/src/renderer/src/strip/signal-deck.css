@@ -1,0 +1,336 @@
+/* Signal Deck styling. No grid, position, span or input geometry changes. */
+.strip-screen {
+	color-scheme: inherit;
+}
+.strip-tile-icon[data-themed-artwork="true"] {
+	background: var(--strip-text);
+	mask-size: contain;
+	mask-repeat: no-repeat;
+	mask-position: center;
+}
+.strip-tile-icon[data-themed-artwork="true"] img {
+	visibility: hidden;
+}
+.strip-screen .strip-slot[data-state="tile"] {
+	border-radius: 4px;
+	box-shadow:
+		inset 0 0 0 1px var(--strip-hairline),
+		inset 0 -3px 0 var(--strip-hairline);
+}
+.strip-screen .strip-slot[data-pressed="true"] {
+	box-shadow: inset 0 0 0 2px var(--strip-selection);
+}
+.strip-screen
+	:is(
+		.strip-key-chip,
+		.copilot-status,
+		.clawbot-badge,
+		.audio-bot-state,
+		.meeting-key-state
+	) {
+	border-radius: 3px;
+	font-weight: 600;
+}
+.strip-screen
+	:is(
+		.strip-voice-key,
+		.audio-bot-key,
+		.meeting-key,
+		.oq-soundboard-unavailable
+	) {
+	background-color: var(--strip-surface);
+	color: var(--strip-text);
+	border-radius: 4px;
+}
+.strip-screen :is(.clawbot, .clawbot-input, .copilot, .meeting-display) {
+	background: var(--strip-surface);
+	color: var(--strip-text);
+	border-radius: 4px;
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+}
+.strip-screen :is(.clawbot-header, .copilot-toolbar, .meeting-toolbar) {
+	border-color: var(--strip-hairline);
+	background: var(--strip-surface);
+}
+.strip-screen
+	:is(
+		.clawbot-bubble,
+		.clawbot-code,
+		.clawbot-tool,
+		.copilot-bubble,
+		.meeting-safe-text
+	) {
+	background: var(--strip-raised);
+	border-color: var(--strip-hairline);
+	border-radius: 3px;
+	color: var(--strip-text);
+}
+.strip-screen
+	:is(.clawbot-chip, .clawbot-pill, .clawbot-input-button, .copilot-copy) {
+	border-radius: 3px;
+	background: var(--strip-raised);
+	border-color: var(--strip-line);
+}
+.strip-screen
+	:is(.clawbot-tool-name, .clawbot-sender, .copilot-label, .meeting-heading) {
+	font-weight: 650;
+}
+.strip-screen :is(.clawbot-input-control, textarea) {
+	border-radius: 4px;
+	color: var(--strip-text);
+	background: var(--strip-canvas);
+}
+.strip-screen :is(.clawbot-input-control, textarea):focus {
+	border-color: var(--strip-selection);
+	box-shadow: inset 0 0 0 1px var(--strip-selection);
+}
+.oq-monitor[data-style] {
+	color: var(--strip-text);
+	font-family: var(--strip-font);
+}
+.oq-monitor[data-style] .monitor-card {
+	border-radius: 4px;
+	border-color: var(--strip-hairline);
+	color: var(--strip-text);
+	background: var(--strip-surface);
+	box-shadow: inset 0 -3px 0 var(--strip-hairline);
+	backdrop-filter: none;
+}
+.oq-monitor[data-style]
+	:is(
+		.monitor-heading,
+		.monitor-value,
+		.monitor-label,
+		.monitor-total,
+		.monitor-number,
+		.monitor-disk-name
+	) {
+	color: var(--strip-text);
+	text-shadow: none;
+	font-family: var(--strip-font);
+}
+.oq-monitor[data-style]
+	:is(
+		.monitor-subtitle,
+		.monitor-state,
+		.monitor-field-unavailable,
+		.monitor-stat-label,
+		.monitor-caption
+	) {
+	color: var(--strip-muted);
+	text-shadow: none;
+}
+.oq-monitor[data-style] :is(.monitor-value, .monitor-number) {
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+.oq-monitor[data-style] :is(.monitor-bar-fill, .monitor-progress-fill) {
+	background: var(--strip-accent);
+}
+.oq-monitor[data-style] .monitor-state[data-state="available"] {
+	color: var(--strip-success);
+}
+.strip-screen .monitor-metric-tile {
+	border-radius: 4px;
+	background: var(--strip-surface);
+	color: var(--strip-text);
+	border-bottom: 3px solid var(--strip-hairline);
+}
+.strip-screen .monitor-metric-tile[data-state="available"] {
+	border-bottom-color: var(--strip-success);
+}
+.strip-screen .monitor-metric-tile[data-state="stale"] {
+	border-bottom-color: var(--strip-warning);
+}
+.strip-screen
+	.monitor-metric-tile:is(
+		[data-state="unavailable"],
+		[data-state="unsupported"],
+		[data-state="error"]
+	) {
+	background-image: repeating-linear-gradient(
+		135deg,
+		transparent 0 18px,
+		var(--strip-hairline) 18px 19px
+	);
+}
+.strip-screen :is(.oq-player, .oq-local-player, .weather-card, .media-card) {
+	border-radius: 4px;
+	background-color: var(--strip-surface);
+	color: var(--strip-text);
+}
+.strip-screen .oq-clock {
+	color: var(--strip-text);
+}
+.strip-screen :is(.oq-clock-nav, .oq-clock-card) {
+	border-radius: 4px;
+}
+.strip-screen :is(.oq-clock-week, .oq-clock-label) {
+	color: var(--strip-muted);
+	font-family: var(--strip-font);
+}
+.strip-screen .oq-clock-time {
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+/* Keep each existing overlay's composition while replacing its serif/teal treatment. */
+.knob-overlay-root .scene-rail {
+	--scene-accent: var(--strip-accent);
+	color: var(--strip-text);
+	background: var(--strip-scrim);
+	backdrop-filter: blur(12px);
+}
+.knob-overlay-root
+	:is(
+		.scene-instructions h1,
+		.scene-card-name,
+		.scene-value,
+		.scene-knob-value
+	) {
+	font-family: var(--strip-font);
+	font-weight: 650;
+	letter-spacing: -0.025em;
+}
+.knob-overlay-root :is(.scene-card, .scene-close, .scene-confirm) {
+	border-radius: 4px;
+	border-color: var(--strip-hairline);
+	background: var(--strip-surface);
+	color: var(--strip-text);
+}
+.knob-overlay-root .scene-card[data-focused="true"] {
+	border-color: var(--strip-selection);
+	box-shadow: inset 0 -3px 0 var(--strip-selection);
+}
+.knob-overlay-root
+	:is(
+		.scene-card-meta,
+		.scene-card-action,
+		.scene-legend,
+		.scene-timeout,
+		.scene-instructions p
+	) {
+	color: var(--strip-muted);
+}
+.knob-overlay-root .scene-card[data-current="true"] .scene-card-meta {
+	color: var(--strip-success);
+}
+
+/* Theme every existing display family, including their standalone Studio previews. */
+.oq-clock-scrim {
+	background: color-mix(in srgb, var(--strip-canvas) 78%, transparent);
+}
+.oq-monitor .monitor-built-in {
+	background: var(--strip-canvas);
+}
+.oq-monitor .monitor-scrim {
+	background: color-mix(in srgb, var(--strip-canvas) 78%, transparent);
+}
+.oq-monitor .monitor-disk-drawer {
+	background: var(--strip-surface);
+	color: var(--strip-text);
+	border-color: var(--strip-line);
+}
+.oq-monitor .monitor-bar > span {
+	background: var(--strip-accent);
+}
+.strip-screen
+	:is(
+		.oq-player,
+		.oq-weather-card,
+		.oq-music-card,
+		.obs-tile,
+		.home-assistant-tile
+	) {
+	color: var(--strip-text);
+	border-radius: 4px;
+}
+.strip-screen :is(.oq-player-main, .oq-music-play) {
+	border-radius: 4px;
+	background: var(--strip-accent);
+	color: var(--strip-accent-ink);
+}
+.strip-screen :is(.oq-player-previous, .oq-player-next) {
+	border-radius: 4px;
+	background: var(--strip-raised);
+	color: var(--strip-text);
+}
+.strip-screen
+	:is(
+		.oq-player-source,
+		.oq-weather-meta,
+		.meeting-key-status,
+		.clawbot-time,
+		.copilot-hint
+	) {
+	color: var(--strip-muted);
+}
+.knob-overlay-root
+	:is(
+		.scene-card-preview,
+		.scene-card-action,
+		.scene-pages button,
+		.knob-volume,
+		.knob-notice
+	) {
+	border-radius: 4px;
+}
+.knob-overlay-root .scene-card-preview {
+	background: var(--strip-raised);
+}
+.knob-overlay-root .scene-card[data-pressed="true"] {
+	background: var(--strip-raised);
+}
+.knob-overlay-root .scene-card-action {
+	background: var(--strip-raised);
+	color: var(--strip-text);
+}
+.knob-overlay-root .scene-card[data-focused="true"] .scene-card-action {
+	background: var(--strip-accent);
+	color: var(--strip-accent-ink);
+}
+.knob-overlay-root
+	:is(.scene-count, .scene-instructions .knob-current-label em) {
+	color: var(--strip-text);
+}
+.knob-overlay-root .scene-pages button {
+	background: var(--strip-surface);
+	border-color: var(--strip-line);
+}
+.knob-overlay-root .knob-card-placeholder {
+	background:
+		repeating-linear-gradient(
+			90deg,
+			transparent 0 calc(12.5% - 5px),
+			var(--strip-surface) calc(12.5% - 5px) 12.5%
+		),
+		linear-gradient(
+			transparent calc(50% - 3px),
+			var(--strip-surface) calc(50% - 3px) calc(50% + 3px),
+			transparent calc(50% + 3px)
+		),
+		var(--strip-line);
+}
+
+.strip-screen .strip-key-chip[data-kind="alarm"] {
+	background: var(--strip-warning-soft);
+}
+.strip-screen .strip-key-chip[data-kind="invalid"] {
+	background: var(--strip-danger-soft);
+}
+
+.knob-overlay-root .scene-card[data-focused="true"] {
+	background: var(--strip-raised);
+	color: var(--strip-text);
+}
+.knob-overlay-root
+	.scene-card[data-current="true"]
+	.scene-card-meta
+	span:last-child {
+	color: var(--strip-success);
+}
+.strip-screen .voice-backdrop {
+	background: var(--strip-scrim);
+}
+.management-window .nav-item[aria-current="page"] .icon {
+	color: var(--oq-selection);
+}

@@ -53,7 +53,8 @@
 	/* State colors, always paired with text. Danger is derived, not themed. */
 	--oq-success: var(--quake-success);
 	--oq-warning: var(--quake-warning);
-	--oq-danger: light-dark(#b42318, #f08a78);
+	--oq-danger: var(--quake-danger);
+	--oq-selection: var(--quake-selection);
 	--oq-success-soft: color-mix(in srgb, var(--quake-success) 14%, transparent);
 	--oq-warning-soft: color-mix(in srgb, var(--quake-warning) 16%, transparent);
 	--oq-danger-soft: color-mix(in srgb, var(--oq-danger) 14%, transparent);
@@ -62,9 +63,9 @@
 		0 0 0 2px var(--oq-bg),
 		0 0 0 4px color-mix(in srgb, var(--quake-accent) 85%, transparent);
 
-	--oq-radius-sm: 6px;
-	--oq-radius-md: 8px;
-	--oq-radius-lg: 12px;
+	--oq-radius-sm: 3px;
+	--oq-radius-md: 4px;
+	--oq-radius-lg: 6px;
 
 	--oq-space-1: 4px;
 	--oq-space-2: 8px;
@@ -644,4 +645,40 @@ button {
 		--quake-motion-pulse: status-pulse 1.6s ease-in-out infinite;
 		--quake-motion-press: knob-press 420ms ease-out;
 	}
+}
+
+/* Signal Deck: navigation and focus have their own role, distinct from action and status. */
+:root {
+	--oq-focus-ring: 0 0 0 2px var(--oq-bg), 0 0 0 4px var(--oq-selection);
+}
+:focus-visible {
+	outline-color: var(--oq-selection);
+}
+.management-window .nav-item[aria-current="page"] {
+	color: var(--oq-selection);
+	background: color-mix(in srgb, var(--oq-selection) 12%, var(--oq-sidebar));
+	box-shadow: inset 3px 0 0 var(--oq-selection);
+}
+.management-window :is(.group-title, .nav-heading, .page-header h1) {
+	font-weight: 650;
+	letter-spacing: -0.02em;
+}
+.management-window :is(.group, .mc-card, .field-group) {
+	box-shadow: none;
+	border-radius: 4px;
+}
+.management-window .mc-topbar {
+	border-bottom: 1px solid var(--oq-hairline);
+	background: var(--oq-surface);
+}
+.management-window .theme-choice {
+	border-radius: 4px;
+}
+.management-window .theme-choice:has(input:checked) {
+	outline: 2px solid var(--oq-selection);
+	outline-offset: 2px;
+}
+.management-window
+	:is(.connection-pill, .mc-status-dot)[data-state="connected"] {
+	color: var(--oq-success);
 }

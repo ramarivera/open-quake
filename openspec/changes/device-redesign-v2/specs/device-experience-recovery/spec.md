@@ -37,3 +37,18 @@ Two Opus5.5 proposals SHALL cover the same full 22-screen inventory, state varia
 #### Scenario: Compare complete proposals
 - **WHEN** Ramiro opens the previews
 - **THEN** both offer all device screens and recovery/unavailable states, at the real device ratio without nested frames
+
+
+### Requirement: Signal Deck appearance preserves user layouts
+All device renderers, overlays and Management Studio SHALL use the selected Signal Deck visual language and coordinated theme roles. Styling SHALL NOT move existing key hit regions, change profile actions, replace custom artwork, or rewrite saved profiles.
+
+#### Scenario: Change between dark and light editor palettes
+- **WHEN** the user chooses a Catppuccin, GitHub, Superhuman, Codex, Linear or Notion inspired theme
+- **THEN** device and Studio use the coordinated palette with readable text and distinct selection/state colors while stored geometry remains unchanged
+
+### Requirement: Ambient expands the existing background feature
+Ambient SHALL retain existing media import, playlist and playback behavior. Additional procedural and music-reactive backgrounds SHALL be additive. A reactive background SHALL use the explicitly enabled background video audio source and SHALL explain absence of that source rather than simulate music as a live measurement.
+
+#### Scenario: Existing background playlist
+- **WHEN** a saved Vivid background profile loads after the rename
+- **THEN** its default display name is Ambient and its media and actions remain unchanged

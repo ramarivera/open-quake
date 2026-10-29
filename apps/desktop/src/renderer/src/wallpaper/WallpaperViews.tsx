@@ -3,6 +3,7 @@ import { useAppTranslations } from "../i18n";
 import { useStripSettings } from "../strip/stripSettings";
 import { DeviceScreen } from "../ui/DeviceScreen";
 import { PageHeader, Segmented } from "../ui/Form";
+import { AmbientSettings } from "./AmbientSettings";
 import type { useWallpaper } from "./useWallpaper";
 import { WallpaperEditor } from "./WallpaperEditor";
 
@@ -24,10 +25,13 @@ export function WallpaperSettings({
 	const active =
 		saved?.settings.displayMediaList[wallpaper.snapshot?.activeIndex ?? 0];
 	const editor = (
-		<WallpaperEditor
-			key={`${saved?.serial}:${saved?.revision}`}
-			wallpaper={wallpaper}
-		/>
+		<>
+			<AmbientSettings serial={saved?.serial} />
+			<WallpaperEditor
+				key={`${saved?.serial}:${saved?.revision}`}
+				wallpaper={wallpaper}
+			/>
+		</>
 	);
 	if (embedded) return editor;
 	return (
@@ -39,7 +43,7 @@ export function WallpaperSettings({
 				value={preview}
 				options={[
 					{ value: "active", label: "Key grid" },
-					{ value: "vivid", label: "Vivid screen" },
+					{ value: "vivid", label: "Ambient screen" },
 				]}
 				onChange={setPreview}
 			/>
