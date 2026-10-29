@@ -591,8 +591,8 @@ if (!app.requestSingleInstanceLock()) {
 							panelSerial,
 							{
 								management: (tab) => desktopShell.open(tab),
-								systemOverview: (serial, observable) =>
-									systemOverview.open(serial, observable),
+								systemOverview: (serial, mode) =>
+									systemOverview.open(serial, mode),
 								dismissSystemOverview: (serial) => systemOverview.tap(serial),
 							},
 						);

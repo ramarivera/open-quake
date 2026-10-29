@@ -1672,7 +1672,7 @@ it.each([
 				).toBe(handled);
 				expect(executed).toBe(true);
 				expect(arm).toHaveBeenCalledTimes(arms ? 1 : 0);
-				if (arms) expect(arm).toHaveBeenCalledWith("device");
+				if (arms) expect(arm).toHaveBeenCalledWith("device", "apps");
 			}).pipe(
 				Effect.provide(
 					layer(
@@ -1801,3 +1801,39 @@ it("publishes host brightness to inactive Studio profiles and pages on the conne
 		),
 	);
 });
+
+it.each([
+	["control+up", "windows"],
+	["control+down", "windows"],
+	["command+space", "search"],
+	["command+alt+escape", "force-quit"],
+	["command+shift+4", "screenshot"],
+])(
+	"observes the specific native mode after executing %s",
+	async (chord, mode) => {
+		const arm = vi.fn();
+		const press = vi.fn(() => Effect.void);
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const port = yield* KeyRuntimePort;
+				yield* port.execute(
+					{ type: "hotkey", actions: [{ type: "key", value: chord }] },
+					"device",
+				);
+				expect(press).toHaveBeenCalledWith(chord);
+				expect(arm).toHaveBeenCalledExactlyOnceWith("device", mode);
+			}).pipe(
+				Effect.provide(
+					layer(false, undefined, undefined, undefined, undefined, undefined, {
+						keyboard: {
+							supportedTokens: new Set([...HOTKEY_KEYS, ...HOTKEY_MODIFIERS]),
+							pressChord: press,
+						},
+						systemOverview: arm,
+					}),
+				),
+				Effect.scoped,
+			),
+		);
+	},
+);
