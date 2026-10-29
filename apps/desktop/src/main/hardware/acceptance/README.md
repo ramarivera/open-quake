@@ -159,6 +159,12 @@ effect, and the LEDs were seen flashing during these runs.
 
 ## Guided touch and knob capture
 
+For raw input overlays in a development panel, launch the existing desktop `dev`
+command with `OPEN_QUAKE_INPUT_DIAGNOSTICS=1`. The flag is ignored outside
+development and for management windows. Ordinary panels neither draw raw touch
+markers or detent counters nor schedule their expiry updates. Actual control
+feedback and offline status stay available.
+
 The development-only `guided-input` entry launches the production app with fresh
 scratch data and one device owner. It subscribes to the existing panel preload
 bridge. It does not create another HID reader. Sixteen inert page tiles and empty

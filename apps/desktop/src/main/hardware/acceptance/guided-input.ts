@@ -353,10 +353,17 @@ async function run() {
 			JSON.stringify({ ...capture.snapshot(), selfTest }, null, 2),
 			{ mode: 0o600 },
 		);
-		if (panel && !panel.isDestroyed())
-			await boundedCaptureWait(
-				panel.webContents.executeJavaScript("window.__guidedCapture?.close()"),
-			).catch(() => {});
+		if (panel && !panel.isDestroyed()) {
+			const contents = panel.webContents;
+			code = await finishGuidedCapture(
+				undefined,
+				() =>
+					boundedCaptureWait(
+						contents.executeJavaScript("window.__guidedCapture?.close()"),
+					),
+				code,
+			);
+		}
 		captureFinished = true;
 		app.quit();
 	}

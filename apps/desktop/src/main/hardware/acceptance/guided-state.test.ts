@@ -232,6 +232,30 @@ it("bounds stalled renderer paint and permits failure cleanup without retaining 
 		vi.useRealTimers();
 	}
 });
+it("an observed capture exits unsuccessfully when renderer close rejects or times out", async () => {
+	vi.useFakeTimers();
+	try {
+		for (const mode of ["success", "rejection", "timeout"]) {
+			const close =
+				mode === "timeout"
+					? new Promise<void>(() => {})
+					: Promise.resolve().then(() => {
+							if (mode === "rejection") throw new Error("close failed");
+						});
+			const result = finishGuidedCapture(
+				undefined,
+				() => boundedCaptureWait(close),
+				0,
+			);
+			await vi.advanceTimersByTimeAsync(5000);
+			expect(await result).toBe(mode === "success" ? 0 : 1);
+			expect(vi.getTimerCount()).toBe(0);
+		}
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
 it("attempts cleanup after finalization failure and rejects success on either failure", async () => {
 	for (const failed of ["capture", "cleanup", "both", "neither"]) {
 		let closed = 0;

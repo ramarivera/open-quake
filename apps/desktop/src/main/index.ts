@@ -122,6 +122,7 @@ import { createWizardOwners } from "./settings/wizard-owners";
 import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { registerStripTransport } from "./strip-transport";
+import { surfaceQuery } from "./surface-query";
 import { createToneRecorder, prepareVoiceSurface, toneSinks } from "./voice";
 import { meetingAdmission } from "./voice/admission";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
@@ -147,11 +148,13 @@ function loadSurface(
 	rotation: PanelRotation = 0,
 	serial?: string,
 ): void {
-	const query = {
+	const query = surfaceQuery(
 		surface,
-		rotation: String(rotation),
-		...(serial ? { serial } : {}),
-	};
+		rotation,
+		serial,
+		isDev,
+		process.env.OPEN_QUAKE_INPUT_DIAGNOSTICS,
+	);
 	if (isDev) {
 		win.loadURL(
 			`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`,
