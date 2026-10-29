@@ -78,7 +78,7 @@ it("MGMT-038/039 SETTINGS-070 exposes offline guide and fixed project support fr
 		this.open = false;
 	});
 	await mount(createElement(ConnectionCheck));
-	await click(button("Installation Guide"));
+	await click(button("Installation guide"));
 	expect(document.querySelector("dialog[open]")).not.toBeNull();
 	const link = element<HTMLAnchorElement>("a");
 	const event = new MouseEvent("click", { bubbles: true, cancelable: true });

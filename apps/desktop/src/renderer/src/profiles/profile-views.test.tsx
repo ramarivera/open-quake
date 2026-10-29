@@ -614,7 +614,7 @@ it("MGMT-118 reaches actual emoji package and shortcut creation workflows from K
 	);
 	await click(button(f.host, "New Package"));
 	await settle(() =>
-		expect(f.host.querySelector('input[value="Unnamed Pack"]')).not.toBeNull(),
+		expect(f.host.querySelector('input[value="Unnamed pack"]')).not.toBeNull(),
 	);
 	await click(button(f.host, "AI shortcuts"));
 	await settle(() =>

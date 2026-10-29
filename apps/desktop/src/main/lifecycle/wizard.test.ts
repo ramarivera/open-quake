@@ -53,7 +53,7 @@ describe("wizard orientation consumer", () => {
 			expect(vertical).toContain("270°");
 			expect(vertical).toContain(
 				locale === "en"
-					? "Open Display Settings"
+					? "Open display settings"
 					: "Anzeigeeinstellungen öffnen",
 			);
 			expect(vertical).not.toContain('data-tone="success">Recommended');

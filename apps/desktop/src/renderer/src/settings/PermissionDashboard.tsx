@@ -56,7 +56,7 @@ export function PermissionDashboard({
 						type="button"
 						className="mc-button"
 						disabled={c.busy || permission.status === "unsupported"}
-						aria-label={`${permission.status === "granted" ? "Open Settings" : "Allow access"}: ${names[permission.key]}`}
+						aria-label={`${permission.status === "granted" ? "Open settings" : "Allow access"}: ${names[permission.key]}`}
 						onClick={() => {
 							if (
 								permission.key === "accessibility" &&
@@ -69,7 +69,7 @@ export function PermissionDashboard({
 						{permission.status === "granted"
 							? de
 								? "Einstellungen öffnen"
-								: "Open Settings"
+								: "Open settings"
 							: de
 								? "Zugriff erlauben…"
 								: "Allow access…"}
@@ -105,7 +105,7 @@ export function PermissionDashboard({
 								);
 							}}
 						>
-							{de ? "Jetzt neu starten" : "Restart Now"}
+							{de ? "Jetzt neu starten" : "Restart now"}
 						</button>
 						<button
 							type="button"

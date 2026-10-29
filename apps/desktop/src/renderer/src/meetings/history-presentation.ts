@@ -6,7 +6,7 @@ import {
 } from "../../../shared/meeting-bridge";
 
 export const stageLabels = [
-	"Start Recording",
+	"Recording",
 	"Recording ended, uploading",
 	"Upload completed, ready to parse",
 	"Parsing",
@@ -32,6 +32,7 @@ export function statusLabel(record: MeetingRecord): string {
 		case "completed":
 			return "Success";
 		case "recording":
+			return "Recording";
 		case "processing":
 			return "Processing";
 		case "failed":

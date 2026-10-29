@@ -80,7 +80,7 @@ export function MeetingAnimation({
 	const label =
 		progress && progress.status !== 0
 			? progress.stage === 0
-				? "Start Recording"
+				? "Recording"
 				: progress.stage === 1 ||
 						(progress.stage === 2 && progress.status === 1)
 					? "Recording ended, uploading"
@@ -92,7 +92,7 @@ export function MeetingAnimation({
 								? "Minutes generation completed"
 								: "Parsing completed, generating minutes"
 			: state === "recording"
-				? "Start Recording"
+				? "Recording"
 				: state === "processing"
 					? "Parsing completed, generating minutes"
 					: state === "failure"

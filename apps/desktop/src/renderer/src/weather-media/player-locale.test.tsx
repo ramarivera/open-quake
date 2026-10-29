@@ -112,7 +112,7 @@ it("switches mounted system/local media and weather copy through reactive locale
 	try {
 		const system = view.host.querySelector('[data-source="system"]');
 		const local = view.host.querySelector('[data-source="local"]');
-		expect(system?.textContent).toContain("System Media");
+		expect(system?.textContent).toContain("System media");
 		expect(local?.textContent).toContain("Not configured");
 		const button = system?.querySelector('[data-testid="playStop"]');
 		const calls = weather.request.mock.calls.length;

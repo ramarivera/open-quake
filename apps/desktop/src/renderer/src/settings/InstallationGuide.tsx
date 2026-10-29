@@ -4,21 +4,21 @@ import "./settings.css";
 
 const copy = {
 	en: {
-		open: "Installation Guide",
+		open: "Installation guide",
 		close: "Close installation guide",
-		title: "Quake Hardware Installation Guide",
-		steps: ["Connect Cables", "Desktop Setup", "Laptop Setup"],
+		title: "QUAKE hardware installation guide",
+		steps: ["Connect cables", "Desktop setup", "Laptop setup"],
 		titles: [
-			"Connect Quake's Included Cables",
-			"Connect to Desktop",
-			"Connect to Laptop (via Hub)",
+			"Connect QUAKE's included cables",
+			"Connect to desktop",
+			"Connect to laptop via hub",
 		],
 		instructions: [
 			[
 				"Plug the cable's USB-C connector into the Quake unit's left USB-C input port",
 				"Plug the cable's Mini HDMI connector into the Quake unit's left Mini HDMI input port",
 				'Fully insert the cables. You\'ll hear a "click" when the latch engages.',
-				"Box Contents: Quake unit × 1, USB-C cable × 1, Mini HDMI cable × 1",
+				"Box contents: Quake unit × 1, USB-C cable × 1, Mini HDMI cable × 1",
 			],
 			[
 				"Plug the cable's USB-A connector into your desktop's USB-A port",

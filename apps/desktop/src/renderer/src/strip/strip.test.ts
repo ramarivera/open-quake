@@ -172,8 +172,8 @@ describe("strip screen", () => {
 		expect(markupForTitle(shortcut, "Lock screen")).toContain(
 			'data-full-title="Lock screen"',
 		);
-		expect(markupForTitle(chat, "Content Writer")).toContain(
-			'data-full-title="Content Writer"',
+		expect(markupForTitle(chat, "Content writer")).toContain(
+			'data-full-title="Content writer"',
 		);
 		expect(markupForTitle(chat, "Compliance")).toContain(
 			'data-full-title="Compliance"',

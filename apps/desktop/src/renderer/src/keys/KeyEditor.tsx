@@ -876,7 +876,7 @@ export function KeyEditor({
 						{key ? (
 							<Group
 								title={
-									keyTitle(key, locale) || key.config.type || "Select Function"
+									keyTitle(key, locale) || key.config.type || "Select function"
 								}
 							>
 								{selectedTile && selection && (
@@ -960,7 +960,7 @@ export function KeyEditor({
 										<option value={key.config.type}>
 											{key.config.type
 												? keyText(key.config.type, locale)
-												: "Select Function"}
+												: "Select function"}
 										</option>
 										{ACTION_REGISTRY.filter(
 											(a) => a.id !== key.config.type,
@@ -998,17 +998,13 @@ export function KeyEditor({
 								{overlaps.length > 0 && (
 									<div
 										role="alertdialog"
-										aria-label={
-											locale === "de"
-												? "Ersetzung bestätigen"
-												: "Replace Confirmation"
-										}
+										aria-label={keyText("shortcutGrid.replaceTitle", locale)}
 									>
 										<p>
-											{locale === "de"
-												? "Diese Felder werden ersetzt"
-												: "Placing here will replace the existing component(s)"}
-											: {overlaps.join(", ")}
+											{keyText("shortcutGrid.replaceConfirm", locale).replace(
+												"{names}",
+												overlaps.join(", "),
+											)}
 										</p>
 										<button
 											type="button"
@@ -1020,9 +1016,7 @@ export function KeyEditor({
 												})
 											}
 										>
-											{locale === "de"
-												? "Ersetzen bestätigen"
-												: "Confirm Replace"}
+											{keyText("shortcutGrid.confirmReplace", locale)}
 										</button>
 										<button type="button" onClick={() => void revert()}>
 											{keyText("cancel", locale)}

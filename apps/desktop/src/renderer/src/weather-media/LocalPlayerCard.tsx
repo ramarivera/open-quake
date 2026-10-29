@@ -117,7 +117,7 @@ export function LocalPlayerCard({
 			? {
 					id: `local:${targetId}:${state.trackIndex}`,
 					appId: "open-quake.local",
-					appName: "Local Music",
+					appName: "Local music",
 					title: state.title,
 					artist: configured ? `${state.trackIndex + 1} / ${state.total}` : "",
 					coverUrl: null,

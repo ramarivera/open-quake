@@ -205,7 +205,7 @@ export function ManagementShell({
 					className="sidebar"
 					data-drawer={narrow ? (drawerOpen ? "open" : "closed") : undefined}
 					inert={narrow && !drawerOpen}
-					aria-label="Management Center"
+					aria-label="Management center"
 				>
 					<div className="mc-product-mark">
 						<span className="mc-product-icon" aria-hidden="true">

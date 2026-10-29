@@ -216,8 +216,8 @@ export function PlayerCard({
 							{source === "local"
 								? locale === "de"
 									? "Lokale Musik"
-									: "Local Music"
-								: session?.appName || "System Media"}
+									: "Local music"
+								: session?.appName || "System media"}
 						</span>
 					</div>
 					<div className="oq-player-title" title={session?.title}>

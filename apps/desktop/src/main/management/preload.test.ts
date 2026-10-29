@@ -58,7 +58,7 @@ it("activation subscribes before signaling ready and delivers the queued Setting
 	expect(native.off).toHaveBeenCalledWith(MANAGEMENT_ACTIVATE, native.listener);
 });
 
-it("MGMT-039 SETTINGS-015 real management preload enables support and forwards Restart Now to shell IPC", async () => {
+it("MGMT-039 SETTINGS-015 real management preload enables support and forwards Restart now to shell IPC", async () => {
 	vi.stubGlobal("process", { ...process, isMainFrame: true });
 	vi.resetModules();
 	await import("./preload");
@@ -101,8 +101,8 @@ it("MGMT-039 SETTINGS-015 real management preload enables support and forwards R
 		const mounted = await mount(createElement(Dashboard));
 		await click(button("Allow access…"));
 		await act(async () => grant());
-		expect(button("Restart Now").disabled).toBe(false);
-		await click(button("Restart Now"));
+		expect(button("Restart now").disabled).toBe(false);
+		await click(button("Restart now"));
 		expect(native.invoke).toHaveBeenCalledExactlyOnceWith(MANAGEMENT_COMMAND, {
 			action: "restart",
 		});

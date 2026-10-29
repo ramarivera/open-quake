@@ -23,6 +23,7 @@ import {
 	reduceCopilot,
 } from "../../tiles/aiCopilot/copilot-state";
 import { checkSend } from "../../tiles/clawBotInput/input-state";
+import { stripText } from "./strings";
 import { keyInfo } from "./useVoiceSurface";
 import { StripToasts, VoiceOverlay } from "./VoiceOverlay";
 import {
@@ -483,7 +484,19 @@ describe("copilot status machine", () => {
 			Option.some({ _tag: "string", key: "aiIconViewTxt.status.timeout" }),
 		);
 	});
-	it("ignores Start Recording unless initializing, and shows busy and error codes", () => {
+	it("labels voice preparation separately from active recording", () => {
+		let view = play([key("1,6", "down")]);
+		for (const [status, expected] of [
+			["preparing", "Initializing"],
+			["listening", "Recording"],
+		] as const) {
+			view = play([stage("1,6", { _tag: "recording", status })], view);
+			const text = Option.getOrThrow(view.copilot.statusText);
+			if (text._tag !== "string") throw new Error("Expected voice status text");
+			expect(stripText("en", text.key)).toBe(expected);
+		}
+	});
+	it("ignores recording status unless initializing, and shows busy and error codes", () => {
 		const response = (
 			status: -1 | 3 | 5,
 			errorCode = Option.none<string>(),

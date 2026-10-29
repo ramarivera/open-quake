@@ -69,7 +69,7 @@ it("SCREEN-110 AI-338 fans incremental results to two mounted keys, scrolls, kee
 		await vi.advanceTimersByTimeAsync(5400);
 	});
 	for (const footer of dom.host.querySelectorAll('footer[role="status"]'))
-		expect(footer.textContent).toBe("Update speed : - -");
+		expect(footer.textContent).toBe("Waiting for translation");
 	await dom.push({
 		translations: [],
 		translating: false,

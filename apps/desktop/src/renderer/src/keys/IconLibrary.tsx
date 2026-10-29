@@ -343,7 +343,7 @@ export function IconLibrary({
 				<span className="icon-library-count">
 					{selected?.icons.length ?? 0}
 				</span>
-				<button type="button" onClick={onClose} aria-label="Close Icon Library">
+				<button type="button" onClick={onClose} aria-label={t("close")}>
 					×
 				</button>
 			</header>

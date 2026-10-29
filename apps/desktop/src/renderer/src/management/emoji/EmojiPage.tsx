@@ -166,12 +166,12 @@ export function EmojiPage(): React.JSX.Element {
 		const id = crypto.randomUUID();
 		const reply = await run({
 			type: "command",
-			command: { type: "create-package", id, name: "Unnamed Pack" },
+			command: { type: "create-package", id, name: "Unnamed pack" },
 		});
 		if (reply) {
 			setPackId(id);
 			renameCancelled.current = false;
-			setRename({ id, name: "Unnamed Pack" });
+			setRename({ id, name: "Unnamed pack" });
 		}
 	};
 	const edit = (item: EmojiItem): void => {
@@ -230,7 +230,7 @@ export function EmojiPage(): React.JSX.Element {
 					type="button"
 					onClick={() => setSettings(true)}
 				>
-					App Match Settings
+					App match settings
 				</button>
 			</PageHeader>
 			<ol className="emoji-steps" aria-label="Emoji creation steps">
@@ -284,7 +284,7 @@ export function EmojiPage(): React.JSX.Element {
 										event.currentTarget.scrollLeft += event.deltaY;
 								}}
 								role="listbox"
-								aria-label="Static Emoji assets"
+								aria-label="Static emoji assets"
 							>
 								{view.store.staticAssets.map((asset) => (
 									<button
@@ -718,7 +718,7 @@ export function EmojiPage(): React.JSX.Element {
 				</button>
 			) : null}
 			{legacy ? (
-				<Modal title="Generate Emoji" close={() => setLegacy(false)}>
+				<Modal title="Generate emoji" close={() => setLegacy(false)}>
 					<label className="mc-field">
 						Motion description
 						<textarea
@@ -749,7 +749,7 @@ export function EmojiPage(): React.JSX.Element {
 							});
 						}}
 					>
-						Generate Emoji
+						Generate emoji
 					</button>
 					<button
 						className="mc-button"
@@ -1071,7 +1071,7 @@ function AppMatchDialog({
 	const [query, setQuery] = useState("");
 	const [mode, setMode] = useState<EmojiMode | null>(view.store.globalMode);
 	return (
-		<Modal title="App Match Settings" close={close}>
+		<Modal title="App match settings" close={close}>
 			<label>
 				<input
 					type="checkbox"

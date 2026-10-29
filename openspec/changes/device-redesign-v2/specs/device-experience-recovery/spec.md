@@ -33,6 +33,21 @@ All default profile names supplied to the device selector SHALL use localized cu
 - **WHEN** the selection moves between the active and an inactive profile
 - **THEN** the primary action remains Apply and the Current badge identifies the live profile
 
+### Requirement: Default labels use consistent current wording
+English device and Studio labels SHALL use sentence case, correct spelling and current product names while preserving proper names, translated locales, stable lookup keys and explicitly customized titles. Recording status SHALL describe the active state separately from start and stop actions.
+
+#### Scenario: Active meeting and default function labels
+
+- **WHEN** an English meeting view is recording or the user opens default key, media, profile, connection or setup controls
+- **THEN** the active status reads Recording and default labels use consistent wording without legacy DK, Dekie or Vivid product names
+- **AND** saved custom names and language-specific translations remain unchanged
+
+#### Scenario: Previously saved English default titles
+
+- **WHEN** a saved built-in key still has its pre-rename English default title and a localized thumbnail is requested
+- **THEN** its known legacy title resolves through the current locale catalog
+- **AND** explicitly edited titles and persisted source data remain unchanged
+
 ### Requirement: Host metrics explain unavailable data
 Monitoring SHALL start and deliver supported readings when requested. Unavailable or unsupported fields SHALL display an explicit reason without fabricated data or blank unexplained fields.
 

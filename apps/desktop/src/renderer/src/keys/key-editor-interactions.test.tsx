@@ -20,6 +20,7 @@ import {
 	AppLibrarySnapshot,
 	defaultAppLibrary,
 } from "../../../../../../packages/device/src/profiles/app-library";
+import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -1011,13 +1012,13 @@ it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through Key
 		)?.htmlFor;
 		return query(f.host, `[id="${id}"]`, HTMLInputElement);
 	};
-	await click(labelField("Custom Role"));
+	await click(labelField("Custom role"));
 	await input(
 		query(f.host, "textarea", HTMLTextAreaElement),
 		"Retained system prompt",
 	);
-	await input(labelField("Chat Timeout(s)"), "20");
-	await click(labelField("Use Dekie Agent"));
+	await input(labelField("Chat timeout in seconds"), "20");
+	await click(labelField("Use agent"));
 	await click(button(f.host, "Save"));
 	await settle(() =>
 		expect(f.host.textContent).toContain("Saved successfully"),
@@ -1041,7 +1042,7 @@ it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through Key
 	expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
 		"Retained system prompt",
 	);
-	expect(labelField("Chat Timeout(s)").value).toBe("20");
+	expect(labelField("Chat timeout in seconds").value).toBe("20");
 });
 
 it("MGMT-055 SETTINGS-013 shares the saved border preference with the actual key editor", async () => {
@@ -1420,7 +1421,7 @@ it("MGMT-066/078 retargets the open picker across keys and discards replies afte
 			return original(command);
 		});
 	await f.select();
-	await click(button(f.host, "Icon Library"));
+	await click(button(f.host, "Icon library"));
 	expect(openings).toHaveLength(1);
 	await click(button(f.host, "1,2"));
 	await settle(() => expect(openings).toHaveLength(2));
@@ -1499,14 +1500,14 @@ it.each([false, true])(
 		);
 		await f.select();
 		const before = f.stored();
-		await click(button(f.host, "Icon Library"));
+		await click(button(f.host, "Icon library"));
 		await settle(() =>
 			expect(
-				chooser.host.querySelector('[aria-label="Icon Library"]'),
+				chooser.host.querySelector('[aria-label="Icon library"]'),
 			).toBeDefined(),
 		);
 		expect(
-			chooser.host.querySelector('[aria-label="Icon Library"]'),
+			chooser.host.querySelector('[aria-label="Icon library"]'),
 		).not.toBeNull();
 		const icon = "data:image/png;base64,AAAA";
 		await act(async () => finish({ _tag: "success", icon }));
@@ -1622,7 +1623,7 @@ it("MGMT-070/075 SCREEN-136 requires replacement confirmation including anchor a
 	await click(button(f.host, "Cancel"));
 	expect(f.stored()).toEqual(before);
 	await libraryPlace(f.host, "playAudio", "2,8");
-	await click(button(f.host, "Confirm Replace"));
+	await click(button(f.host, "Confirm replacement"));
 	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
 	expect(f.stored().profiles[0].pages[0].keys).toEqual([
 		expect.objectContaining({
@@ -1647,7 +1648,7 @@ it("MGMT-070/076 coalesces repeated confirmation while reading the saved revisio
 			if (command.type === "read") await paused;
 			return original(command);
 		});
-	const confirm = button(f.host, "Confirm Replace");
+	const confirm = button(f.host, "Confirm replacement");
 	await act(async () => {
 		confirm.click();
 		confirm.click();
@@ -1921,10 +1922,10 @@ it("MGMT-061 labels four presets and custom size, applies inward edge geometry a
 	const size = query(f.host, "#key-span", HTMLSelectElement);
 	expect([...size.options].map((o) => o.textContent)).toEqual(
 		expect.arrayContaining([
-			"1x1 Single",
-			"2x1 Horizontal",
-			"1x2 Vertical",
-			"2x2 Four Cells",
+			"1x1 single",
+			"2x1 horizontal",
+			"1x2 vertical",
+			"2x2 four cells",
 			"Custom 3x1",
 		]),
 	);
@@ -1932,7 +1933,7 @@ it("MGMT-061 labels four presets and custom size, applies inward edge geometry a
 	await click(button(f.host, "Save"));
 	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
 	await libraryPlace(f.host, "playAudio", "1,1");
-	await click(button(f.host, "Confirm Replace"));
+	await click(button(f.host, "Confirm replacement"));
 	await settle(() =>
 		expect(query(f.host, "#key-span", HTMLSelectElement).disabled).toBe(true),
 	);
@@ -1954,7 +1955,7 @@ it("MGMT-111 SCREEN-139 lists every overflowing import item/span and preserves s
 	await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), source);
 	await click(button(f.host, "Inspect import"));
 	const dialog = query(f.host, '[role="alertdialog"]', HTMLDivElement);
-	expect(dialog.getAttribute("aria-label")).toBe("Layout Overflow Warning");
+	expect(dialog.getAttribute("aria-label")).toBe("Layout overflow warning");
 	expect(dialog.querySelectorAll("li")).toHaveLength(17);
 	expect(dialog.textContent).toContain("2×1");
 	await click(button(dialog, "Cancel"));
@@ -2661,7 +2662,7 @@ it("MGMT-109/124 generated placement confirms replacements and refuses locked re
 	await settle(() =>
 		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
 	);
-	await click(button(f.host, "Confirm Replace"));
+	await click(button(f.host, "Confirm replacement"));
 	await settle(() =>
 		expect(
 			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,1")
@@ -2956,7 +2957,7 @@ it("MGMT-401 uses only typed profile/page selects for switch-profile keys", asyn
 	).not.toBeNull();
 	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
 	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
-		"Next Profile",
+		"Next profile",
 	);
 });
 
@@ -3045,7 +3046,7 @@ for (const state of ["hidden", "deleted"] as const) {
 				.disabled,
 		).toBe(true);
 		expect(select.querySelector('option[value="-1"]')?.textContent).toBe(
-			"Next Profile",
+			"Next profile",
 		);
 		expect(
 			select.querySelector<HTMLOptionElement>('option[value="p"]')?.disabled,
@@ -3400,3 +3401,26 @@ it("keeps the active profile when Console delivery is rejected and retains the i
 		0,
 	);
 });
+
+it.each(["en", "de", "zh", "ja"] as const)(
+	"localizes key-size overlap confirmation in %s without saving on cancel",
+	async (locale) => {
+		const f = await gridFixture([gridKey("1,1"), gridKey("1,2")]);
+		const before = f.stored();
+		await input(query(f.host, "#keys-language", HTMLSelectElement), locale);
+		await f.select();
+		await input(query(f.host, "#key-span", HTMLSelectElement), "2,1");
+		const dialog = query(f.host, '[role="alertdialog"]', HTMLDivElement);
+		expect(dialog.getAttribute("aria-label")).toBe(
+			keyText("shortcutGrid.replaceTitle", locale),
+		);
+		expect(dialog.textContent).toContain(
+			keyText("shortcutGrid.replaceConfirm", locale).replace("{names}", "1,2"),
+		);
+		expect(dialog.textContent).toContain(
+			keyText("shortcutGrid.confirmReplace", locale),
+		);
+		await click(button(dialog, keyText("cancel", locale)));
+		expect(f.stored()).toEqual(before);
+	},
+);

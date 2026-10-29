@@ -200,9 +200,9 @@ export function MonitorKeySettings({
 					{slot ? <p>{slot.name}</p> : null}
 				</>
 			) : null}
-			<Row label={locale === "de" ? "Temperatureinheit" : "Temperature Unit"}>
+			<Row label={locale === "de" ? "Temperatureinheit" : "Temperature unit"}>
 				<select
-					aria-label="Temperature Unit"
+					aria-label="Temperature unit"
 					value={settings.temperatureUnit}
 					onChange={(e) =>
 						change({

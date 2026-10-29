@@ -66,7 +66,7 @@ export function MeetingKey({
 		(start
 			? "Start"
 			: tile.type === "mic"
-				? "Mic Mute"
+				? "Mic mute"
 				: kind === "mark"
 					? "Mark"
 					: kind === "record"
@@ -123,7 +123,7 @@ export function MeetingKey({
 					</span>
 					<span className="meeting-key-status">
 						{recording
-							? "Start Recording"
+							? "Recording"
 							: main?.state === "processing"
 								? "Processing"
 								: ""}

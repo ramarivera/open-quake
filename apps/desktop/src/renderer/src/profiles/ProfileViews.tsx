@@ -320,7 +320,7 @@ export function ProfilesManager(): React.JSX.Element {
 			? deviceChoice.serial
 			: Option.getOrElse(link?.device ?? Option.none(), () => "");
 	return (
-		<section className="profiles-manager" aria-label="Knob Profile">
+		<section className="profiles-manager" aria-label="Knob profile">
 			<header>
 				<button
 					type="button"

@@ -24,7 +24,7 @@ export function ProjectNotice(): React.JSX.Element {
 			<p>
 				{de
 					? "Mit Los geht's stimmst du der MIT-Lizenz zu und bestätigst die lokalen Datenschutz- und Softwarehinweise."
-					: 'By selecting "Get Started", you agree to the MIT license and acknowledge the local privacy information and software notice.'}
+					: 'By selecting "Get started", you agree to the MIT license and acknowledge the local privacy information and software notice.'}
 			</p>
 			<nav
 				aria-label={de ? "Rechtliche Hinweise" : "Project legal documents"}

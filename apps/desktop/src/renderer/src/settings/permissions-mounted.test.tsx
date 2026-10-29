@@ -72,7 +72,7 @@ it("SETTINGS-015 polls mock status on focus/2000ms, requests only by click and o
 		key: "accessibility",
 	});
 	expect(document.body.textContent).toContain("Restart required");
-	await click(button("Restart Now"));
+	await click(button("Restart now"));
 	expect(restart).toHaveBeenCalledExactlyOnceWith({ action: "restart" });
 	await click(button("Later"));
 	expect(document.body.textContent).not.toContain("Restart required");

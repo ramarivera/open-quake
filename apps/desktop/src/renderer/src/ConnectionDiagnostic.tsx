@@ -72,7 +72,7 @@ export function DiagnosticView({
 			{status?.issue === "native-failed" && (
 				<p role="alert">
 					Quake display arrangement failed. Automatic layout prompts are paused
-					for 10 minutes. Open Display Settings to adjust the layout, or try
+					for 10 minutes. Open display settings to adjust the layout, or try
 					Arrange Quake display again.
 				</p>
 			)}
