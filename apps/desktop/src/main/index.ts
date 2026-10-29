@@ -86,6 +86,7 @@ import {
 	probeHiddenMirroring,
 	probeWindowsDisplays,
 } from "./lifecycle/native-display";
+import { createNativeOverviewReader } from "./lifecycle/native-overview";
 import {
 	createPanelWindow,
 	destroyPanel,
@@ -318,6 +319,7 @@ if (!app.requestSingleInstanceLock()) {
 							bus?.device
 								? bus.device(serial)?.hardware?.()
 								: bus?.hardware?.();
+						const overviewReader = createNativeOverviewReader();
 						const systemOverview = createSystemOverview(async (serial) => {
 							const session = currentHardware(serial);
 							if (!session) return;
@@ -341,7 +343,7 @@ if (!app.requestSingleInstanceLock()) {
 							);
 							const window = stripWindows.get(serial)?.win ?? panelWin;
 							showPanel(window);
-						});
+						}, overviewReader.visible);
 						let settingsSerial: string | undefined;
 						let settingsHardware: ReturnType<typeof currentHardware>;
 						const selectedHardware = () =>
@@ -589,7 +591,8 @@ if (!app.requestSingleInstanceLock()) {
 							panelSerial,
 							{
 								management: (tab) => desktopShell.open(tab),
-								systemOverview: (serial) => systemOverview.open(serial),
+								systemOverview: (serial, observable) =>
+									systemOverview.open(serial, observable),
 								dismissSystemOverview: (serial) => systemOverview.tap(serial),
 							},
 						);
@@ -1762,6 +1765,8 @@ if (!app.requestSingleInstanceLock()) {
 									() => integrations.dispose(),
 									() => obs.dispose(),
 									() => emoji.dispose(),
+									() => systemOverview.dispose(),
+									() => overviewReader.dispose(),
 									() => settingsWindow.dispose(),
 									() => localeRegistration.dispose(),
 									() => chatRegistration.dispose(),

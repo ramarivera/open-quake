@@ -70,3 +70,82 @@ it("keeps move actions inside the cancellation until an explicit lift", async ()
 	expect(overview.consume("A", up)).toBe(true);
 	expect(overview.consume("A", down)).toBe(false);
 });
+
+it("passes the next input after a witnessed host dismissal without sending Escape", async () => {
+	vi.useFakeTimers();
+	let visible = false;
+	const cancel = vi.fn(async () => {});
+	const overview = createSystemOverview(cancel, () => visible);
+	try {
+		overview.open("A", true);
+		await vi.advanceTimersByTimeAsync(500);
+		visible = true;
+		await vi.advanceTimersByTimeAsync(100);
+		visible = false;
+		expect(overview.consume("A", down)).toBe(false);
+		expect(await overview.tap("A")).toBe(false);
+		expect(cancel).not.toHaveBeenCalled();
+		expect(vi.getTimerCount()).toBe(0);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
+});
+
+it("keeps unwitnessed or failed observations armed without an expiry timeout", async () => {
+	vi.useFakeTimers();
+	let visible: boolean | undefined = false;
+	const cancel = vi.fn(async () => {});
+	const overview = createSystemOverview(cancel, () => visible);
+	try {
+		overview.open("A", true);
+		await vi.advanceTimersByTimeAsync(100000);
+		expect(await overview.tap("A")).toBe(true);
+		overview.open("B", true);
+		visible = true;
+		await vi.advanceTimersByTimeAsync(100);
+		visible = undefined;
+		await vi.advanceTimersByTimeAsync(100);
+		expect(await overview.tap("B")).toBe(true);
+		expect(cancel).toHaveBeenCalledTimes(2);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
+});
+
+it("retains the full cancellation contact when its native window disappears", async () => {
+	vi.useFakeTimers();
+	let visible = true;
+	const overview = createSystemOverview(
+		async () => {},
+		() => visible,
+	);
+	try {
+		overview.open("A", true);
+		expect(overview.consume("A", down)).toBe(true);
+		visible = false;
+		await vi.advanceTimersByTimeAsync(100);
+		expect(
+			overview.consume("A", {
+				...down,
+				points: [{ action: 2, x: 100, y: 100 }],
+			}),
+		).toBe(true);
+		expect(overview.consume("A", up)).toBe(true);
+		expect(overview.consume("A", down)).toBe(false);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
+});
+
+it("doesn't probe ordinary device input or unobservable overview modes", async () => {
+	const visible = vi.fn(() => false);
+	const overview = createSystemOverview(async () => {}, visible);
+	expect(overview.consume("A", down)).toBe(false);
+	overview.open("A");
+	expect(await overview.tap("A")).toBe(true);
+	expect(visible).not.toHaveBeenCalled();
+	overview.dispose();
+});

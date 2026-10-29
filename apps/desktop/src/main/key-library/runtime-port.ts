@@ -82,7 +82,7 @@ export interface DesktopKeyRuntimeActions {
 	readonly brightness?: BrightnessAdapter;
 	readonly keyboard?: KeyboardActionAdapter;
 	readonly dismissSystemOverview?: (deviceId: string) => Promise<boolean>;
-	readonly systemOverview?: (deviceId: string) => void;
+	readonly systemOverview?: (deviceId: string, observable?: boolean) => void;
 	readonly application?: NativeApplicationPort;
 	readonly screenshots?: ScreenshotPort;
 	readonly lock?: () => Promise<void>;
@@ -211,7 +211,10 @@ export const desktopKeyRuntimePort = (
 							"command+shift+4",
 						].includes(chord)
 					)
-						runtimeActions.systemOverview?.(deviceId);
+						runtimeActions.systemOverview?.(
+							deviceId,
+							chord === "control+up" || chord === "control+down",
+						);
 				});
 			if (!mock && mediaActions?.observe) {
 				const changes = yield* Queue.sliding<{

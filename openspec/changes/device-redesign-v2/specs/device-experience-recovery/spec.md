@@ -97,6 +97,13 @@ Device brightness SHALL retain its label and explain its knob interaction. A mac
 - **WHEN** Electron reports an unexpected renderer exit
 - **THEN** the same panel reloads and its controls become usable again, while intentional destruction does not restart it
 
+#### Scenario: Host dismisses a witnessed macOS window overview
+
+- **WHEN** Mission Control or Exposé opened by the device has a supported visible native window and that window subsequently disappears
+- **THEN** the next device input reaches its intended control without sending an unrelated Escape
+- **AND** failed native reads, modes with no supported visibility signal and unwitnessed openings retain cancellation ownership without a guessed expiry
+- **AND** a device cancellation consumes its full contact even when dismissal removes the native window before touch release
+
 ### Requirement: Studio brightness reflects the selected device
 Overview, key-grid and selected-key previews SHALL display the selected physical QUAKE's live brightness readback. Synthetic editor identities SHALL NOT be used as hardware serials. Host brightness SHALL explain the tap-and-turn interaction and unsupported host displays without fabricating percentages.
 
