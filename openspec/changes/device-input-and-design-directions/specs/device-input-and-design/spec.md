@@ -42,9 +42,14 @@ The device home and Management Studio SHALL use the selected Instrument Console 
 
 
 #### Scenario: Preserve explicitly styled key headings
-- **WHEN** a saved generic key uses an explicitly styled top or bottom heading
+- **WHEN** a saved generic key uses an explicitly styled top, middle or bottom heading
 - **THEN** artwork leaves room for its two-line heading at device size and in a scaled Studio preview
 
 #### Scenario: Match page buttons and touch targets
 - **WHEN** the Scene Rail spans more than one page
 - **THEN** rendered navigation buttons and physical hit tests use the same rectangles and the model and renderer use the same page size
+
+
+#### Scenario: Hide a saved heading without moving artwork
+- **WHEN** a generic key hides its saved heading
+- **THEN** heading position and style do not change the default artwork size or placement

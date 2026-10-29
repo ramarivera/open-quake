@@ -31,7 +31,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 				? { top: "50%", transform: "translate(-50%, -50%)" }
 				: { bottom: metrics.padding };
 	const fullArtwork = config.type === "emoji" || config.type === "gameMode";
-	const titleAware = explicit || fullArtwork;
+	const titleAware = (explicit && config.title.display) || fullArtwork;
 	const iconSize =
 		config.type === "emoji"
 			? Math.floor(Math.min(tile.box.width, tile.box.height) * 0.77)
@@ -60,7 +60,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 					transform: titleAware ? "translate(-50%, -50%)" : "none",
 					top: fullArtwork
 						? "50%"
-						: explicit
+						: titleAware
 							? `${metrics.iconCenter * 100}%`
 							: 28,
 				}}
