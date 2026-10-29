@@ -332,7 +332,9 @@
 	opacity: 1;
 	transition: opacity 240ms ease;
 }
-.knob-notice[data-exiting="true"] { opacity: 0; }
+.knob-notice[data-exiting="true"] {
+	opacity: 0;
+}
 @media (prefers-reduced-motion: reduce) {
 	.knob-overlay-root *,
 	.knob-overlay-root *::before,
