@@ -3,7 +3,12 @@ import { expect, it, vi } from "vitest";
 import { confirmProfileAction } from "./native-dialog";
 
 const calls = vi.hoisted(() => ({
-	showMessageBox: vi.fn(async () => ({ response: 1 })),
+	showMessageBox: vi.fn<
+		(
+			owner: BrowserWindow,
+			options: { signal?: AbortSignal | undefined },
+		) => Promise<{ response: number }>
+	>(async () => ({ response: 1 })),
 }));
 vi.mock("electron", () => ({ dialog: calls }));
 const owner = () => ({
@@ -38,4 +43,27 @@ it("never opens an unowned dialog when the management window is missing", async 
 	calls.showMessageBox.mockClear();
 	expect(await confirmProfileAction(undefined, "Run?", "command")).toBe(false);
 	expect(calls.showMessageBox).not.toHaveBeenCalled();
+});
+
+it("returns false when the approval signal times out", async () => {
+	calls.showMessageBox.mockImplementationOnce(
+		async (_owner, options) =>
+			new Promise((resolve) => {
+				const signal = options.signal;
+				if (!signal) throw Error("Abort signal missing");
+				if (signal.aborted) resolve({ response: 1 });
+				else
+					signal.addEventListener("abort", () => resolve({ response: 1 }), {
+						once: true,
+					});
+			}),
+	);
+	expect(
+		await confirmProfileAction(
+			owner() as unknown as BrowserWindow,
+			"Run?",
+			"command",
+			10,
+		),
+	).toBe(false);
 });

@@ -1,7 +1,13 @@
 import { Option, Schema } from "effect";
+import macShortcutDefaults from "./builtins/default_mac_shortcut_config.json";
 import { builtinProfiles } from "./profile-catalog.js";
 import type { Profile, ProfileKey } from "./profile-contracts.js";
 import type { ProfilePlatform } from "./profile-manager-contracts.js";
+
+/** The recovered launcher binding is the source of truth for overview ownership. */
+export const MAC_APPS_COMMAND = macShortcutDefaults
+	.find((key) => key.keyCode === "1,7")
+	?.config.actions.find((action) => action.type === "text")?.value;
 
 const catalogs = new Map<ProfilePlatform, readonly Profile[]>();
 const catalogFor = (platform: ProfilePlatform) => {

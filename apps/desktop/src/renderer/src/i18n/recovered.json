@@ -28,7 +28,9 @@
 			"unavailable": "不可用",
 			"volumeKnob": "点击选中 · 转动旋钮调节",
 			"jumpTo": "跳转到",
-			"brightnessKnob": "轻触后旋转旋钮"
+			"brightnessKnob": "轻触后旋转旋钮",
+			"hostBrightnessUnsupported": "此显示器不支持主机亮度调节。请使用显示器自身的亮度控件。",
+			"controlUnavailable": "此控件不可用"
 		},
 		"translationLanguages": {
 			"en": "英语",
@@ -147,7 +149,9 @@
 			"unavailable": "Unavailable",
 			"volumeKnob": "Tap to focus · turn knob to adjust",
 			"jumpTo": "Jump to",
-			"brightnessKnob": "Tap, then turn knob"
+			"brightnessKnob": "Tap, then turn knob",
+			"hostBrightnessUnsupported": "Host brightness is not supported on this display. Use its brightness controls.",
+			"controlUnavailable": "This control is unavailable"
 		},
 		"translationLanguages": {
 			"en": "English",
@@ -247,7 +251,9 @@
 			"unavailable": "No disponible",
 			"volumeKnob": "Toca para enfocar · gira para ajustar",
 			"jumpTo": "Saltar a",
-			"brightnessKnob": "Toca y gira la perilla"
+			"brightnessKnob": "Toca y gira la perilla",
+			"hostBrightnessUnsupported": "Esta pantalla no admite el brillo del equipo. Usa sus controles de brillo.",
+			"controlUnavailable": "Este control no está disponible"
 		},
 		"translationLanguages": {
 			"en": "Inglés",
@@ -366,7 +372,9 @@
 			"unavailable": "Indisponible",
 			"volumeKnob": "Touchez pour sélectionner · tournez pour régler",
 			"jumpTo": "Aller à",
-			"brightnessKnob": "Touchez, puis tournez"
+			"brightnessKnob": "Touchez, puis tournez",
+			"hostBrightnessUnsupported": "Cet écran ne permet pas de régler la luminosité depuis l’ordinateur. Utilisez ses commandes.",
+			"controlUnavailable": "Cette commande est indisponible"
 		},
 		"translationLanguages": {
 			"en": "Anglais",
@@ -485,7 +493,9 @@
 			"unavailable": "사용 불가",
 			"volumeKnob": "탭하여 선택 · 노브를 돌려 조절",
 			"jumpTo": "이동",
-			"brightnessKnob": "누른 후 노브 회전"
+			"brightnessKnob": "누른 후 노브 회전",
+			"hostBrightnessUnsupported": "이 디스플레이는 호스트 밝기 조절을 지원하지 않습니다. 디스플레이의 밝기 조절 기능을 사용하세요.",
+			"controlUnavailable": "이 컨트롤을 사용할 수 없습니다"
 		},
 		"translationLanguages": {
 			"en": "영어",
@@ -604,7 +614,9 @@
 			"unavailable": "Nicht verfügbar",
 			"volumeKnob": "Zum Fokussieren tippen · Drehknopf zum Regeln",
 			"jumpTo": "Springen zu",
-			"brightnessKnob": "Tippen, dann drehen"
+			"brightnessKnob": "Tippen, dann drehen",
+			"hostBrightnessUnsupported": "Dieses Display unterstützt keine Helligkeitssteuerung vom Computer. Nutze seine Helligkeitsregler.",
+			"controlUnavailable": "Diese Steuerung ist nicht verfügbar"
 		},
 		"translationLanguages": {
 			"en": "Englisch",
@@ -704,7 +716,9 @@
 			"unavailable": "Non disponibile",
 			"volumeKnob": "Tocca per selezionare · ruota per regolare",
 			"jumpTo": "Vai a",
-			"brightnessKnob": "Tocca, poi ruota"
+			"brightnessKnob": "Tocca, poi ruota",
+			"hostBrightnessUnsupported": "Questo schermo non supporta il controllo della luminosità dal computer. Usa i suoi controlli.",
+			"controlUnavailable": "Questo controllo non è disponibile"
 		},
 		"translationLanguages": {
 			"en": "Inglese",
@@ -823,7 +837,9 @@
 			"unavailable": "利用不可",
 			"volumeKnob": "タップで選択 · ノブを回して調整",
 			"jumpTo": "移動先",
-			"brightnessKnob": "タップしてノブを回す"
+			"brightnessKnob": "タップしてノブを回す",
+			"hostBrightnessUnsupported": "このディスプレイはホストからの明るさ調整に対応していません。ディスプレイの明るさ調整を使用してください。",
+			"controlUnavailable": "このコントロールは利用できません"
 		},
 		"translationLanguages": {
 			"en": "英語",

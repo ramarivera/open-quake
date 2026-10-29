@@ -38,11 +38,11 @@ export function createSystemOverview(
 			if (!entry || event.kind !== "touch" || event.points.length === 0)
 				return false;
 			if (entry.phase === "armed") {
-				if (!event.points.some((point) => point.action === 0)) return false;
+				if (!event.points.some((point) => point.action === 1)) return false;
 				entry.phase = "contact";
 				void dismiss(serial, entry).catch(() => {});
 			}
-			if (event.points.every((point) => point.action !== 0)) {
+			if (event.points.every((point) => point.action === 0)) {
 				entry.phase = "released";
 				if (!entry.pending) state.delete(serial);
 			}

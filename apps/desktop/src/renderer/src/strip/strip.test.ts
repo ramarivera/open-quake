@@ -719,7 +719,7 @@ it("names brightness, explains knob operation and doesn't display stale disconne
 					...tile.key.config.title,
 					text: "My light",
 					userModifiedStyle: true,
-					pos: "mid",
+					pos: "mid" as const,
 				},
 			},
 		},
@@ -732,4 +732,26 @@ it("names brightness, explains knob operation and doesn't display stale disconne
 	);
 	expect(custom).toContain('data-full-title="My light"');
 	expect(custom).not.toContain("quick-brightness-state");
+});
+
+it("gives host brightness the same tap-and-turn instruction without a fabricated percentage", () => {
+	const p = builtinProfiles("darwin").find((p) => p.id === "1-2");
+	if (!p) throw Error("Quick missing");
+	const tile = stripLayout(p, p.pages[0]).tiles.find(
+		(t) => t.type === "brightness",
+	);
+	if (!tile) throw Error("Host brightness missing");
+	const html = renderToStaticMarkup(
+		createElement(GenericTile, {
+			tile,
+			context: {
+				now: undefined,
+				hourFormat: "24h",
+				voice: previewVoiceContext,
+			},
+		}),
+	);
+	expect(html).toContain("Host brightness");
+	expect(html).toContain("Tap, then turn knob");
+	expect(html).not.toContain("<output>");
 });

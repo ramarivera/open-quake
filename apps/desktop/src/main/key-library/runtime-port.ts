@@ -44,6 +44,7 @@ import {
 import { encodeDeviceChord } from "../../../../../packages/device/src/hardware/hardware-invariants.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
+import { MAC_APPS_COMMAND } from "../../../../../packages/device/src/profiles/host-shortcuts";
 import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileKey as ProfileKeySchema } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
@@ -474,14 +475,6 @@ export const desktopKeyRuntimePort = (
 						});
 						if (config.type === "hotkey")
 							yield* overviewOpened(config.actions[0].value, deviceId);
-						if (
-							config.type === "cmd" &&
-							platform() === "darwin" &&
-							deviceId &&
-							config.actions[0].value ===
-								"if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi"
-						)
-							runtimeActions.systemOverview?.(deviceId);
 					}),
 				executePlugin: runtimeActions.plugin ?? unavailablePluginAction,
 				...(runtimeActions.timerCompleted
@@ -553,7 +546,24 @@ export const desktopKeyRuntimePort = (
 										: new HostActionFailed(original);
 								},
 							})
-					).pipe(Effect.withSpan("DesktopKeys.executeOwned")),
+					).pipe(
+						Effect.tap((handled) =>
+							Effect.sync(() => {
+								if (
+									handled &&
+									platform() === "darwin" &&
+									key.config.type === "cmd" &&
+									key.config.actions.some(
+										(action) =>
+											action.type === "text" &&
+											action.value === MAC_APPS_COMMAND,
+									)
+								)
+									runtimeActions.systemOverview?.(activation.deviceId);
+							}),
+						),
+						Effect.withSpan("DesktopKeys.executeOwned"),
+					),
 				resetOwned: (deviceId) =>
 					resetOwned ? Effect.promise(() => resetOwned(deviceId)) : Effect.void,
 				publish: (state) => Effect.sync(() => publish(state)),

@@ -16,3 +16,9 @@
 
 - [ ] 10 Sweep all device and Studio labels for English UI language leaks, DK branding, spelling and casing. Terra 6.1 host delegation failed before execution because T3 rejected the thread/start response during decode-payload. Bead open-quake-c3u.8 remains open.
 - [ ] 11 Remove remaining unparented maintenance alerts without exercising destructive reset/restore actions. Bead open-quake-c3u.9.
+
+- [ ] 12 Keep Overview, grid and selected-tile brightness previews synchronized with the selected physical QUAKE, independently of preview profile identities. Bead open-quake-c3u.10.
+- [ ] 13 Give Host brightness the same tap-and-turn instruction and explain unsupported connected displays without inventing a value. Native Mac mini main display currently returns supported:false. Bead open-quake-c3u.11.
+- [ ] 14 Expire control-error notices after three seconds and fade them out, including repeated errors and reduced-motion support. Bead open-quake-c3u.12.
+
+- [ ] 15 Observe host-side dismissal of device-opened macOS overviews. Until then the next device tap is consumed after host dismissal. Electron focus does not prove OS overview visibility; no guessed timeout. Bead open-quake-c3u.13.

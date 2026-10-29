@@ -1,7 +1,7 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { expect, it } from "vitest";
 import { adaptHostShortcuts } from "./host-shortcuts.js";
-import { localizedKey } from "./key-editing-invariants.js";
+import { keyTitle, localizedKey } from "./key-editing-invariants.js";
 import { builtinProfiles } from "./profile-catalog.js";
 import { Profile, ProfileJsonObject } from "./profile-contracts.js";
 
@@ -151,6 +151,7 @@ it("follows original catalog identity after moving a customized tile", () => {
 		{ ...source, pages: [{ ...source.pages[0], keys: [moved] }] },
 		"win32",
 	).pages[0].keys[0];
+	if (!result) throw Error("Moved tile missing");
 	expect(result.keyCode).toBe("3,4");
 	expect(result.config.icon).toBe("my-artwork.png");
 	expect(result.config.size).toEqual([2, 1]);
@@ -160,3 +161,32 @@ it("follows original catalog identity after moving a customized tile", () => {
 			.actions,
 	);
 });
+
+it.each(["darwin", "win32", "linux"] as const)(
+	"keeps default microphone alternate casing consistent on %s",
+	(host) => {
+		const key = quick(host).pages[0].keys.find((k) => k.config.type === "mic");
+		if (!key) throw Error("Mic missing");
+		expect(keyTitle(key, "en", true)).toBe("Device mic");
+		const title = { ...key.config.title, text: "Device Mic" };
+		const legacy = {
+			...key,
+			config: {
+				...key.config,
+				alterTitle: Option.some(title),
+				userModifiedAlterTitle: false,
+			},
+		};
+		expect(keyTitle(legacy, "en", true)).toBe("Device mic");
+		expect(
+			keyTitle(
+				{
+					...legacy,
+					config: { ...legacy.config, userModifiedAlterTitle: true },
+				},
+				"en",
+				true,
+			),
+		).toBe("Device Mic");
+	},
+);

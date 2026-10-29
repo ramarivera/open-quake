@@ -240,7 +240,19 @@ function StripGrid({
 						/>
 						<KeyState
 							state={
-								tile.type === "luminance" ? undefined : runtime(tile.keyCode)
+								tile.type === "luminance"
+									? tile.key.config.title.userModifiedStyle === true &&
+										clockSelection &&
+										hardwareKeyState(tile.type, hardware)?.progress !==
+											undefined
+										? {
+												...clockSelection,
+												keyCode: tile.keyCode,
+												progress: hardwareKeyState(tile.type, hardware)
+													?.progress,
+											}
+										: undefined
+									: runtime(tile.keyCode)
 							}
 						/>
 						{tileOverlay?.(tile)}
@@ -282,6 +294,7 @@ export function StripScreen({
 	children,
 	onLayout,
 	previewSerial,
+	hardwareSerial,
 	titles = "key-locale",
 	interactive = true,
 	monitoringPreview = false,
@@ -301,6 +314,8 @@ export function StripScreen({
 	monitoringPreview?: boolean;
 	wallpaperSound?: boolean;
 	previewSerial?: string;
+	/** Real device supplying readback when profile selection uses a preview identity. */
+	hardwareSerial?: string | undefined;
 	/** Reports the layout actually painted for the panel input adapter. */
 	onLayout?: (layout: StripLayout | undefined) => void;
 	wallpaper?: WallpaperSnapshot | undefined;
@@ -378,7 +393,7 @@ export function StripScreen({
 		};
 	}, [interactive]);
 
-	const hardware = useHardwareSnapshot(serial);
+	const hardware = useHardwareSnapshot(hardwareSerial ?? serial);
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);

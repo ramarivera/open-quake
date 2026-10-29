@@ -146,3 +146,34 @@ it("SCREEN-097 mounted picker reuses decodes during progress, rejects old revisi
 	expect(off).toHaveBeenCalledOnce();
 	expect(images.every((image) => !image.hasAttribute("src"))).toBe(true);
 });
+it("expires repeated request-failure notices and cancels timers on unmount", async () => {
+	vi.useFakeTimers();
+	Object.defineProperty(window, "quakeKnob", {
+		configurable: true,
+		value: {
+			onSnapshot: () => () => {},
+			request: async () => ({
+				_tag: "failure",
+				code: "QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+			}),
+		},
+	});
+	let fail: (() => Promise<void>) | undefined;
+	function Notice() {
+		const { notice, request } = useKnob();
+		fail = () => request({ _tag: "ToggleVolume", sessionId: "s1" });
+		return createElement("output", null, notice);
+	}
+	const mounted = await mount(createElement(Notice));
+	await act(async () => fail?.());
+	expect(mounted.host.textContent).toBe("This control is unavailable");
+	await act(async () => vi.advanceTimersByTimeAsync(2000));
+	await act(async () => fail?.());
+	await act(async () => vi.advanceTimersByTimeAsync(1500));
+	expect(mounted.host.textContent).toBe("This control is unavailable");
+	await act(async () => vi.advanceTimersByTimeAsync(1500));
+	expect(mounted.host.textContent).toBe("");
+	await act(async () => fail?.());
+	await mounted.unmount();
+	expect(vi.getTimerCount()).toBe(0);
+});

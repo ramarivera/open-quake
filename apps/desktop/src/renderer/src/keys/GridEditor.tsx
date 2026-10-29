@@ -559,6 +559,7 @@ export function GridEditor({
 						pressedKeyCode={mirrorPressed}
 						interactive={false}
 						previewSerial="editor-preview"
+						hardwareSerial={serial}
 						wallpaper={wallpaper}
 						profiles={{ _tag: "ready", envelope: previewEnvelope }}
 						showEmptyGridDashedBorder={stripSettings.showEmptyGridDashedBorder}

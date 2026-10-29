@@ -180,3 +180,23 @@ describe("native panel owner", () => {
 		});
 	});
 });
+it("recovers a parked crashed panel and reports the native exit details", () => {
+	const report = vi.fn();
+	const panel = createPanelWindow(target, false, "darwin", report),
+		win = current();
+	showPanel(panel);
+	win.listeners.get("render-process-gone")?.(
+		{},
+		{ reason: "crashed", exitCode: 9 },
+	);
+	parkPanel(panel);
+	vi.advanceTimersByTime(250);
+	expect(win.webContents.reload).toHaveBeenCalledOnce();
+	expect(report).toHaveBeenCalledWith("retry", {
+		reason: "crashed",
+		exitCode: 9,
+	});
+	win.listeners.get("did-finish-load")?.();
+	showPanel(panel);
+	expect(win.showInactive).toHaveBeenCalled();
+});

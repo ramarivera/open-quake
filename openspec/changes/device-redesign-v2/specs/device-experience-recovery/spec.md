@@ -66,3 +66,17 @@ Device brightness SHALL retain its label and explain its knob interaction. A mac
 #### Scenario: Device panel renderer crashes
 - **WHEN** Electron reports an unexpected renderer exit
 - **THEN** the same panel reloads and its controls become usable again, while intentional destruction does not restart it
+
+### Requirement: Studio brightness reflects the selected device
+Overview, key-grid and selected-key previews SHALL display the selected physical QUAKE's live brightness readback. Synthetic editor identities SHALL NOT be used as hardware serials. Host brightness SHALL explain the tap-and-turn interaction and unsupported host displays without fabricating percentages.
+
+#### Scenario: Preview and device share a connected QUAKE
+- **WHEN** its confirmed display brightness is 100 percent
+- **THEN** Studio previews and the device show the same value, and disconnecting clears the live value
+
+### Requirement: Control notices expire
+A control-error notice SHALL expire three seconds after the latest failure and fade out over 240 milliseconds, with the transition disabled for reduced motion. Native failures SHALL remain available in diagnostics.
+
+#### Scenario: Repeated unavailable control
+- **WHEN** a second failure occurs before the first notice expires
+- **THEN** expiry restarts from the new failure and unrelated snapshot updates do not keep the notice visible

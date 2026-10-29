@@ -349,3 +349,8 @@
 	color: var(--strip-muted);
 	margin-top: 5px;
 }
+
+.quick-brightness-state output[data-unavailable="true"] {
+	font-size: 20px;
+	overflow-wrap: anywhere;
+}

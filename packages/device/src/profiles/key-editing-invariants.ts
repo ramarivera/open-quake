@@ -71,6 +71,17 @@ export function keyTitle(
 	locale: ProfileLocale,
 	alternate = false,
 ): string {
+	if (
+		alternate &&
+		locale === "en" &&
+		key.config.type === "mic" &&
+		key.config.userModifiedAlterTitle !== true &&
+		Option.isSome(key.compatibility) &&
+		key.compatibility.value.catalog === true &&
+		Option.isSome(key.config.alterTitle) &&
+		key.config.alterTitle.value.text === "Device Mic"
+	)
+		return "Device mic";
 	if (alternate && Option.isSome(key.config.alterTitle))
 		return keyTitle(
 			{

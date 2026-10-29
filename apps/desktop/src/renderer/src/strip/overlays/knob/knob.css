@@ -329,7 +329,10 @@
 	color: var(--strip-text);
 	font-size: 26px;
 	font-weight: 550;
+	opacity: 1;
+	transition: opacity 240ms ease;
 }
+.knob-notice[data-exiting="true"] { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
 	.knob-overlay-root *,
 	.knob-overlay-root *::before,

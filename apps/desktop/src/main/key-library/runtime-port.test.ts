@@ -1616,3 +1616,78 @@ it("MGMT-205 HA sequence dispatches the full validated key and aborts its actual
 	);
 	expect(os.clipboard).not.toHaveBeenCalled();
 });
+
+it.each([
+	{
+		host: "darwin",
+		command:
+			"if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi",
+		handled: true,
+		arms: true,
+	},
+	{
+		host: "darwin",
+		command:
+			"if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi",
+		handled: false,
+		arms: false,
+	},
+	{
+		host: "linux",
+		command:
+			"if [ -d /System/Applications/Apps.app ]; then open /System/Applications/Apps.app; else open -a Launchpad; fi",
+		handled: true,
+		arms: false,
+	},
+	{ host: "darwin", command: "my-custom-command", handled: true, arms: false },
+])(
+	"arms Apps cancellation only after its saved-command owner succeeds: $host $handled $arms",
+	async ({ host, command, handled, arms }) => {
+		os.platform.mockReturnValue(host);
+		const arm = vi.fn();
+		let executed = false;
+		const key = {
+			...createEmptyProfileKey("1,7"),
+			config: {
+				...createEmptyProfileKey("1,7").config,
+				type: "cmd",
+				actions: [{ type: "text", value: command }],
+			},
+		};
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const port = yield* KeyRuntimePort;
+				if (!port.executeOwned) throw Error("Missing owned action");
+				expect(arm).not.toHaveBeenCalled();
+				expect(
+					yield* port.executeOwned(key, {
+						deviceId: "device",
+						profileId: "p",
+						pageId: "one",
+						revision: 0,
+					}),
+				).toBe(handled);
+				expect(executed).toBe(true);
+				expect(arm).toHaveBeenCalledTimes(arms ? 1 : 0);
+				if (arms) expect(arm).toHaveBeenCalledWith("device");
+			}).pipe(
+				Effect.provide(
+					layer(
+						false,
+						undefined,
+						undefined,
+						undefined,
+						async () => {
+							expect(arm).not.toHaveBeenCalled();
+							executed = true;
+							return handled;
+						},
+						undefined,
+						{ systemOverview: arm },
+					),
+				),
+				Effect.scoped,
+			),
+		);
+	},
+);

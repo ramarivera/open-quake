@@ -23,7 +23,8 @@ export function GenericTile({
 	const foreground = useForegroundArtwork(config.type === "gameMode");
 	const artwork = useTileArtwork(foreground || config.icon, config.type);
 	const explicit = config.title.userModifiedStyle === true;
-	const brightness = config.type === "luminance" && !explicit;
+	const brightness =
+		["luminance", "brightness"].includes(config.type) && !explicit;
 	const metrics = genericTileMetrics(tile.box, {
 		pos: config.title.pos,
 		style: config.title.style,
@@ -55,7 +56,7 @@ export function GenericTile({
 		config.type === "gameMode" ? Math.floor(tile.box.height * 0.95) : iconSize;
 	return (
 		<div
-			className={`strip-tile${config.type === "luminance" && !explicit ? " quick-brightness" : ""}`}
+			className={`strip-tile${brightness ? " quick-brightness" : ""}`}
 			data-type={tile.type}
 			style={{ borderRadius: tile.tileRadius }}
 		>
@@ -90,11 +91,13 @@ export function GenericTile({
 			</div>
 			{brightness ? (
 				<div className="quick-brightness-state">
-					<output>
-						{luminance === undefined
-							? t("unavailable")
-							: `${luminancePercent(luminance)}%`}
-					</output>
+					{config.type === "luminance" ? (
+						<output data-unavailable={luminance === undefined}>
+							{luminance === undefined
+								? t("unavailable")
+								: `${luminancePercent(luminance)}%`}
+						</output>
+					) : null}
 					<span>{t("brightnessKnob")}</span>
 				</div>
 			) : null}
@@ -111,7 +114,7 @@ export function GenericTile({
 							explicit && styles.includes("underline") ? "underline" : "none",
 						color: explicit ? config.title.color : undefined,
 						width: brightness
-							? "calc(100% - 84px)"
+							? "calc(100% - 120px)"
 							: explicit
 								? metrics.titleWidth
 								: "calc(100% - 48px)",

@@ -22,6 +22,7 @@ function manage(
 	let hiddenBounds: Rectangle | undefined;
 	let closedBounds: Rectangle | undefined;
 	let recoveries: number[] = [];
+	let recovery: ReturnType<typeof setTimeout> | undefined;
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	const later = (ms: number, action: () => void) => {
 		const timer = setTimeout(() => {
@@ -116,6 +117,7 @@ function manage(
 		closedBounds = hiddenBounds ?? panelBounds(target.display, target.isPanel);
 		park();
 		disposed = true;
+		if (recovery) clearTimeout(recovery);
 		clearInterval(guard);
 	};
 	const guard = setInterval(() => {
@@ -137,13 +139,17 @@ function manage(
 		const now = Date.now();
 		recoveries = recoveries.filter((time) => now - time < 60_000);
 		if (recoveries.length >= 3) {
-			report?.("exhausted");
+			report?.("exhausted", details);
 			return;
 		}
-		report?.("retry");
+		report?.("retry", details);
 		recoveries.push(now);
 		ready = !target.isPanel;
-		later(250, () => win.webContents.reload());
+		if (recovery) clearTimeout(recovery);
+		recovery = setTimeout(() => {
+			recovery = undefined;
+			if (!disposed && !win.isDestroyed()) win.webContents.reload();
+		}, 250);
 	});
 	win.webContents.on("did-start-loading", () => {
 		ready = !target.isPanel;
