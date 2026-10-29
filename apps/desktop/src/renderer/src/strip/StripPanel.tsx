@@ -92,7 +92,11 @@ function ActiveStripPanel(): React.JSX.Element {
 		new URLSearchParams(window.location.search).get("serial") ??
 		snapshot?.saved.serial;
 	const profileSerial = serial ?? "desktop-preview";
-	const feedback = usePanelFeedback(useQuakeEvents());
+	const query = new URLSearchParams(location.search);
+	const inputDiagnostics =
+		window.quakeSettings?.development === true &&
+		query.get("inputDiagnostics") === "1";
+	const feedback = usePanelFeedback(useQuakeEvents(), inputDiagnostics);
 	const observeSelection = (next: StripProfiles): void => {
 		if (next._tag === "ready") {
 			const current = selectStripPage(next.envelope, profileSerial);
@@ -417,14 +421,8 @@ function ActiveStripPanel(): React.JSX.Element {
 				>
 					<PanelFeedbackLayer
 						view={feedback}
-						inputDiagnostics={
-							window.quakeSettings?.development === true &&
-							new URLSearchParams(location.search).get("inputDiagnostics") ===
-								"1"
-						}
-						rotation={Number(
-							new URLSearchParams(location.search).get("rotation") ?? 0,
-						)}
+						inputDiagnostics={inputDiagnostics}
+						rotation={Number(query.get("rotation") ?? 0)}
 					/>
 					<KnobPanelLayer />
 				</StripScreen>
