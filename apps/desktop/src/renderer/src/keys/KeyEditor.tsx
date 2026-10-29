@@ -998,17 +998,13 @@ export function KeyEditor({
 								{overlaps.length > 0 && (
 									<div
 										role="alertdialog"
-										aria-label={
-											locale === "de"
-												? "Ersetzung bestätigen"
-												: "Replace confirmation"
-										}
+										aria-label={keyText("shortcutGrid.replaceTitle", locale)}
 									>
 										<p>
-											{locale === "de"
-												? "Diese Felder werden ersetzt"
-												: "Placing here will replace the existing component(s)"}
-											: {overlaps.join(", ")}
+											{keyText("shortcutGrid.replaceConfirm", locale).replace(
+												"{names}",
+												overlaps.join(", "),
+											)}
 										</p>
 										<button
 											type="button"
@@ -1020,9 +1016,7 @@ export function KeyEditor({
 												})
 											}
 										>
-											{locale === "de"
-												? "Ersetzen bestätigen"
-												: "Confirm replacement"}
+											{keyText("shortcutGrid.confirmReplace", locale)}
 										</button>
 										<button type="button" onClick={() => void revert()}>
 											{keyText("cancel", locale)}

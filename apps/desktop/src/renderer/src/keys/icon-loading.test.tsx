@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from "react";
 import { expect, it, vi } from "vitest";
+import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants";
 import type { KeyReply, KeyRequest } from "../../../shared/key-library";
 import { click, element, mount } from "../management/dom-test";
 import { IconLibrary } from "./IconLibrary";
@@ -130,3 +131,27 @@ it("MGMT-423 dismisses progress on a library failure and keeps retry available",
 		await view.unmount();
 	}
 });
+
+it.each(["en", "de", "zh", "ja"] as const)(
+	"localizes the icon-library close control in %s",
+	async (locale) => {
+		window.quakeKeyLibrary = {
+			request: async () => ({ _tag: "success", packs: [] }),
+			onRuntime: () => () => {},
+			onPreview: () => () => {},
+		};
+		const onClose = vi.fn();
+		const view = await mount(
+			createElement(IconLibrary, { locale, onClose, onSelect: () => {} }),
+		);
+		try {
+			const close = element<HTMLButtonElement>(
+				`.icon-library-toolbar button[aria-label="${keyText("close", locale)}"]`,
+			);
+			await click(close);
+			expect(onClose).toHaveBeenCalledOnce();
+		} finally {
+			await view.unmount();
+		}
+	},
+);

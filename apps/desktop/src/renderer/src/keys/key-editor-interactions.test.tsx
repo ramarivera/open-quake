@@ -20,6 +20,7 @@ import {
 	AppLibrarySnapshot,
 	defaultAppLibrary,
 } from "../../../../../../packages/device/src/profiles/app-library";
+import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -2956,7 +2957,7 @@ it("MGMT-401 uses only typed profile/page selects for switch-profile keys", asyn
 	).not.toBeNull();
 	expect(f.host.querySelectorAll('input[id^="key-action-"]')).toHaveLength(0);
 	expect(f.host.querySelector('option[value="-1"]')?.textContent).toBe(
-		"Next Profile",
+		"Next profile",
 	);
 });
 
@@ -3045,7 +3046,7 @@ for (const state of ["hidden", "deleted"] as const) {
 				.disabled,
 		).toBe(true);
 		expect(select.querySelector('option[value="-1"]')?.textContent).toBe(
-			"Next Profile",
+			"Next profile",
 		);
 		expect(
 			select.querySelector<HTMLOptionElement>('option[value="p"]')?.disabled,
@@ -3400,3 +3401,26 @@ it("keeps the active profile when Console delivery is rejected and retains the i
 		0,
 	);
 });
+
+it.each(["en", "de", "zh", "ja"] as const)(
+	"localizes key-size overlap confirmation in %s without saving on cancel",
+	async (locale) => {
+		const f = await gridFixture([gridKey("1,1"), gridKey("1,2")]);
+		const before = f.stored();
+		await input(query(f.host, "#keys-language", HTMLSelectElement), locale);
+		await f.select();
+		await input(query(f.host, "#key-span", HTMLSelectElement), "2,1");
+		const dialog = query(f.host, '[role="alertdialog"]', HTMLDivElement);
+		expect(dialog.getAttribute("aria-label")).toBe(
+			keyText("shortcutGrid.replaceTitle", locale),
+		);
+		expect(dialog.textContent).toContain(
+			keyText("shortcutGrid.replaceConfirm", locale).replace("{names}", "1,2"),
+		);
+		expect(dialog.textContent).toContain(
+			keyText("shortcutGrid.confirmReplace", locale),
+		);
+		await click(button(dialog, keyText("cancel", locale)));
+		expect(f.stored()).toEqual(before);
+	},
+);
