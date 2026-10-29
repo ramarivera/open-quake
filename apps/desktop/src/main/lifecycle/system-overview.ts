@@ -41,10 +41,7 @@ export function createSystemOverview(
 		}
 		if (
 			![...state.values()].some(
-				(entry) =>
-					entry.mode &&
-					entry.phase === "armed" &&
-					readings.get(entry.mode) !== undefined,
+				(entry) => entry.mode && entry.phase === "armed",
 			)
 		) {
 			clearInterval(timer);

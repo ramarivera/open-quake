@@ -103,6 +103,7 @@ Device brightness SHALL retain its label and explain its knob interaction. A mac
 - **THEN** the next device input reaches its intended control without sending an unrelated Escape
 - **AND** each device observes its own overlay mode and unrelated overlays do not hold cancellation armed
 - **AND** failed native reads, modes with no supported visibility signal and unwitnessed openings retain cancellation ownership without a guessed expiry
+- **AND** switching directly between Apps and Search clears ownership of the mode that ended without dismissing its replacement
 - **AND** a device cancellation consumes its full contact even when dismissal removes the native window before touch release
 
 ### Requirement: Studio brightness reflects the selected device

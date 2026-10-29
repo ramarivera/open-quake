@@ -1,9 +1,11 @@
 import koffi from "koffi";
+import { createNativeAppsReader } from "./native-apps-overview";
 import type { SystemOverviewMode } from "./system-overview";
 
-/** Only window ownership/layer is inspected; window titles never leave CoreGraphics. */
+/** Native window ownership/layer plus Apps identifiers; no titles or search text. */
 export function createNativeOverviewReader() {
-	let read: ((mode: SystemOverviewMode) => boolean) | undefined;
+	const appsReader = createNativeAppsReader();
+	let read: ((mode: SystemOverviewMode) => boolean | undefined) | undefined;
 	let release: (() => void) | undefined;
 	return {
 		visible: (mode: SystemOverviewMode): boolean | undefined => {
@@ -36,6 +38,7 @@ export function createNativeOverviewReader() {
 					const free = cf.func("void CFRelease(void *value)");
 					const owner: unknown = string(null, "kCGWindowOwnerName", 0x08000100);
 					const layer: unknown = string(null, "kCGWindowLayer", 0x08000100);
+					const pid: unknown = string(null, "kCGWindowOwnerPID", 0x08000100);
 					// Public window metadata observed during real open/close cycles.
 					// Legacy Launchpad has no reliable match here and stays fail-closed.
 					const matches: Record<
@@ -53,10 +56,10 @@ export function createNativeOverviewReader() {
 					};
 					const owners = new Map<string, unknown>();
 					release = () => {
-						for (const key of [owner, layer, ...owners.values()])
+						for (const key of [owner, layer, pid, ...owners.values()])
 							if (key) free(key);
 					};
-					if (!owner || !layer) throw Error("overview-key-unavailable");
+					if (!owner || !layer || !pid) throw Error("overview-key-unavailable");
 					for (const [name] of Object.values(matches).flat()) {
 						if (owners.has(name)) continue;
 						const key: unknown = string(null, name, 0x08000100);
@@ -79,8 +82,19 @@ export function createNativeOverviewReader() {
 										([name, layer]) =>
 											decoded[0] === layer && equal(owned, owners.get(name)),
 									)
-								)
-									return true;
+								) {
+									if (mode !== "apps" && mode !== "search") return true;
+									const process: unknown = value(entry, pid);
+									const decodedPid = [0];
+									if (!process || !number(process, 9, decodedPid))
+										return undefined;
+									const apps = appsReader.visible(decodedPid[0] ?? 0);
+									return apps === undefined
+										? undefined
+										: mode === "apps"
+											? apps
+											: !apps;
+								}
 							}
 							return false;
 						} finally {
@@ -98,6 +112,7 @@ export function createNativeOverviewReader() {
 		},
 		dispose: () => {
 			release?.();
+			appsReader.dispose();
 			release = undefined;
 			read = undefined;
 		},

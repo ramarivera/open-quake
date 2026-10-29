@@ -201,3 +201,23 @@ it("keeps observing supported modes when another mode's native reader fails", as
 		vi.useRealTimers();
 	}
 });
+
+it("retries transient native failures during overlay launch before witnessing dismissal", async () => {
+	vi.useFakeTimers();
+	let visible: boolean | undefined;
+	const cancel = vi.fn(async () => {});
+	const overview = createSystemOverview(cancel, () => visible);
+	try {
+		overview.open("A", "apps");
+		visible = true;
+		await vi.advanceTimersByTimeAsync(100);
+		visible = false;
+		await vi.advanceTimersByTimeAsync(100);
+		expect(await overview.tap("A")).toBe(false);
+		expect(cancel).not.toHaveBeenCalled();
+		expect(vi.getTimerCount()).toBe(0);
+	} finally {
+		overview.dispose();
+		vi.useRealTimers();
+	}
+});
