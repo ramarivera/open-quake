@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-	KnobModelSnapshot,
-	KnobRequest,
-	MenuProfile,
+import {
+	KNOB_PROFILE_PAGE_SIZE,
+	type KnobModelSnapshot,
+	type KnobRequest,
+	type MenuProfile,
 } from "../../../../../shared/knob-contracts";
 import { useLocaleText } from "../../../i18n";
 import { mountPickerTouch } from "./picker-touch";
 import { SceneCards } from "./SceneCards";
-import { sceneTarget } from "./scene-rail";
+import { scenePageRect, sceneTarget } from "./scene-rail";
 
 export function ProfilePicker({
 	snapshot,
@@ -78,17 +79,27 @@ export function ProfilePicker({
 				</p>
 				<p className="knob-picker-hint">{t("knobHint")}</p>
 				<p className="scene-timeout">{t("pageHint")}</p>
-				{entries.length > 15 ? (
-					<div className="scene-pages">
-						{([-1, 1] as const).map((delta) => (
+			</header>
+			{entries.length > KNOB_PROFILE_PAGE_SIZE ? (
+				<div className="scene-pages">
+					{([-1, 1] as const).map((delta) => {
+						const rect = scenePageRect(delta);
+						return (
 							<button
 								type="button"
 								key={delta}
-								aria-label={`${t("jumpTo")} ${entries[Math.max(0, Math.min(Math.ceil(entries.length / 15) - 1, selector.page + delta)) * 15]?.name ?? ""}`}
+								style={{
+									left: rect.x,
+									top: rect.y,
+									width: rect.width,
+									height: rect.height,
+								}}
+								aria-label={`${t("jumpTo")} ${entries[Math.max(0, Math.min(Math.ceil(entries.length / KNOB_PROFILE_PAGE_SIZE) - 1, selector.page + delta)) * KNOB_PROFILE_PAGE_SIZE]?.name ?? ""}`}
 								disabled={
 									delta < 0
 										? selector.page === 0
-										: selector.page >= Math.ceil(entries.length / 15) - 1
+										: selector.page >=
+											Math.ceil(entries.length / KNOB_PROFILE_PAGE_SIZE) - 1
 								}
 								onClick={(event) => {
 									if (event.detail === 0)
@@ -97,10 +108,10 @@ export function ProfilePicker({
 							>
 								{delta < 0 ? "‹" : "›"}
 							</button>
-						))}
-					</div>
-				) : null}
-			</header>
+						);
+					})}
+				</div>
+			) : null}
 			<button
 				className="scene-close"
 				type="button"

@@ -13,6 +13,7 @@ import { consoleProfile } from "../keys/console-profile";
 import { stripLayout } from "./geometry";
 import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripScreen } from "./StripScreen";
+import { genericTileMetrics } from "./tileMetrics";
 import { ConsoleVolumeTile } from "./tiles/ConsoleVolumeTile";
 
 const originalKeyLibrary = window.quakeKeyLibrary;
@@ -174,5 +175,74 @@ it("keeps compact saved volume keys on the icon/title renderer and reserves the 
 		expect(!!host.querySelector(".console-volume")).toBe(large);
 		expect(!!host.querySelector('.strip-tile[data-type="vol"]')).toBe(!large);
 		expect(host.textContent).toContain(volume.config.title.text);
+	}
+});
+
+it("keeps wrapping custom titles clear of artwork on device keys and scaled editor previews", () => {
+	const source = consoleProfile("en", "Console");
+	const base = source.pages[0].keys.find((key) => key.config.type === "vol");
+	if (!base) throw new Error("Missing volume key");
+	for (const pos of ["top", "bot"] as const) {
+		const key = {
+			...base,
+			keyCode: "1,1",
+			config: {
+				...base.config,
+				icon: "0-56",
+				size: [1, 1] as const,
+				title: {
+					...base.config.title,
+					text: "A long custom volume heading",
+					size: 12,
+					pos,
+					userModifiedStyle: true,
+				},
+			},
+		};
+		const profile: Profile = {
+			...source,
+			pages: [{ ...source.pages[0], keys: [key] }],
+		};
+		const tile = stripLayout(profile, profile.pages[0]).tiles[0];
+		if (!tile) throw new Error("Missing custom key");
+		const metrics = genericTileMetrics(tile.box, key.config.title);
+		for (const scale of [1, 0.5]) {
+			const host = document.createElement("div");
+			host.innerHTML = renderToStaticMarkup(
+				<div
+					style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}
+				>
+					<StripScreen
+						profiles={{
+							_tag: "ready",
+							envelope: {
+								...createInitialProfileEnvelope(),
+								profiles: [profile],
+							},
+						}}
+						showEmptyGridDashedBorder={false}
+					/>
+				</div>,
+			);
+			const icon = host.querySelector<HTMLElement>(".strip-tile-icon");
+			const title = host.querySelector<HTMLElement>(".strip-tile-title");
+			if (!icon || !title) throw new Error("Missing rendered artwork or title");
+			expect(icon.querySelector("img")).not.toBeNull();
+			const top =
+				(Number.parseFloat(icon.style.top) / 100) * tile.box.height -
+				Number.parseFloat(icon.style.height) / 2;
+			const bottom = top + Number.parseFloat(icon.style.height);
+			const titleHeight = metrics.fontSize * 1.2 * 2;
+			expect(icon.style.transform).toBe("translate(-50%, -50%)");
+			if (pos === "top")
+				expect(top * scale).toBeGreaterThanOrEqual(
+					(metrics.padding + titleHeight + 8) * scale,
+				);
+			else
+				expect(bottom * scale).toBeLessThanOrEqual(
+					(tile.box.height - metrics.padding - titleHeight - 8) * scale,
+				);
+			expect(title.textContent).toBe(key.config.title.text);
+		}
 	}
 });

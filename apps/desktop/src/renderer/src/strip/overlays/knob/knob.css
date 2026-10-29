@@ -237,15 +237,13 @@
 }
 .scene-pages {
 	position: absolute;
-	top: 252px;
-	left: 0;
-	display: flex;
-	align-items: center;
-	gap: 16px;
+	inset: 0;
+	pointer-events: none;
 }
+/* Position and size come from scenePageRect, shared with physical hit testing. */
 .scene-pages button {
-	width: 90px;
-	height: 48px;
+	position: absolute;
+	pointer-events: auto;
 	border: 1px solid #365951;
 	background: #152227;
 	border-radius: 8px;

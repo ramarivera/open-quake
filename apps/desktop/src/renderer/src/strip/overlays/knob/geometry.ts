@@ -1,3 +1,5 @@
+import { KNOB_PROFILE_PAGE_SIZE } from "../../../../../shared/knob-contracts";
+
 export interface Rect {
 	readonly x: number;
 	readonly y: number;
@@ -5,8 +7,8 @@ export interface Rect {
 	readonly height: number;
 }
 export function pickerLayout(count: number) {
-	const paged = count > 15;
-	const n = paged ? 15 : Math.max(1, count);
+	const paged = count > KNOB_PROFILE_PAGE_SIZE;
+	const n = paged ? KNOB_PROFILE_PAGE_SIZE : Math.max(1, count);
 	const columns =
 		n <= 2 ? 2 : n <= 6 ? 3 : n <= 8 ? 4 : n === 9 ? 3 : n <= 12 ? 4 : 5;
 	const rows = Math.max(1, Math.ceil(n / columns));
@@ -42,7 +44,10 @@ export function cardRect(count: number, offset: number, page = 0): Rect {
 	const layout = pickerLayout(count);
 	const rowsInPage = Math.max(
 		1,
-		Math.ceil(Math.min(15, count - page * 15) / layout.columns),
+		Math.ceil(
+			Math.min(KNOB_PROFILE_PAGE_SIZE, count - page * KNOB_PROFILE_PAGE_SIZE) /
+				layout.columns,
+		),
 	);
 	const gridHeight = rowsInPage * layout.height + (rowsInPage - 1) * 16;
 	return {
@@ -70,14 +75,21 @@ export function pickerTarget(
 	x: number,
 	y: number,
 ): PickerTarget {
-	const start = page * 15;
-	for (let index = start; index < Math.min(start + 15, count); index++)
+	const start = page * KNOB_PROFILE_PAGE_SIZE;
+	for (
+		let index = start;
+		index < Math.min(start + KNOB_PROFILE_PAGE_SIZE, count);
+		index++
+	)
 		if (inside(cardRect(count, index - start, page), x, y))
 			return { kind: "card", index };
-	if (count > 15) {
+	if (count > KNOB_PROFILE_PAGE_SIZE) {
 		if (page > 0 && inside(pageArrowRect(-1), x, y))
 			return { kind: "page", delta: -1 };
-		if (page < Math.ceil(count / 15) - 1 && inside(pageArrowRect(1), x, y))
+		if (
+			page < Math.ceil(count / KNOB_PROFILE_PAGE_SIZE) - 1 &&
+			inside(pageArrowRect(1), x, y)
+		)
 			return { kind: "page", delta: 1 };
 	}
 	return { kind: "blank" };

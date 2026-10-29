@@ -1,6 +1,9 @@
 import { Schema } from "effect";
 import { KnobSession } from "../knob-contracts.js";
 
+/** Shared selector paging contract for the model and both renderer layouts. */
+export const KNOB_PROFILE_PAGE_SIZE = 15;
+
 const id = Schema.NonEmptyTrimmedString;
 export const Thumbnail = Schema.Union(
 	Schema.TaggedStruct("missing", {}),

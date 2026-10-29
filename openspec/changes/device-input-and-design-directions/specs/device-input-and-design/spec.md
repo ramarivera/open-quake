@@ -39,3 +39,12 @@ The device home and Management Studio SHALL use the selected Instrument Console 
 #### Scenario: Edit an actual key
 - **WHEN** a user chooses a key in the Studio mirror or key table
 - **THEN** the inspector edits that real key and saves through the existing profile contract
+
+
+#### Scenario: Preserve explicitly styled key headings
+- **WHEN** a saved generic key uses an explicitly styled top or bottom heading
+- **THEN** artwork leaves room for its two-line heading at device size and in a scaled Studio preview
+
+#### Scenario: Match page buttons and touch targets
+- **WHEN** the Scene Rail spans more than one page
+- **THEN** rendered navigation buttons and physical hit tests use the same rectangles and the model and renderer use the same page size
