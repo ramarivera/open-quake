@@ -20,10 +20,6 @@ export const GuidedInput = Schema.Union(
 		state: Schema.Literal("connected", "disconnected"),
 	}),
 );
-export const GuidedArrival = Schema.Struct({
-	event: GuidedInput,
-	at: Schema.Number.pipe(Schema.finite(), Schema.nonNegative()),
-});
 type Input = typeof GuidedInput.Type;
 type Event = Input & { readonly t: number; readonly step: string };
 export const GUIDED_STEPS = [
@@ -72,6 +68,12 @@ export const GUIDED_STEPS = [
 		goal: "tap",
 	},
 ] as const;
+export type GuidedStepId = (typeof GUIDED_STEPS)[number]["id"];
+export const GuidedArrival = Schema.Struct({
+	event: GuidedInput,
+	at: Schema.Number.pipe(Schema.finite(), Schema.nonNegative()),
+	step: Schema.optional(Schema.Literal(...GUIDED_STEPS.map((step) => step.id))),
+});
 
 /** Observes requested sequences; it never infers physical target accuracy. */
 export function createGuidedCapture(now: () => number, limit = 10000) {
@@ -95,15 +97,24 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 		let moved = false;
 		for (const event of mine) {
 			if (event.kind !== "touch") continue;
-			const point = event.points[0];
-			if (!point) continue;
-			if (point.action === 1) {
-				if (!start) start = point;
-				else if (point.x !== start.x || point.y !== start.y) moved = true;
-			} else {
-				if (start && moved) return true;
+			if (event.points.filter((point) => point.action === 1).length > 1) {
 				start = undefined;
 				moved = false;
+				continue;
+			}
+			// End the previous contact before beginning its replacement, regardless
+			// of the device's point order in a mixed release/press frame.
+			for (const point of [...event.points].sort(
+				(a, b) => a.action - b.action,
+			)) {
+				if (point.action === 1) {
+					if (!start) start = point;
+					else if (point.x !== start.x || point.y !== start.y) moved = true;
+				} else {
+					if (start && moved) return true;
+					start = undefined;
+					moved = false;
+				}
 			}
 		}
 		return false;
@@ -129,7 +140,11 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 		stop(reason: "aborted" | "buffer-overflow") {
 			stopped = reason;
 		},
-		accept(raw: unknown, at = now()) {
+		accept(
+			raw: unknown,
+			at = now(),
+			shownStep: GuidedStepId | null = current()?.id ?? null,
+		) {
 			tick();
 			const step = current();
 			if (!step || stopped) return;
@@ -143,9 +158,10 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 			events.push({
 				...parsed.value,
 				t: Math.round(at - began),
-				step: step.id,
+				step: shownStep ?? "unprompted",
 			});
-			const mine = events.slice(from);
+			if (shownStep !== step.id) return;
+			const mine = events.slice(from).filter((event) => event.step === step.id);
 			const turns = mine.reduce(
 				(sum, e) => sum + (e.kind === "rotate" ? e.direction : 0),
 				0,
@@ -181,10 +197,15 @@ export function createGuidedCapture(now: () => number, limit = 10000) {
 			}
 		},
 		acceptBatch(
-			batch: readonly { event: unknown; at: number }[],
+			batch: readonly {
+				event: unknown;
+				at: number;
+				step?: GuidedStepId | undefined;
+			}[],
 			dropped: number,
 		) {
-			for (const arrival of batch) this.accept(arrival.event, arrival.at);
+			for (const arrival of batch)
+				this.accept(arrival.event, arrival.at, arrival.step ?? null);
 			if (dropped > 0) this.stop("buffer-overflow");
 		},
 		snapshot() {
