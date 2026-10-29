@@ -65,6 +65,54 @@ describe("recovered catalog", () => {
 			expect(translateProfile(source, "de").pages).not.toEqual(source.pages);
 		}
 	});
+	it.each([
+		["1-0", "defaultDiscordConfig.navBack", "Nav Back"],
+		["1-0", "defaultDiscordConfig.pushToTalk", "Push To Talk"],
+		["1-0", "defaultDiscordConfig.streamerMode", "Streamer Mode"],
+		["1-0", "defaultDiscordConfig.navForward", "Nav Forward"],
+		["1-0", "defaultDiscordConfig.screenShare", "Screen Share"],
+		["1-5", "defaultAiCopilotChatConfig.contentWriter", "Content Writer"],
+		["1-1", "defaultMeetingAssistantConfig.micMute", "Mic Mute"],
+	])(
+		"translates persisted legacy title %s/%s without changing custom titles",
+		(id, titleKey, legacy) => {
+			const profile = builtinProfiles("darwin").find((p) => p.id === id);
+			const key = profile?.pages[0].keys.find(
+				(k) => k.config.title.text === profileText(titleKey, "en"),
+			);
+			if (!profile || !key) throw new Error("Missing catalog fixture");
+			for (const userModifiedTitle of [undefined, false, true]) {
+				const saved = Schema.decodeUnknownSync(Profile)(
+					Schema.encodeSync(Profile)({
+						...profile,
+						pages: [
+							{
+								...profile.pages[0],
+								keys: [
+									{
+										...key,
+										config: {
+											...key.config,
+											userModifiedTitle,
+											title: { ...key.config.title, text: legacy },
+										},
+									},
+								],
+							},
+						],
+					}),
+				);
+				for (const locale of ["en", "de", "zh", "ja"] as const) {
+					const translated = translateProfile(saved, locale).pages[0].keys[0];
+					expect(translated?.config.title.text).toBe(
+						userModifiedTitle ? legacy : profileText(titleKey, locale),
+					);
+					expect(translated?.config.actions).toEqual(key.config.actions);
+					expect(saved.pages[0].keys[0]?.config.title.text).toBe(legacy);
+				}
+			}
+		},
+	);
 	it("decodes all nine layouts on each OS with exact Quick actions", () => {
 		for (const platform of ["darwin", "win32", "linux"] as const) {
 			const profiles = builtinProfiles(platform);

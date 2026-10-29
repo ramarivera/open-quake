@@ -50,7 +50,7 @@ export const STRIP_STRINGS = {
 		"aiIconViewTxt.status.error": "Error",
 		"aiIconViewTxt.status.processing": "Processing",
 		"aiIconViewTxt.status.completed": "Completed",
-		"aiIconViewTxt.status.startrecording": "Start Recording",
+		"aiIconViewTxt.status.startrecording": "Recording",
 		"aiIconViewTxt.status.generating": "Generating",
 		"aiIconViewTxt.status.initializing": "Initializing",
 		"aiIconViewTxt.status.systemBusy": "System busy",

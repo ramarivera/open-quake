@@ -42,6 +42,12 @@ English device and Studio labels SHALL use sentence case, correct spelling and c
 - **THEN** the active status reads Recording and default labels use consistent wording without legacy DK, Dekie or Vivid product names
 - **AND** saved custom names and language-specific translations remain unchanged
 
+#### Scenario: Previously saved English default titles
+
+- **WHEN** a saved built-in key still has its pre-rename English default title and a localized thumbnail is requested
+- **THEN** its known legacy title resolves through the current locale catalog
+- **AND** explicitly edited titles and persisted source data remain unchanged
+
 ### Requirement: Host metrics explain unavailable data
 Monitoring SHALL start and deliver supported readings when requested. Unavailable or unsupported fields SHALL display an explicit reason without fabricated data or blank unexplained fields.
 

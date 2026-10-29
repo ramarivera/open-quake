@@ -187,6 +187,17 @@ export const profileLabel = (
 		return profile.name;
 	return entry ? profileText(entry.title, locale) : profile.name;
 };
+// Installed catalogs keep the English title they had when first saved.
+// Match these exact defaults by lookup key; arbitrary/custom casing isn't an alias.
+const legacyEnglishTitles: Readonly<Record<string, string>> = {
+	"defaultDiscordConfig.navBack": "Nav Back",
+	"defaultDiscordConfig.pushToTalk": "Push To Talk",
+	"defaultDiscordConfig.streamerMode": "Streamer Mode",
+	"defaultDiscordConfig.navForward": "Nav Forward",
+	"defaultDiscordConfig.screenShare": "Screen Share",
+	"defaultAiCopilotChatConfig.contentWriter": "Content Writer",
+	"defaultMeetingAssistantConfig.micMute": "Mic Mute",
+};
 export const translateProfile = (
 	profile: Profile,
 	locale: ProfileLocale,
@@ -229,7 +240,8 @@ export const translateProfile = (
 					title._tag === "Left" ||
 					!title.right.i18nKey ||
 					title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
-					key.config.title.text !== profileText(title.right.i18nKey, "en")
+					(key.config.title.text !== profileText(title.right.i18nKey, "en") &&
+						key.config.title.text !== legacyEnglishTitles[title.right.i18nKey])
 				)
 					return key;
 				return {

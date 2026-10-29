@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
+
+import { Schema } from "effect";
 import { act } from "react";
 import * as ReactDOM from "react-dom/client";
 import { expect, it, vi } from "vitest";
+import {
+	builtinProfiles,
+	profileText,
+	translateProfile,
+} from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { Profile } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	clockProfile,
 	stripFixtureEnvelope,
@@ -146,6 +154,74 @@ it("pins hidden thumbnail borders to capture identity despite saved and live set
 		await close();
 		history.replaceState(null, "", url);
 		localStorage.clear();
+		vi.unstubAllGlobals();
+	}
+});
+
+it("renders persisted old English defaults in German thumbnails and preserves explicit edits", async () => {
+	const { ProfileThumbnail } = await import("./ProfileViews");
+	const { mount } = await import("../../test/dom");
+	const profile = builtinProfiles("darwin").find((p) => p.id === "1-5");
+	const key = profile?.pages[0].keys.find(
+		(k) => k.config.title.text === "Content writer",
+	);
+	if (!profile || !key) throw new Error("Missing chat fixture");
+	const saved = Schema.decodeUnknownSync(Profile)(
+		Schema.encodeSync(Profile)({
+			...profile,
+			pages: [
+				{
+					...profile.pages[0],
+					keys: profile.pages[0].keys.map((k) =>
+						k === key
+							? {
+									...k,
+									config: {
+										...k.config,
+										title: { ...k.config.title, text: "Content Writer" },
+									},
+								}
+							: { ...k, config: { ...k.config, userModifiedTitle: true } },
+					),
+				},
+			],
+		}),
+	);
+	const url = location.href;
+	history.replaceState(
+		null,
+		"",
+		"/?surface=profile-thumbnail&profile=1-5&locale=de",
+	);
+	vi.stubGlobal("quakeProfileManager", {
+		request: async () => ({
+			_tag: "success",
+			view: {
+				envelope: stripFixtureEnvelope(
+					Schema.encodeSync(Profile)(translateProfile(saved, "de")),
+				),
+				serials: [],
+				apps: [],
+				thumbnails: {},
+				progress: { running: false, done: 0, total: 0, failed: 0 },
+			},
+		}),
+	});
+	const { host, close } = await mount(<ProfileThumbnail />);
+	try {
+		expect(host.querySelector("[data-profile-ready]")).not.toBeNull();
+		expect(host.textContent).toContain(
+			profileText("defaultAiCopilotChatConfig.contentWriter", "de"),
+		);
+		expect(host.textContent).not.toContain("Content Writer");
+		expect(
+			saved.pages[0].keys.find((k) => k.keyCode === key.keyCode)?.config.title
+				.text,
+		).toBe("Content Writer");
+		expect(host.textContent).toContain("Compliance");
+	} finally {
+		await close();
+		history.replaceState(null, "", url);
 		vi.unstubAllGlobals();
 	}
 });
