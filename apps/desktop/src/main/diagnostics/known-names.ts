@@ -193,6 +193,7 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"panel.input",
 	"hardware.acceptance.failed",
 	"hardware.request.failed",
 	"hardware.lock.failed",

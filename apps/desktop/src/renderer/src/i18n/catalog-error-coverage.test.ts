@@ -102,7 +102,7 @@ it("renders every bundled locale string without legacy DK-Claw names", () => {
 			...Object.values(featureDictionaries).map((copy) => copy[locale]),
 		])) {
 			const rendered = renderToStaticMarkup(createElement("span", null, value));
-			expect(rendered, `${locale}: ${value}`).not.toMatch(/DK[- ]Claw|DK龙虾/);
+			expect(rendered, `${locale}: ${value}`).not.toMatch(/DK[- ]?Claw|DK龙虾/);
 		}
 		expect(agentsCopy(locale).keyFields.title).not.toMatch(/OpenClaw|ClawBot/);
 		expect(

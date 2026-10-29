@@ -30,9 +30,9 @@ import {
 	type DiagnosticOperation,
 	safeCause,
 	safeError,
+	safeInputLog,
 	safeLogEvent,
 	safeSpanName,
-	safeTouchLog,
 } from "./privacy.js";
 
 export type { DiagnosticStorageOptions } from "./persistence.js";
@@ -134,7 +134,7 @@ export function createDesktopDiagnostics(
 					type: "log",
 					level: logLevel.label,
 					event: safeLogEvent(messages),
-					...safeTouchLog(messages),
+					...safeInputLog(messages),
 					...correlation(span, FiberRefs.getOrDefault(context, requestId)),
 					...(errors.length ? { errors } : {}),
 					...(!Cause.isEmpty(cause) ? { cause: safeCause(cause) } : {}),

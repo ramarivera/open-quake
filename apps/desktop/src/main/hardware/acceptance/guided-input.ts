@@ -293,6 +293,21 @@ async function run() {
 									: [{ source: "mock", kind: "status", state: step.goal }];
 				for (const input of inputs)
 					panel.webContents.send("quake:event", input);
+				// Check the actual production renderer while input feedback is live.
+				await delay(50);
+				assert.equal(
+					await panel.webContents.executeJavaScript(
+						"document.querySelectorAll('.panel-knob, .panel-touch').length",
+					),
+					0,
+					"Normal panel must not show the diagnostic dial or raw click marker",
+				);
+				if (step.goal === "left")
+					await writeFile(
+						join(directory, "panel-input.png"),
+						(await panel.webContents.capturePage()).toPNG(),
+						{ mode: 0o600 },
+					);
 			}
 			if (capture.snapshot().status !== "recording") break;
 			await delay(100);

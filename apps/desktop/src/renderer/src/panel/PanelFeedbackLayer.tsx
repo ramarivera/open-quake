@@ -1,3 +1,4 @@
+import { normalizeTouch } from "../strip/touch-geometry";
 import {
 	DETENT_DEGREES,
 	formatDetents,
@@ -157,27 +158,44 @@ function OfflinePlate({
  */
 export function PanelFeedbackLayer({
 	view,
+	inputDiagnostics = false,
+	rotation = 0,
 }: {
 	view: PanelFeedbackView;
+	inputDiagnostics?: boolean;
+	rotation?: number;
 }): React.JSX.Element {
 	return (
 		<g className="panel-feedback">
 			{view.link.state === "offline" ? (
 				<OfflinePlate link={view.link} />
-			) : (
+			) : inputDiagnostics ? (
 				<Knob view={view} />
-			)}
-			{view.touches.map((touch) => (
-				<g key={touch.id} className="panel-touch">
-					<circle
-						cx={touch.x}
-						cy={touch.y}
-						r="48"
-						className="panel-touch-ring"
-					/>
-					<circle cx={touch.x} cy={touch.y} r="8" className="panel-touch-dot" />
-				</g>
-			))}
+			) : null}
+			{inputDiagnostics
+				? view.touches.map((raw) => {
+						const touch = {
+							...raw,
+							...normalizeTouch(raw, { width: 1920, height: 480, rotation }),
+						};
+						return (
+							<g key={touch.id} className="panel-touch">
+								<circle
+									cx={touch.x}
+									cy={touch.y}
+									r="48"
+									className="panel-touch-ring"
+								/>
+								<circle
+									cx={touch.x}
+									cy={touch.y}
+									r="8"
+									className="panel-touch-dot"
+								/>
+							</g>
+						);
+					})
+				: null}
 		</g>
 	);
 }
