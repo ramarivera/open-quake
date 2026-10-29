@@ -8,12 +8,17 @@ import { app, BrowserWindow, dialog, globalShortcut, shell } from "electron";
 import { encodeProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type { OpenQuakeBridge } from "../../../preload/quake";
 import { guidedProfileEnvelope } from "./guided-profile";
-import { createGuidedCapture, GuidedArrival } from "./guided-state";
+import { finishGuidedCapture } from "./guided-shutdown";
+import {
+	createGuidedCapture,
+	GuidedArrival,
+	type GuidedStepId,
+} from "./guided-state";
 import { acceptanceScratch, ownNativeDevice } from "./native-owner";
 
 interface Recorder {
 	drain(): { events: unknown[]; dropped: number };
-	prompt(text: string): void;
+	prompt(text: string, step?: GuidedStepId): Promise<void>;
 	close(): void;
 }
 /** Self-contained function, serialized into the production panel's main world. */
@@ -25,8 +30,13 @@ function installRecorder() {
 	host.__guidedCapture?.close();
 	const events: unknown[] = [];
 	let dropped = 0;
+	let shownStep: GuidedStepId | undefined;
 	const record = (event: unknown) =>
-		events.push({ event, at: performance.timeOrigin + performance.now() });
+		events.push({
+			event,
+			at: performance.timeOrigin + performance.now(),
+			step: shownStep,
+		});
 	const label = document.createElement("div");
 	label.setAttribute("role", "status");
 	label.id = "guided-input-prompt";
@@ -55,8 +65,13 @@ function installRecorder() {
 	});
 	host.__guidedCapture = {
 		drain: () => ({ events: events.splice(0), dropped }),
-		prompt: (text) => {
+		prompt: async (text, step) => {
+			shownStep = undefined;
 			label.textContent = text;
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			);
+			shownStep = step;
 		},
 		close: () => {
 			off();
@@ -176,9 +191,9 @@ app.on("will-quit", (event) => {
 	if (exiting) return;
 	exiting = true;
 	if (!captureFinished) aborted = true;
-	void (captureRun ?? Promise.resolve())
-		.then(() => owner?.close())
-		.finally(() => app.exit(code));
+	void finishGuidedCapture(captureRun, () => owner?.close(), code).then(
+		(exitCode) => app.exit(exitCode),
+	);
 });
 await writeFile(
 	join(directory, "capture.json"),
@@ -247,7 +262,7 @@ async function run() {
 			if (step && step.id !== currentPrompt) {
 				currentPrompt = step.id;
 				await panel.webContents.executeJavaScript(
-					`window.__guidedCapture.prompt(${JSON.stringify(step.prompt)})`,
+					`window.__guidedCapture.prompt(${JSON.stringify(step.prompt)}, ${JSON.stringify(step.id)})`,
 				);
 				await writeFile(
 					join(directory, "capture.json"),

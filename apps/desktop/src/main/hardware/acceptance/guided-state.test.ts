@@ -4,6 +4,7 @@ import { KnobResource } from "../../../../../../packages/device/src/knob/knob-co
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { pinKnobProfile } from "../../knob/voice-route";
 import { guidedProfileEnvelope } from "./guided-profile";
+import { finishGuidedCapture } from "./guided-shutdown";
 import { createGuidedCapture, GUIDED_STEPS } from "./guided-state";
 
 const touch = (action: 0 | 1, x = 100, y = 100) => ({
@@ -123,6 +124,98 @@ it("rejects invalid arrival clocks before retaining an event", () => {
 	now = 200;
 	for (const at of [NaN, Infinity, 99, 201]) c.accept(touch(1), at);
 	expect(c.snapshot().events).toHaveLength(0);
+});
+it("retains queued gestures without answering a prompt that was not shown", () => {
+	const c = createGuidedCapture(() => 0);
+	c.acceptBatch(
+		[
+			{ event: touch(1), at: 0, step: "center" },
+			{ event: touch(0), at: 0, step: "center" },
+			...Array.from({ length: 5 }, () => ({
+				event: { kind: "rotate", direction: -1 },
+				at: 0,
+				step: "center" as const,
+			})),
+		],
+		0,
+	);
+	expect(c.current()?.id).toBe("left");
+	expect(c.snapshot().events).toHaveLength(7);
+	c.acceptBatch(
+		Array.from({ length: 5 }, () => ({
+			event: { kind: "rotate", direction: -1 },
+			at: 0,
+			step: "left" as const,
+		})),
+		0,
+	);
+	expect(c.current()?.id).toBe("right");
+});
+it("tracks a replacement contact in one frame without treating two fingers as movement", () => {
+	const toSwipe = () => {
+		const c = createGuidedCapture(() => 0);
+		c.accept(touch(1));
+		c.accept(touch(0));
+		for (const direction of [-1, 1])
+			for (let i = 0; i < 5; i++) c.accept({ kind: "rotate", direction });
+		for (let i = 0; i < 3; i++) {
+			c.accept({ kind: "press", state: 1 });
+			c.accept({ kind: "press", state: 0 });
+		}
+		for (let i = 0; i < 4; i++) {
+			c.accept(touch(1));
+			c.accept(touch(0));
+		}
+		return c;
+	};
+	const c = toSwipe();
+	c.accept(touch(1, 100));
+	c.accept({
+		kind: "touch",
+		points: [
+			{ action: 0, x: 100, y: 100 },
+			{ action: 1, x: 300, y: 100 },
+		],
+	});
+	c.accept(touch(1, 350));
+	c.accept(touch(0, 350));
+	expect(c.current()?.id).toBe("unplug");
+	const multi = toSwipe();
+	multi.accept({
+		kind: "touch",
+		points: [
+			{ action: 1, x: 100, y: 100 },
+			{ action: 1, x: 300, y: 100 },
+		],
+	});
+	multi.accept({
+		kind: "touch",
+		points: [
+			{ action: 0, x: 100, y: 100 },
+			{ action: 0, x: 300, y: 100 },
+		],
+	});
+	expect(multi.current()?.id).toBe("swipe");
+});
+it("attempts cleanup after finalization failure and rejects success on either failure", async () => {
+	for (const failed of ["capture", "cleanup", "both", "neither"]) {
+		let closed = 0;
+		const finalization = Promise.resolve().then(() => {
+			if (failed === "capture" || failed === "both")
+				throw new Error("fixture failure");
+		});
+		const code = await finishGuidedCapture(
+			finalization,
+			async () => {
+				closed++;
+				if (failed === "cleanup" || failed === "both")
+					throw new Error("fixture failure");
+			},
+			0,
+		);
+		expect(closed).toBe(1);
+		expect(code).toBe(failed === "neither" ? 0 : 1);
+	}
 });
 it("seeds one fresh inert touch profile with no provider or host actions", async () => {
 	const envelope = guidedProfileEnvelope();

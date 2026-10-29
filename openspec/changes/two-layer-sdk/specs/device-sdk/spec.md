@@ -427,3 +427,12 @@ The hardware query probe SHALL reject evidence containing the selected device se
 - **WHEN** the guided fixture fails or its panel navigates within the same window
 - **THEN** failures exit nonzero and the new document receives a recorder before capture continues
 - **AND** swipe observation requires movement and release during one continuous contact, not separate taps
+
+#### Scenario: Prompt boundaries and shutdown failure
+- **WHEN** input queued under one instruction reaches the recorder after that step completes
+- **THEN** it remains evidence without answering a different, undisplayed instruction
+- **AND** capture finalization failure still attempts owner cleanup, with either failure causing an unsuccessful exit
+
+#### Scenario: Ordered contact replacement
+- **WHEN** one tracked contact releases and another begins in the same event
+- **THEN** the recorder processes them in order without treating simultaneous fingers as movement of one contact
