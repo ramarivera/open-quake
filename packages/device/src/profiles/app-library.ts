@@ -61,7 +61,7 @@ export const defaultAppLibrary = (): readonly AppLibraryGroup[] => [
 		subMenu: "Discord",
 		children: [
 			preset("1,1", "Mute", "mute", ["control+alt+m"]),
-			preset("1,2", "Defean", "deafen", ["control+alt+d"]),
+			preset("1,2", "Deafen", "deafen", ["control+alt+d"]),
 			preset("1,3", "Nav Back", "navBack", ["control+alt+leftbracket"]),
 			preset("1,4", "Camera", "camera", ["control+alt+k"]),
 			preset("1,5", "Game Mode", "gameMode", [], true),
@@ -94,6 +94,10 @@ export function mergeMissingDefaultAppMenu(
 	const missing = defaults.filter((group) => !seen.has(group.subMenu));
 	return missing.length ? [...existing, ...missing] : existing;
 }
+/** Exact pre-correction preset texts; saved library keys keep localizing. */
+const legacyPresetTexts: Readonly<Record<string, string>> = {
+	"defaultAppMenu.deafen": "Defean",
+};
 /** Restore vendor locks by action identity without weakening a user's stricter locks. */
 export function appLibraryKey(
 	group: AppLibraryGroup,
@@ -114,6 +118,8 @@ export function appLibraryKey(
 			(value) =>
 				value.keyCode === key.keyCode &&
 				(value.config.title.text === key.config.title.text ||
+					legacyPresetTexts[value.config.title.i18nKey ?? ""] ===
+						key.config.title.text ||
 					(!!value.config.title.i18nKey &&
 						ProfileLocale.literals.some(
 							(locale) =>

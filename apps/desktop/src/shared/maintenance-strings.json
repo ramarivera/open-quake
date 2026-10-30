@@ -5,7 +5,7 @@
 			"upgradingInBackground": "Upgrading…"
 		},
 		"upgradeButton": "Upgrade",
-		"dialogTitle": "Firmware Upgrade",
+		"dialogTitle": "Firmware upgrade",
 		"close": "Close",
 		"step": {
 			"enter_download_mode": "Enter download mode",
@@ -52,12 +52,12 @@
 	"clearAllData": "Clear all data and exit",
 	"clearAllDataConfirm": "This will clear all data since initialization and cannot be undone. Backup before continuing?",
 	"clearAllDataCancel": "Cancel",
-	"clearAllDataBackup": "Backup and Continue",
-	"clearAllDataWithoutBackup": "Continue Without Backup",
+	"clearAllDataBackup": "Backup and continue",
+	"clearAllDataWithoutBackup": "Continue without backup",
 	"clearAllDataBackupFailed": "Backup failed. Continue to clear data and exit?",
 	"clearAllDataFailed": "Failed to clear data. Please try again.",
-	"checkUpdate": "Check Update",
-	"resourcesManage": "Backup & Restore",
+	"checkUpdate": "Check for updates",
+	"resourcesManage": "Backup & restore",
 	"importResources": "Import",
 	"exportResources": "Export",
 	"permissions": {

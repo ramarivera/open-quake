@@ -123,6 +123,26 @@ it("MGMT-121/123 resolves labels without changing renamed defaults or stored loc
 	expect(appLibraryLabel(explicit, "de")).toBe("");
 });
 
+it("keeps the legacy misspelled Deafen preset title localizable", () => {
+	const group = defaultAppLibrary()[0];
+	if (!group) throw new Error("Missing Discord fixture");
+	const deafen = group.children[1];
+	if (!deafen) throw new Error("Missing preset");
+	expect(deafen.config.title.text).toBe("Deafen");
+	const saved = {
+		...deafen,
+		config: {
+			...deafen.config,
+			title: { ...deafen.config.title, text: "Defean" },
+		},
+	};
+	const placed = appLibraryKey(group, saved);
+	expect(placed.config.userModifiedTitle).toBeUndefined();
+	expect(appLibraryLabel(placed, "en")).toBe("Deafen");
+	expect(appLibraryLabel(placed, "de")).toBe("Taubschalten");
+	expect(saved.config.title.text).toBe("Defean");
+});
+
 it.each([
 	["Discord", "discord", 100],
 	["Premiere", "Adobe Premiere Pro", 90],

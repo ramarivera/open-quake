@@ -66,6 +66,7 @@ describe("recovered catalog", () => {
 		}
 	});
 	it.each([
+		["1-0", "defaultDiscordConfig.deafen", "Defean"],
 		["1-0", "defaultDiscordConfig.navBack", "Nav Back"],
 		["1-0", "defaultDiscordConfig.pushToTalk", "Push To Talk"],
 		["1-0", "defaultDiscordConfig.streamerMode", "Streamer Mode"],
@@ -113,6 +114,14 @@ describe("recovered catalog", () => {
 			}
 		},
 	);
+	it("ships the meeting mic alternate title in sentence case", () => {
+		const meeting = builtinProfiles("darwin").find((p) => p.id === "1-1");
+		const mic = meeting?.pages[0].keys.find((k) => k.config.type === "mic");
+		if (!mic) throw new Error("Missing meeting mic fixture");
+		expect(Option.getOrUndefined(mic.config.alterTitle)?.text).toBe(
+			"Device mic",
+		);
+	});
 	it("decodes all nine layouts on each OS with exact Quick actions", () => {
 		for (const platform of ["darwin", "win32", "linux"] as const) {
 			const profiles = builtinProfiles(platform);
