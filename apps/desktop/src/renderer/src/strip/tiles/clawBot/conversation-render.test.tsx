@@ -74,7 +74,7 @@ it("AI-181 AI-185 AI-189: selected header, cancelled picker, path append and con
 		/>,
 	);
 	expect(element(".clawbot-input-title", HTMLElement).textContent).toBe(
-		"Command Input · Weather",
+		"Command input · Weather",
 	);
 	const box = element("textarea", HTMLTextAreaElement),
 		attach = element(".clawbot-input-button:last-child", HTMLButtonElement),
@@ -118,7 +118,7 @@ it("AI-181 AI-189: preview controls stay disabled even for injected sub-touch", 
 		/>,
 	);
 	expect(element(".clawbot-input-title", HTMLElement).textContent).toBe(
-		"Command Input",
+		"Command input",
 	);
 	for (const button of document.querySelectorAll<HTMLButtonElement>(
 		".clawbot-input-button",
