@@ -31,7 +31,7 @@ it("SETTINGS-068/069 opens offline illustrated steps, changes only guide languag
 		),
 	);
 	expect(document.body.textContent).toContain(
-		"DisplayPort output to Quake's HDMI input",
+		"DisplayPort output to QUAKE's HDMI input",
 	);
 	await click(button("3. Laptop setup"));
 	expect(document.body.textContent).toContain("USB-C port that supports DP");

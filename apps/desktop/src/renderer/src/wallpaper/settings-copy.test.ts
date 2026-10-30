@@ -7,7 +7,7 @@ import { appDictionaries } from "../i18n";
 import { type WallpaperController, WallpaperSettings } from "./WallpaperViews";
 
 it.each([
-	{ locale: "en", add: "Add Media…", clear: "Remove All" },
+	{ locale: "en", add: "Add media…", clear: "Remove all" },
 	{ locale: "de", add: "Medien hinzufügen…", clear: "Alle entfernen" },
 ])(
 	"labels playlist actions and describes the active media in $locale",

@@ -246,11 +246,11 @@ async function smoke(): Promise<void> {
 	await wait(
 		async () =>
 			(await js(
-				`!document.querySelector('[aria-label="Decrease Device Luminance"]').disabled`,
+				`!document.querySelector('[aria-label="Decrease device luminance"]').disabled`,
 			)) === true,
 	);
 	await js(
-		`document.querySelector('[aria-label="Decrease Device Luminance"]').click()`,
+		`document.querySelector('[aria-label="Decrease device luminance"]').click()`,
 	);
 	await wait(async () => (await read()).luminance === 229);
 	await wait(

@@ -401,7 +401,7 @@ it("SETTINGS-005 marks both destructive reset actions with the shared danger tre
 		'[data-variant="danger"]',
 	);
 	if (!destructive) throw new Error("Destructive confirmation missing");
-	expect(destructive.textContent).toContain("Without Backup");
+	expect(destructive.textContent).toContain("without backup");
 	const cancel = [...dialog.querySelectorAll("button")].find((item) =>
 		item.textContent?.includes("Cancel"),
 	);

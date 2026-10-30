@@ -17,7 +17,7 @@ export type StripLocale = (typeof STRIP_LOCALES)[number];
 export const STRIP_STRINGS = {
 	en: {
 		"voiceOutput.unavailable": "Speech playback is unavailable.",
-		"operationConfiguration.audioBotTtsEngine": "Audio Bot TTS engine",
+		"operationConfiguration.audioBotTtsEngine": "Voice assistant TTS engine",
 		"operationConfiguration.audioBotTtsEngineQwen":
 			"Cloud (same as global AI voice)",
 		"operationConfiguration.audioBotTtsEngineWebSpeech":

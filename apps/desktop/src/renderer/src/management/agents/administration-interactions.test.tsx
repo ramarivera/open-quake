@@ -90,7 +90,7 @@ it("CENTER-047/048 initial Settings load, channel invalidation and explicit clea
 		element<HTMLInputElement>("#agents-settings input[type=number]"),
 		"19001",
 	);
-	await click(button("Save Settings"));
+	await click(button("Save settings"));
 	expect(request).toHaveBeenCalledWith({
 		type: "save-service-settings",
 		settings: { ...settings, port: 19001 },

@@ -122,7 +122,7 @@ it("WIDGETS-128 releases picked assets on Cancel and unmount using separate draf
 		</GTProvider>,
 	);
 	try {
-		await click(button(mounted.host, "Add Media…"));
+		await click(button(mounted.host, "Add media…"));
 		const first = calls[0];
 		expect(first).toMatchObject({
 			_tag: "pick",
@@ -131,7 +131,7 @@ it("WIDGETS-128 releases picked assets on Cancel and unmount using separate draf
 		});
 		await click(button(mounted.host, "Cancel"));
 		expect(calls[1]).toEqual({ ...first, _tag: "discard" });
-		await click(button(mounted.host, "Add Media…"));
+		await click(button(mounted.host, "Add media…"));
 		expect(calls[2]).not.toEqual(first);
 		await mounted.close();
 		expect(calls[3]).toEqual({ ...calls[2], _tag: "discard" });

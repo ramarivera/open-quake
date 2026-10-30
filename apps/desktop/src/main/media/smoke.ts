@@ -484,8 +484,8 @@ async function smoke(): Promise<void> {
 	);
 	assert(
 		Array.isArray(actionLabels) &&
-			actionLabels.includes("Add Media…") &&
-			actionLabels.includes("Remove All"),
+			actionLabels.includes("Add media…") &&
+			actionLabels.includes("Remove all"),
 	);
 	// Cluster 18: exercise the mounted playlist editor without foreground input.
 	selectedPath = pngPath;
@@ -899,7 +899,7 @@ async function smoke(): Promise<void> {
 	assert(
 		(
 			await management.webContents.executeJavaScript("document.body.innerText")
-		).includes("Quake display arrangement failed"),
+		).includes("QUAKE display arrangement failed"),
 	);
 	assert(
 		(

@@ -1156,7 +1156,7 @@ it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and
 	);
 	const reset = vi.fn(async () => ({ _tag: "ok" }));
 	vi.stubGlobal("quakeVoice", { request: reset });
-	await click(button(f.host, "Reset Context"));
+	await click(button(f.host, "Reset context"));
 	expect(reset).toHaveBeenCalledWith({ _tag: "ResetContext", keyCode: "1,1" });
 	expect(f.host.textContent).toContain("Context reset");
 	await click(button(f.host, "Save"));
