@@ -111,8 +111,8 @@ export function SequenceEditor({
 		);
 	return (
 		<div className="key-sequence">
-			<h3>Multiple Operations</h3>
-			<p aria-live="polite">Contain: {value.length} Project</p>
+			<h3>Multiple operations</h3>
+			<p aria-live="polite">Operations: {value.length}</p>
 			<button
 				type="button"
 				aria-expanded={expanded}
@@ -263,7 +263,7 @@ export function SequenceEditor({
 						);
 					}}
 				>
-					Add Operation
+					Add operation
 				</button>
 			</div>
 		</div>

@@ -27,8 +27,8 @@ const copy = {
 				"Only DisplayPort available? Use an adapter from your PC's DisplayPort output to Quake's HDMI input. HDMI-to-DisplayPort adapters work in the opposite direction.",
 			],
 			[
-				"Plug the cable's USB-A and HDMI connectors into the Hub's matching ports",
-				"Plug the Hub's USB-C connector into your laptop's USB-C port that supports DP functionality",
+				"Plug the cable's USB-A and HDMI connectors into the hub's matching ports",
+				"Plug the hub's USB-C connector into your laptop's USB-C port that supports DP functionality",
 				"The laptop's USB-C port must support DisplayPort video output. A USB-only hub cannot carry the Quake display signal.",
 			],
 		],

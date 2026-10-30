@@ -110,7 +110,7 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 		await click(button("Close", element("dialog")));
 		expect(saved.apps).toEqual([]);
 		await click(button("App match settings"));
-		await click(button("Add App"));
+		await click(button("Add app"));
 		await input(
 			element<HTMLInputElement>("dialog input:not([type=checkbox])"),
 			"slack",

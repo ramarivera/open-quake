@@ -103,7 +103,7 @@ export function TaskInspector({
 	const tasks = [
 		{ id: "audio", name: "Audio and upload", state: record.audio },
 		{ id: "transcript", name: "Live transcript", state: record.transcription },
-		{ id: "summary", name: "AI Summary", state: record.summary },
+		{ id: "summary", name: "AI summary", state: record.summary },
 	] as const;
 	const working =
 		!!pending || record.state === "processing" || record.state === "recording";

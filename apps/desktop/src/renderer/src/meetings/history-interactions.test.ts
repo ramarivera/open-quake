@@ -28,9 +28,9 @@ describe("meeting history consumers", () => {
 		expect(element(".meeting-list").textContent).toContain(
 			"No meeting minutes records",
 		);
-		expect(dom.host.textContent).toContain("Select Meeting Minutes");
+		expect(dom.host.textContent).toContain("Select meeting minutes");
 		expect(dom.host.textContent).toContain(
-			"Select a meeting minutes from the left list to view detailed content",
+			"Select meeting minutes from the list on the left to view detailed content.",
 		);
 		const records = [
 			meetingRecord(1, { state: "recorded" }),
@@ -123,7 +123,7 @@ describe("meeting history consumers", () => {
 			id: record.id,
 			confirmed: true,
 		});
-		expect(dom.host.textContent).toContain("Select Meeting Minutes");
+		expect(dom.host.textContent).toContain("Select meeting minutes");
 	});
 
 	it("AI-305 AI-306 copies the exact active body and reports empty or denied clipboard", async () => {

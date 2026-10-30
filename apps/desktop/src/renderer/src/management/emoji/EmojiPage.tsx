@@ -224,7 +224,7 @@ export function EmojiPage(): React.JSX.Element {
 	};
 	return (
 		<div className="page emoji-page">
-			<PageHeader title="AI Emoji">
+			<PageHeader title="AI emoji">
 				<button
 					className="mc-button"
 					type="button"
@@ -235,20 +235,20 @@ export function EmojiPage(): React.JSX.Element {
 			</PageHeader>
 			<ol className="emoji-steps" aria-label="Emoji creation steps">
 				<li>
-					<span>1</span>Add Static Asset
+					<span>1</span>Add static asset
 				</li>
 				<li>
-					<span>2</span>Generate Motion Emoji
+					<span>2</span>Generate motion emoji
 				</li>
 				<li>
-					<span>3</span>Compose Pack
+					<span>3</span>Compose pack
 				</li>
 			</ol>
 			<div className="mc-split emoji-workspace">
 				<div className="emoji-creation">
 					<section className="mc-panel">
 						<div className="mc-toolbar">
-							<h2>Static Assets ({view?.store.staticAssets.length ?? 0})</h2>
+							<h2>Static assets ({view?.store.staticAssets.length ?? 0})</h2>
 							{staticHash ? (
 								<button
 									className="mc-button"
@@ -270,7 +270,7 @@ export function EmojiPage(): React.JSX.Element {
 								type="button"
 								onClick={() => void run({ type: "import-static" })}
 							>
-								Add Asset
+								Add asset
 							</button>
 						</div>
 						{view?.store.staticAssets.length ? (
@@ -308,7 +308,7 @@ export function EmojiPage(): React.JSX.Element {
 								onClick={() => void run({ type: "import-static" })}
 							>
 								<span>＋</span>
-								<strong>Add your first static Emoji</strong>
+								<strong>Add your first static emoji</strong>
 								<small>PNG, JPG supported. Select multiple at once.</small>
 							</button>
 						)}
@@ -332,7 +332,7 @@ export function EmojiPage(): React.JSX.Element {
 							<div>
 								<div className="emoji-fields">
 									<label className="mc-field">
-										Emoji Name (Optional)
+										Emoji name (optional)
 										<input
 											value={title}
 											maxLength={30}
@@ -342,7 +342,7 @@ export function EmojiPage(): React.JSX.Element {
 										<small>{title.length}/30</small>
 									</label>
 									<label className="mc-field">
-										Caption Text (Optional)
+										Caption text (optional)
 										<input
 											value={caption}
 											placeholder="e.g. Go for it!"
@@ -355,7 +355,7 @@ export function EmojiPage(): React.JSX.Element {
 									</label>
 								</div>
 								<label className="mc-field">
-									Motion Description (Required)
+									Motion description (required)
 									<textarea
 										value={prompt}
 										maxLength={180}
@@ -368,7 +368,7 @@ export function EmojiPage(): React.JSX.Element {
 									<small>{prompt.length}/180</small>
 								</label>
 								<p className="emoji-preset-label">
-									Quick Actions (click to fill the description)
+									Quick actions (click to fill the description)
 								</p>
 								<div className="emoji-presets">
 									{motionPresets(locale).map((text) => (
@@ -410,7 +410,7 @@ export function EmojiPage(): React.JSX.Element {
 											})
 										}
 									>
-										Generate Motion Emoji
+										Generate motion emoji
 									</button>
 									<button
 										className="mc-button"
@@ -434,14 +434,14 @@ export function EmojiPage(): React.JSX.Element {
 					</section>
 					<section className="mc-panel">
 						<div className="mc-toolbar">
-							<h2>Generated Results</h2>
+							<h2>Generated results</h2>
 							<span className="mc-badge">{selected.length} selected</span>
 						</div>
 						{view?.store.drafts.length ? (
 							<div
 								className="emoji-results"
 								role="listbox"
-								aria-label="Generated animated Emoji"
+								aria-label="Generated animated emoji"
 								aria-multiselectable="true"
 							>
 								{view.store.drafts.map((id) => {
@@ -485,7 +485,7 @@ export function EmojiPage(): React.JSX.Element {
 						)}
 						<div className="mc-toolbar">
 							<span className="muted">
-								Results can be organized into a Package
+								Results can be organized into a package
 							</span>
 							<button
 								className="mc-button"
@@ -506,7 +506,7 @@ export function EmojiPage(): React.JSX.Element {
 									else setNeedsPack(true);
 								}}
 							>
-								Add to Pack
+								Add to pack
 							</button>
 						</div>
 					</section>
@@ -516,7 +516,7 @@ export function EmojiPage(): React.JSX.Element {
 					aria-label="Emoji package library"
 				>
 					<div className="mc-toolbar">
-						<h2>Package Library</h2>
+						<h2>Package library</h2>
 						<button
 							className="emoji-new"
 							title="New emoji package"
@@ -627,14 +627,14 @@ export function EmojiPage(): React.JSX.Element {
 								type="button"
 								onClick={() => void create()}
 							>
-								New Package
+								New package
 							</button>
 						</div>
 					)}
 					{pack ? (
 						<>
 							<div className="mc-toolbar">
-								<h3>Current Pack</h3>
+								<h3>Current pack</h3>
 								<span className="mc-badge">
 									{pack.emojiIds.filter(Boolean).length} / 16
 								</span>
@@ -684,7 +684,7 @@ export function EmojiPage(): React.JSX.Element {
 								type="button"
 								onClick={() => void run({ type: "place", id: pack.id })}
 							>
-								Add to Main Settings Screen
+								Add to main settings screen
 							</button>
 							<button
 								className="mc-button"
@@ -692,7 +692,7 @@ export function EmojiPage(): React.JSX.Element {
 								type="button"
 								onClick={() => void run({ type: "export", id: pack.id })}
 							>
-								Export Emoji Pack
+								Export emoji pack
 							</button>
 							<p className="muted">
 								Can be imported into WeChat, WeCom and other IM tools
@@ -769,7 +769,7 @@ export function EmojiPage(): React.JSX.Element {
 						type="button"
 						onClick={() => void create().then(() => setNeedsPack(false))}
 					>
-						New Package
+						New package
 					</button>
 				</Modal>
 			) : null}
@@ -921,7 +921,7 @@ function CaptionDialog({
 	return (
 		<Modal title={`Edit ${item.name}`} close={close}>
 			<label className="mc-field">
-				Emoji Name
+				Emoji name
 				<input
 					type="text"
 					value={name}
@@ -931,7 +931,7 @@ function CaptionDialog({
 				<small>{name.length}/30</small>
 			</label>
 			<label className="mc-field">
-				Emoji Action
+				Emoji action
 				<select
 					value={mode}
 					onChange={(e) =>
@@ -962,7 +962,7 @@ function CaptionDialog({
 				<img src={preview || undefined} alt="Caption preview" />
 				<div>
 					<label className="mc-field">
-						Caption Text (Optional)
+						Caption text (optional)
 						<input
 							value={settings.text}
 							onChange={(e) => {
@@ -1007,7 +1007,7 @@ function CaptionDialog({
 						</select>
 					</label>
 					<label className="mc-field">
-						Colour
+						Color
 						<input
 							value={settings.color}
 							maxLength={10}
@@ -1022,7 +1022,7 @@ function CaptionDialog({
 								key={hex}
 								type="button"
 								title={`#${hex}`}
-								aria-label={`Colour #${hex}`}
+								aria-label={`Color #${hex}`}
 								style={{ background: `#${hex}` }}
 								onClick={() =>
 									setSettings({ ...settings, color: `0x${hex}ff` })
@@ -1086,7 +1086,7 @@ function AppMatchDialog({
 				<li>Turn matching off to use emoji in every app.</li>
 			</ul>
 			<label className="mc-field">
-				Emoji Action
+				Emoji action
 				<select
 					value={mode === null ? "key" : String(mode)}
 					onChange={(e) =>
@@ -1101,9 +1101,9 @@ function AppMatchDialog({
 						)
 					}
 				>
-					<option value="0">Copy Only</option>
-					<option value="1">Copy and Paste</option>
-					<option value="2">Copy, Paste and Send</option>
+					<option value="0">Copy only</option>
+					<option value="1">Copy and paste</option>
+					<option value="2">Copy, paste and send</option>
 					<option value="key">Use key setting</option>
 				</select>
 			</label>
@@ -1119,7 +1119,7 @@ function AppMatchDialog({
 						})
 					}
 				>
-					Add App
+					Add app
 				</button>
 				<button
 					className="mc-button"
