@@ -223,7 +223,7 @@ it("executes saved direct and allowed AI actions after live display attributes d
 		});
 		expect(await f.request({ type: "ha.key", target, key })).toMatchObject({
 			type: "error",
-			field: "Display Info",
+			field: "Display info",
 		});
 		await f.request({ type: "ha.allowlist", ids: ["button.reset"] });
 		const denied = await f.runtime.runPromise(

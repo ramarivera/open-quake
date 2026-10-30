@@ -71,9 +71,9 @@ export function DiagnosticView({
 			</header>
 			{status?.issue === "native-failed" && (
 				<p role="alert">
-					Quake display arrangement failed. Automatic layout prompts are paused
+					QUAKE display arrangement failed. Automatic layout prompts are paused
 					for 10 minutes. Open display settings to adjust the layout, or try
-					Arrange Quake display again.
+					Arrange QUAKE display again.
 				</p>
 			)}
 			{status?.mock && (
@@ -150,7 +150,7 @@ export function DiagnosticView({
 						disabled={checking}
 						onClick={() => run("bind-all")}
 					>
-						Bind Quake screens
+						Bind QUAKE screens
 					</button>
 				)}
 				<button
@@ -171,7 +171,7 @@ export function DiagnosticView({
 						disabled={checking}
 						onClick={() => run("repair-layout")}
 					>
-						Arrange Quake display…
+						Arrange QUAKE display…
 					</button>
 				)}
 				<InstallationGuide />

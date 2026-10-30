@@ -83,7 +83,7 @@ describe("production integration controller with real conductors and fake ports"
 				fields: { appId: "x" },
 				session: "",
 			}),
-		).toMatchObject({ type: "error", field: "App Secret" });
+		).toMatchObject({ type: "error", field: "App secret" });
 		expect(
 			await f.request({
 				type: "channels.save",

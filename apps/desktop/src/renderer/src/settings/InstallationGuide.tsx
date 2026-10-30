@@ -15,21 +15,21 @@ const copy = {
 		],
 		instructions: [
 			[
-				"Plug the cable's USB-C connector into the Quake unit's left USB-C input port",
-				"Plug the cable's Mini HDMI connector into the Quake unit's left Mini HDMI input port",
+				"Plug the cable's USB-C connector into the QUAKE unit's left USB-C input port",
+				"Plug the cable's Mini HDMI connector into the QUAKE unit's left Mini HDMI input port",
 				'Fully insert the cables. You\'ll hear a "click" when the latch engages.',
-				"Box contents: Quake unit × 1, USB-C cable × 1, Mini HDMI cable × 1",
+				"Box contents: QUAKE unit × 1, USB-C cable × 1, Mini HDMI cable × 1",
 			],
 			[
 				"Plug the cable's USB-A connector into your desktop's USB-A port",
 				"Plug the cable's HDMI connector into your desktop's HDMI port",
 				"Requirement: Desktop must have USB and HDMI ports",
-				"Only DisplayPort available? Use an adapter from your PC's DisplayPort output to Quake's HDMI input. HDMI-to-DisplayPort adapters work in the opposite direction.",
+				"Only DisplayPort available? Use an adapter from your PC's DisplayPort output to QUAKE's HDMI input. HDMI-to-DisplayPort adapters work in the opposite direction.",
 			],
 			[
 				"Plug the cable's USB-A and HDMI connectors into the hub's matching ports",
 				"Plug the hub's USB-C connector into your laptop's USB-C port that supports DP functionality",
-				"The laptop's USB-C port must support DisplayPort video output. A USB-only hub cannot carry the Quake display signal.",
+				"The laptop's USB-C port must support DisplayPort video output. A USB-only hub cannot carry the QUAKE display signal.",
 			],
 		],
 	},
