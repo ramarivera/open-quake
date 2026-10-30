@@ -434,7 +434,7 @@ export function IconLibrary({
 									? t("iconLib.loadingIcons")
 									: search
 										? "No matching icons."
-										: "No icons in this group. Select Picture to add artwork."}
+										: "No icons in this group. Select picture to add artwork."}
 								{!loading && search && (
 									<button type="button" onClick={() => setQuery("")}>
 										Clear search
@@ -473,7 +473,7 @@ export function IconLibrary({
 					disabled={loading}
 					onClick={() => void upload("import-icon")}
 				>
-					Select Picture
+					Select picture
 				</button>
 				<div className="icon-library-zoom">
 					<span>{zoom}px</span>

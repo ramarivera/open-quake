@@ -228,7 +228,7 @@ export function ThemeSettings({
 								setLoading(false);
 							}}
 						/>
-						Import Theme…
+						Import theme…
 					</label>
 				</Row>
 				<details className="disclosure">

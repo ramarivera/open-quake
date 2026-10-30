@@ -18,6 +18,10 @@ const english: Readonly<Record<string, string>> = {
 	"Configure Models": "Configure models",
 	"Change the AI provider in General Settings":
 		"Change the AI provider in General settings",
+	"HomeAssistant Control": "Home Assistant control",
+	"HA Configuration": "HA configuration",
+	"Web Search is unsupported by this provider/model.":
+		"Web search is unsupported by this provider/model.",
 };
 
 const german: Readonly<Record<string, string>> = {

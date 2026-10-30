@@ -185,7 +185,7 @@ export function DiagnosticView({
 						if (!supportAvailable) event.preventDefault();
 					}}
 				>
-					Contact Support
+					Contact support
 				</a>
 			</div>
 			<p role="status" aria-live="polite">

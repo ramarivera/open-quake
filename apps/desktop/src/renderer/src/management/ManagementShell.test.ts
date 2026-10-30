@@ -69,7 +69,7 @@ it("labels every navigation row and marks exactly one current page", () => {
 
 it("keeps the stable hooks used by tests and smokes", () => {
 	const html = render(false);
-	expect(html).toContain('title="UI Settings"');
+	expect(html).toContain('title="UI settings"');
 	expect(html).toContain('aria-label="Drag to resize sidebar"');
 	expect(html).toMatch(
 		/class="content-inner" data-page="keys" data-layout="wide"/,

@@ -93,7 +93,7 @@ export function SystemMediaSettings({
 	const sessions = snapshot?.media.sessions ?? [];
 	return (
 		<fieldset disabled={busy || !snapshot} data-testid="system-media-panel">
-			<legend>System Media</legend>
+			<legend>System media</legend>
 			<p>
 				{snapshot?.media.session?.title ||
 					(de ? "Keine aktive Mediensitzung" : "No active media session")}
@@ -219,7 +219,7 @@ export function MediaKeySettings({
 						<option value="local">
 							{locale === "de" ? "Lokale Musik" : "Local music"}
 						</option>
-						<option value="system">System Media</option>
+						<option value="system">System media</option>
 					</select>
 				</label>
 				{!local ? <SystemMediaSettings locale={locale} /> : null}

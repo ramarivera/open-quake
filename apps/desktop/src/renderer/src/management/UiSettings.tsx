@@ -45,7 +45,7 @@ export function UiSettings({
 				ref={button}
 				className="mc-ui-settings-button"
 				type="button"
-				title="UI Settings"
+				title="UI settings"
 				aria-expanded={open}
 				aria-controls="mc-ui-settings"
 				onClick={() => setOpen(!open)}

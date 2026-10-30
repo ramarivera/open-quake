@@ -52,7 +52,7 @@ export function WallpaperSettings({
 			</span>
 			<DeviceScreen snapshot={wallpaper.snapshot} size="large" view={preview} />
 			<label>
-				Empty Slot Dashed Border
+				Empty slot dashed border
 				<input
 					type="checkbox"
 					checked={strip.settings.showEmptyGridDashedBorder}
@@ -104,7 +104,7 @@ export function WallpaperSettings({
 						});
 				}}
 			>
-				Restore Previous
+				Restore previous
 			</button>
 		</div>
 	);

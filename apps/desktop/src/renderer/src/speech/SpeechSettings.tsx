@@ -216,7 +216,7 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 					<option value="dashscope">DashScope</option>
 					<option value="azure">Microsoft Azure</option>
 					<option value="xfy">XFY</option>
-					<option value="qwen-realtime">Qwen realtime, opt in</option>
+					<option value="qwen-realtime">Qwen realtime, opt-in</option>
 				</select>
 			</Row>
 			{draft.tts ? (

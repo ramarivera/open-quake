@@ -520,8 +520,8 @@ export function ObsSettings({
 						onChange={(e) => update({ monitorType: e.target.value })}
 					>
 						<option value="monitorOff">Off</option>
-						<option value="monitorOnly">Monitor Only</option>
-						<option value="monitorAndOutput">Monitor + Output</option>
+						<option value="monitorOnly">Monitor only</option>
+						<option value="monitorAndOutput">Monitor + output</option>
 					</select>
 				</Row>
 			)}

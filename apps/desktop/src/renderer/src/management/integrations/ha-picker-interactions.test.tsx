@@ -104,7 +104,7 @@ it("CENTER-100 saves and reloads only checked leaves after switching room and do
 	).toEqual(["Kitchen", "Study", "Other"]);
 	for (const d of domains) expect(leaf(`Friendly ${d}`).checked).toBe(true);
 	expect(leaf("Excluded reset").checked).toBe(false);
-	await click(button(mounted.host, "By Entity"));
+	await click(button(mounted.host, "By entity"));
 	expect(mounted.host.querySelectorAll("aside fieldset")).toHaveLength(8);
 	await click(leaf("Friendly light"));
 	await click(leaf("Excluded reset"));
