@@ -182,7 +182,7 @@
 		"saveSaved": "已保存",
 		"saveFailed": "保存失败",
 		"lightingUnavailable": "此固件没有经过确认的灯光控制。",
-		"openFailed": "无法打开 设备",
+		"openFailed": "无法打开设备",
 		"lightingFailed": "灯光更改失败。请刷新后重试。",
 		"target": "目标",
 		"gameTarget": "游戏目标",
