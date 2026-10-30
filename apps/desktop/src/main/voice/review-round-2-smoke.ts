@@ -258,7 +258,7 @@ export async function reviewRound2Smoke(
 			await js<string>(
 				"Array.from(document.querySelectorAll('.clawbot-group')).at(-1).textContent",
 			),
-			/Voice Input.*Weather/s,
+			/Voice input.*Weather/s,
 		);
 		assert.match(
 			await js<string>(
