@@ -84,7 +84,7 @@ export async function copilotSmoke() {
 			assert(presence.querySelector("svg"));
 			assert.equal(getComputedStyle(presence).filter, "none");
 			assert.equal(getComputedStyle(presence).backgroundImage, "none");
-			document.documentElement.dataset.motion = "reduce";
+			await show({ ...initialVoiceView, copilot }, { motion: "reduce" });
 			assert.equal(getComputedStyle(presence).animationName, "none");
 			passed++;
 		}

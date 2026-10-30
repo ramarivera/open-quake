@@ -48,3 +48,14 @@ export const view = (conversation: ConversationState) => ({
 	...initialVoiceView,
 	conversation,
 });
+
+/** Normalize expected CSS colors using Chromium's serialization, including color-mix. */
+export function cssColor(color: string): string {
+	const probe = document.createElement("span");
+	probe.hidden = true;
+	probe.style.backgroundColor = color;
+	document.body.append(probe);
+	const resolved = getComputedStyle(probe).backgroundColor;
+	probe.remove();
+	return resolved;
+}

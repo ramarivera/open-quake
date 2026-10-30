@@ -19,7 +19,7 @@ import {
 	inputScale,
 	selectInput,
 } from "../strip/tiles/clawBotInput/input-state";
-import { delay, rendered, view } from "./smoke-fixtures";
+import { cssColor, delay, rendered, view } from "./smoke-fixtures";
 
 const nativeRequire: NodeJS.Require = globalThis.require;
 const { ipcRenderer }: typeof import("electron") = nativeRequire("electron");
@@ -103,7 +103,10 @@ export async function inputSmoke() {
 		assert(
 			Math.abs(parseFloat(getComputedStyle(warning).fontSize) - 20 * s) < 0.1,
 		);
-		assert.equal(getComputedStyle(warning).backgroundColor, "rgb(30, 33, 36)");
+		assert.equal(
+			getComputedStyle(warning).backgroundColor,
+			cssColor("color-mix(in srgb, #101830 88%, #f2f5ff)"),
+		);
 		await act(async () => {
 			await delay(1700);
 		});

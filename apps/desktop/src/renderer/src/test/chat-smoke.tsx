@@ -17,7 +17,7 @@ import {
 	initialConversation,
 	reduceConversation,
 } from "../strip/tiles/clawBot/conversation";
-import { locales, rendered, view } from "./smoke-fixtures";
+import { cssColor, locales, rendered, view } from "./smoke-fixtures";
 
 const nativeRequire: NodeJS.Require = globalThis.require;
 const assert: typeof import("node:assert/strict") =
@@ -46,7 +46,7 @@ export async function chatSmoke() {
 				s = clawBotScale(card.clientWidth, card.clientHeight),
 				header = element(".clawbot-header"),
 				title = element(".clawbot-title");
-			assert.equal(getComputedStyle(card).backgroundColor, "rgb(21, 23, 26)");
+			assert.equal(getComputedStyle(card).backgroundColor, "rgb(16, 24, 48)");
 			assert.equal(getComputedStyle(card).backdropFilter, "none");
 			assert.equal(
 				getComputedStyle(card).overflow,
@@ -215,7 +215,10 @@ export async function chatSmoke() {
 		)) {
 			const css = getComputedStyle(bubble),
 				last = bubble.parentElement?.matches(":last-child");
-			assert.equal(css.backgroundColor, "rgb(30, 33, 36)");
+			assert.equal(
+				css.backgroundColor,
+				cssColor("color-mix(in srgb, #101830 88%, #f2f5ff)"),
+			);
 			assert.equal(css.overflowWrap, "break-word");
 			assert(Math.abs(parseFloat(css.paddingTop) - 12 * s) < 0.1);
 			assert(Math.abs(parseFloat(css.paddingLeft) - 16 * s) < 0.1);
@@ -352,7 +355,7 @@ export async function chatSmoke() {
 			const button = element<HTMLButtonElement>(".clawbot-tool-row");
 			assert(button.textContent?.includes("Running"));
 			const dot = element(".clawbot-tool-dot");
-			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(95, 202, 181)");
+			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(195, 238, 58)");
 			assert.equal(getComputedStyle(dot).animationDuration, "1.2s");
 			document.documentElement.dataset.motion = "reduce";
 			assert.equal(getComputedStyle(dot).animationName, "none");
@@ -383,7 +386,7 @@ export async function chatSmoke() {
 			);
 			await show(conversation);
 			assert(button.textContent?.includes("Done"));
-			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(98, 201, 138)");
+			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(156, 219, 120)");
 			conversation = reduceConversation(
 				conversation,
 				{ ...tool, phase: "error" },
@@ -394,7 +397,7 @@ export async function chatSmoke() {
 			assert(button.textContent?.includes("Failed"));
 			assert.equal(
 				getComputedStyle(element(".clawbot-tool-dot")).backgroundColor,
-				"rgb(240, 138, 120)",
+				"rgb(255, 146, 155)",
 			);
 			passed++;
 		}
