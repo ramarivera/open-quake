@@ -20,7 +20,7 @@ it("CENTER-005 dismisses on Escape and outside pointer, restores focus and remov
 	const add = vi.spyOn(document, "addEventListener");
 	const remove = vi.spyOn(document, "removeEventListener");
 	const view = await mount(createElement(UiSettings, { controller }));
-	const trigger = element<HTMLButtonElement>("button[title='UI Settings']");
+	const trigger = element<HTMLButtonElement>("button[title='UI settings']");
 	await click(trigger);
 	await click(element("input[name=mc-theme][value=light]"));
 	expect(controller.setTheme).toHaveBeenCalledWith("light");

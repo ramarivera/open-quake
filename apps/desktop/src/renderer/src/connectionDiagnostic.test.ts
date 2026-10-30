@@ -47,10 +47,10 @@ describe("connection diagnostic page", () => {
 			issue: "native-failed",
 		});
 		expect(html).toContain('role="alert"');
-		expect(html).toContain("Quake display arrangement failed");
+		expect(html).toContain("QUAKE display arrangement failed");
 		expect(html).toContain("10 minutes");
 		expect(html).toContain("Open display settings");
-		expect(html).toContain("Arrange Quake display again");
+		expect(html).toContain("Arrange QUAKE display again");
 		expect(html).not.toContain("both connections are normal");
 	});
 	it("uses physical dimensions in the recovered resolution error", () => {

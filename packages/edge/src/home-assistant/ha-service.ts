@@ -280,7 +280,7 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 								onExcessProperty: "error",
 							}).pipe(
 								Effect.catchTag("ParseError", (c) =>
-									Effect.fail(new InputRejected(c, "Display Info")),
+									Effect.fail(new InputRejected(c, "Display info")),
 								),
 							);
 							yield* Effect.try({

@@ -612,7 +612,7 @@ it("MGMT-118 reaches actual emoji package and shortcut creation workflows from K
 	await settle(() =>
 		expect(f.host.textContent).toContain("Create your first emoji pack"),
 	);
-	await click(button(f.host, "New Package"));
+	await click(button(f.host, "New package"));
 	await settle(() =>
 		expect(f.host.querySelector('input[value="Unnamed pack"]')).not.toBeNull(),
 	);

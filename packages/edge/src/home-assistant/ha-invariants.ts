@@ -74,8 +74,8 @@ export function validateHaAction(
 	const service = services.find(
 		(s) => s.domain === domain && s.service === key.service,
 	);
-	if (!entity) throw new InputRejected(undefined, "Select Entity");
-	if (!service) throw new InputRejected(undefined, "Select Action");
+	if (!entity) throw new InputRejected(undefined, "Select entity");
+	if (!service) throw new InputRejected(undefined, "Select action");
 	for (const field of service.fields) {
 		const value = key.service_data[field.name];
 		if (value === undefined) {
@@ -119,7 +119,7 @@ export function validateHaKey(
 		new Set(key.custom_display_detail.map((f) => f.displayItemKey)).size !==
 			key.custom_display_detail.length
 	)
-		throw new InputRejected(undefined, "Display Info");
+		throw new InputRejected(undefined, "Display info");
 }
 export const tileLines = (
 	key: HaKey,

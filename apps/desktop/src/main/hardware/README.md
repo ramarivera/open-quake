@@ -2,8 +2,8 @@
 
 The main device bus owns the session. `registerHardware` only exposes its
 validated settings commands and subscribes to OS lock/unlock. The renderer
-uses Firmware Version, Knob LED stays on, Device Alert Volume, Device Mic,
-Device Luminance and Buzzer from DK-Suite locale-en.json. USB microphone
+uses Firmware version, Knob LED stays on, Device alert volume, Device mic,
+Device luminance and Buzzer from DK-Suite locale-en.json. USB microphone
 selection and firmware upgrading belong to other lanes.
 
 Run the full media smoke documented in `../media/README.md` with

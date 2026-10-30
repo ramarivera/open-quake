@@ -440,7 +440,7 @@ export function AppUpdateDialog({
 					className="button"
 					onClick={() => void c.request({ action: "defer-update" })}
 				>
-					Install Later
+					Install later
 				</button>
 				<button
 					type="button"
@@ -453,7 +453,7 @@ export function AppUpdateDialog({
 						})
 					}
 				>
-					Install Now
+					Install now
 				</button>
 			</footer>
 		</Modal>

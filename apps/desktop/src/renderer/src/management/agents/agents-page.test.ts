@@ -134,14 +134,14 @@ it("CENTER-053/060 searches metadata, validates edits, retains failed saves and 
 	const name = element<HTMLInputElement>("dialog input");
 	const content = element<HTMLTextAreaElement>("dialog textarea[rows='18']");
 	await input(name, "");
-	expect(button("Save Skill").disabled).toBe(true);
+	expect(button("Save skill").disabled).toBe(true);
 	await input(name, "New skill");
 	await input(content, "");
-	expect(button("Save Skill").disabled).toBe(true);
+	expect(button("Save skill").disabled).toBe(true);
 	const markdown =
 		"---\nname: New skill\ndescription: New description\n---\nNew content.";
 	await input(content, markdown);
-	await click(button("Save Skill"));
+	await click(button("Save skill"));
 	expect(request).toHaveBeenCalledWith({
 		type: "save-skill",
 		create: false,

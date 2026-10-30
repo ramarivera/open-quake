@@ -123,7 +123,7 @@
 				"meta": "Step {current} of {total}"
 			},
 			"orientation": {
-				"title": "Display Orientation Confirmation",
+				"title": "Display orientation confirmation",
 				"portrait": "Portrait (not recommended)",
 				"landscape": "Landscape (recommended)",
 				"recommended": "Recommended",
@@ -134,9 +134,9 @@
 				"horizontal": "Orientation: landscape",
 				"unknown": "Checking display orientation…",
 				"open": "Open display settings",
-				"darwin": "Quake display is in standard orientation. In macOS Displays settings, set Quake screen Rotation to 270°.",
-				"win32": "Quake display is in portrait orientation. In Windows Display settings, set Quake screen Orientation to Landscape.",
-				"other": "Portrait orientation detected. Please set the Quake display to landscape in your PC display settings."
+				"darwin": "QUAKE display is in standard orientation. In macOS Displays settings, set QUAKE screen Rotation to 270°.",
+				"win32": "QUAKE display is in portrait orientation. In Windows Display settings, set QUAKE screen Orientation to Landscape.",
+				"other": "Portrait orientation detected. Please set the QUAKE display to landscape in your PC display settings."
 			},
 			"getStarted": "Get started",
 			"serviceRegion": "Service region",
@@ -240,7 +240,7 @@
 					},
 					"double": {
 						"term": "Press twice",
-						"detail": "Switches to the Colorful Screen profile, if you have one."
+						"detail": "Switches to the Ambient profile, if you have one."
 					},
 					"hold": {
 						"term": "Press and hold",
@@ -444,9 +444,9 @@
 				"horizontal": "Ausrichtung: Querformat",
 				"unknown": "Anzeigeausrichtung wird geprüft…",
 				"open": "Anzeigeeinstellungen öffnen",
-				"darwin": "Das Quake-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des Quake-Bildschirms auf 270° ein.",
-				"win32": "Das Quake-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des Quake-Bildschirms auf Querformat ein.",
-				"other": "Hochformat erkannt. Bitte stellen Sie das Quake-Display in den PC-Anzeigeeinstellungen auf Querformat."
+				"darwin": "Das QUAKE-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des QUAKE-Bildschirms auf 270° ein.",
+				"win32": "Das QUAKE-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des QUAKE-Bildschirms auf Querformat ein.",
+				"other": "Hochformat erkannt. Bitte stellen Sie das QUAKE-Display in den PC-Anzeigeeinstellungen auf Querformat."
 			},
 			"getStarted": "Los geht's",
 			"serviceRegion": "Dienstregion",
@@ -550,7 +550,7 @@
 					},
 					"double": {
 						"term": "Zweimal drücken",
-						"detail": "Wechselt zum Profil Colorful Screen, falls du eines hast."
+						"detail": "Wechselt zum Profil Ambient, falls du eines hast."
 					},
 					"hold": {
 						"term": "Gedrückt halten",

@@ -159,10 +159,10 @@ async function smoke(): Promise<void> {
 	// AI Copilot idle: the push-to-talk hint.
 	assert.equal(
 		(await text(".copilot-label"))?.trim(),
-		"AI Copilot Chat",
+		"AI Copilot chat",
 		"AI Copilot view renders",
 	);
-	assert.match((await text(".copilot-hint")) ?? "", /Push-To-Talk/);
+	assert.match((await text(".copilot-hint")) ?? "", /Push-to-talk/);
 	await capture("voice-copilot-idle");
 
 	// Knob voice overlay, stage by stage.
@@ -374,7 +374,7 @@ async function smoke(): Promise<void> {
 		panel,
 		`document.querySelector('.clawbot-input-box')?.value.includes('weather')`,
 	);
-	assert.match((await text(".clawbot-messages")) ?? "", /Voice Input/);
+	assert.match((await text(".clawbot-messages")) ?? "", /Voice input/);
 	await capture("voice-clawbot-recording");
 	await input("1,5", "touchEnd", "clawbot");
 	await waitForVoice(

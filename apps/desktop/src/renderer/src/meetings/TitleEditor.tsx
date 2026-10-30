@@ -58,7 +58,7 @@ export function TitleEditor({
 				else onClose();
 			}}
 		>
-			<h2 id="meeting-title-heading">Edit Meeting Title</h2>
+			<h2 id="meeting-title-heading">Edit meeting title</h2>
 			<form
 				noValidate
 				onSubmit={(event) => {

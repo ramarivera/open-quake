@@ -1123,9 +1123,9 @@ it("MGMT-058 uses the painted mirror bounds and suppresses disabled press feedba
 it("MGMT-280 count/add-step focus and Back preserve the real key draft", async () => {
 	const f = await fixture();
 	await f.select();
-	expect(f.host.textContent).toContain("Contain: 3 Project");
-	await click(button(f.host, "Add Operation"));
-	expect(f.host.textContent).toContain("Contain: 4 Project");
+	expect(f.host.textContent).toContain("Operations: 3");
+	await click(button(f.host, "Add operation"));
+	expect(f.host.textContent).toContain("Operations: 4");
 	expect(document.activeElement).toBe(
 		f.host.querySelector(".key-sequence-step:last-of-type select"),
 	);
@@ -1156,7 +1156,7 @@ it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and
 	);
 	const reset = vi.fn(async () => ({ _tag: "ok" }));
 	vi.stubGlobal("quakeVoice", { request: reset });
-	await click(button(f.host, "Reset Context"));
+	await click(button(f.host, "Reset context"));
 	expect(reset).toHaveBeenCalledWith({ _tag: "ResetContext", keyCode: "1,1" });
 	expect(f.host.textContent).toContain("Context reset");
 	await click(button(f.host, "Save"));

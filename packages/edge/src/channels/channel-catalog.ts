@@ -110,15 +110,15 @@ export const credentialFields = (
 		case "feishu":
 			return [
 				{ key: "appId", label: "App ID", secret: false },
-				{ key: "appSecret", label: "App Secret", secret: true },
+				{ key: "appSecret", label: "App secret", secret: true },
 			];
 		case "qqbot":
 			return [
 				{ key: "appId", label: "App ID", secret: false },
-				{ key: "clientSecret", label: "App Secret", secret: true },
+				{ key: "clientSecret", label: "App secret", secret: true },
 			];
 		case "discord":
-			return [{ key: "token", label: "Bot Token", secret: true }];
+			return [{ key: "token", label: "Bot token", secret: true }];
 		case "wecom":
 			return [
 				{ key: "botId", label: "Bot ID", secret: false },

@@ -452,7 +452,7 @@ describe("ClawBotView rendering", () => {
 		const preview = renderToStaticMarkup(
 			createElement(ClawBotTile, props("preview")),
 		);
-		expect(preview).toContain("Interaction History");
+		expect(preview).toContain("Interaction history");
 		expect(preview).toContain("Checking…");
 		expect(preview).not.toContain("clawbot-messages");
 		const panel = renderToStaticMarkup(
@@ -557,10 +557,10 @@ describe("ClawBotInput", () => {
 				},
 			}),
 		);
-		expect(markup).toContain("Command Input");
-		expect(markup).toContain("Click to enter command...");
+		expect(markup).toContain("Command input");
+		expect(markup).toContain("Tap to enter a command…");
 		expect(markup).toContain("Send");
-		expect(markup).toContain("File Attach");
+		expect(markup).toContain("Attach file");
 		expect(markup).not.toContain("WebChat");
 	});
 });

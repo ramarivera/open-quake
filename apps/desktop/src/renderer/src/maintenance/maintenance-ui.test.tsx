@@ -296,13 +296,13 @@ for (const state of ["available", "downloading", "ready", "failed"] as const) {
 			},
 		});
 		const { host } = await render(c, "update");
-		await click(button(host, "Install Later"));
+		await click(button(host, "Install later"));
 		expect(c.request).toHaveBeenCalledWith({ action: "defer-update" });
 		if (state === "downloading") {
 			expect(query(host, "progress", HTMLProgressElement).value).toBe(0.5);
-			expect(button(host, "Install Now").disabled).toBe(true);
+			expect(button(host, "Install now").disabled).toBe(true);
 		} else {
-			await click(button(host, "Install Now"));
+			await click(button(host, "Install now"));
 			expect(c.request).toHaveBeenCalledWith({
 				action: state === "ready" ? "install-update" : "download-update",
 			});
@@ -401,7 +401,7 @@ it("SETTINGS-005 marks both destructive reset actions with the shared danger tre
 		'[data-variant="danger"]',
 	);
 	if (!destructive) throw new Error("Destructive confirmation missing");
-	expect(destructive.textContent).toContain("Without Backup");
+	expect(destructive.textContent).toContain("without backup");
 	const cancel = [...dialog.querySelectorAll("button")].find((item) =>
 		item.textContent?.includes("Cancel"),
 	);

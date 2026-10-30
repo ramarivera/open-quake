@@ -380,10 +380,10 @@ export function MeetingHistory({
 					/>
 				) : (
 					<article className="meeting-empty">
-						<h2>Select Meeting Minutes</h2>
+						<h2>Select meeting minutes</h2>
 						<p>
-							Select a meeting minutes from the left list to view detailed
-							content
+							Select meeting minutes from the list on the left to view detailed
+							content.
 						</p>
 					</article>
 				)}
@@ -440,7 +440,7 @@ export function MeetingHistory({
 							});
 						}}
 					>
-						Confirm Delete
+						Confirm delete
 					</button>
 				</dialog>
 			) : null}

@@ -17,7 +17,7 @@ export type StripLocale = (typeof STRIP_LOCALES)[number];
 export const STRIP_STRINGS = {
 	en: {
 		"voiceOutput.unavailable": "Speech playback is unavailable.",
-		"operationConfiguration.audioBotTtsEngine": "Audio Bot TTS engine",
+		"operationConfiguration.audioBotTtsEngine": "Voice assistant TTS engine",
 		"operationConfiguration.audioBotTtsEngineQwen":
 			"Cloud (same as global AI voice)",
 		"operationConfiguration.audioBotTtsEngineWebSpeech":
@@ -29,8 +29,8 @@ export const STRIP_STRINGS = {
 		"aiAudio.preparingMic": "Preparing microphone…",
 		"aiAudio.preparingRecord": "Preparing to record…",
 		"aiAudio.speakNow": "You can speak now",
-		"aiAudio.recording": "Recording...",
-		"aiAudio.processing": "Processing...",
+		"aiAudio.recording": "Recording…",
+		"aiAudio.processing": "Processing…",
 		"aiAudio.error": "Processing error, please retry",
 		"aiAudio.busy": "System busy, please try again later",
 		"aiAudio.busyOnGrid": "{name} is busy, please try again later",
@@ -40,8 +40,8 @@ export const STRIP_STRINGS = {
 		"aiAudio.openClawGatewayStarting":
 			"The agent runtime is starting — try again shortly",
 		"aiAudio.openClawNotReady": "The agent runtime is not connected",
-		"aiIconViewTxt.label": "AI Copilot Chat",
-		"aiIconViewTxt.pushToTalkHint": "Push-To-Talk with AI via a button",
+		"aiIconViewTxt.label": "AI Copilot chat",
+		"aiIconViewTxt.pushToTalkHint": "Push-to-talk with AI via a button",
 		"aiIconViewTxt.busyToast": "System busy, please try later",
 		"aiIconViewTxt.errorCodeLine": "Error code: {code}",
 		"aiIconViewTxt.cancelHint.pressPrefix": "Press ",
@@ -54,14 +54,14 @@ export const STRIP_STRINGS = {
 		"aiIconViewTxt.status.generating": "Generating",
 		"aiIconViewTxt.status.initializing": "Initializing",
 		"aiIconViewTxt.status.systemBusy": "System busy",
-		"aiIconViewTxt.status.timeout": "Time out",
-		"quakeBotIconView.interactionHistory": "Interaction History",
+		"aiIconViewTxt.status.timeout": "Timed out",
+		"quakeBotIconView.interactionHistory": "Interaction history",
 		"quakeBotIconView.checking": "Checking…",
 		"quakeBotIconView.noService": "No service",
 		"quakeBotIconView.connecting": "Connecting…",
 		"quakeBotIconView.connected": "Connected",
 		"quakeBotIconView.disconnected": "Disconnected",
-		"quakeBotIconView.voiceInput": "Voice Input",
+		"quakeBotIconView.voiceInput": "Voice input",
 		"quakeBotIconView.userOutgoing": "Command",
 		"quakeBotIconView.systemSender": "System",
 		"quakeBotIconView.statusHintNoService":
@@ -81,7 +81,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorNoAudioCapture":
 			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
 		"quakeBotIconView.voiceStartFailed": "Failed to start voice.",
-		"quakeBotIconView.communicationCancelled": "Cancel communications",
+		"quakeBotIconView.communicationCancelled": "Communication cancelled",
 		"quakeBotIconView.openClawNotConnected":
 			"The agent runtime is not connected.",
 		"quakeBotIconView.sendChatFailed": "Failed to send message.",
@@ -94,17 +94,17 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolExpandHint": "Tap to expand command",
 		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
 		"quakeBotIconView.openLinkFailed": "Could not open link",
-		"quakeBotInputIconView.title": "Command Input",
-		"quakeBotInputIconView.placeholder": "Click to enter command...",
+		"quakeBotInputIconView.title": "Command input",
+		"quakeBotInputIconView.placeholder": "Tap to enter a command…",
 		"quakeBotInputIconView.quickActions.send.label": "Send",
-		"quakeBotInputIconView.quickActions.fileAttach.label": "File Attach",
+		"quakeBotInputIconView.quickActions.fileAttach.label": "Attach file",
 		"quakeBotInputIconView.warnings.selectAssistantCard":
 			"Please tap an AI assistant first!",
 		"quakeBotInputIconView.warnings.selectAssistant":
 			"Please select your assistant!",
 		"clipboard.copySuccess": "Copied to system clipboard",
-		"clipboard.copyFailed": "Copy to system clipboard failed",
-		"voiceOverlay.placeholder": "Waiting for voice input...",
+		"clipboard.copyFailed": "Failed to copy to the system clipboard",
+		"voiceOverlay.placeholder": "Waiting for voice input…",
 	},
 	zh: {
 		"voiceOutput.unavailable": "语音播放不可用。",
@@ -260,7 +260,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"Keine Sprache erkannt. Bitte näher ans Mikrofon sprechen und erneut versuchen.",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"Das Mikrofon war nicht bereit oder es wurde kein Ton aufgenommen. Halte die Taste zum Sprechen etwas länger gedrückt und versuche es erneut.",
 		"quakeBotIconView.voiceStartFailed":
 			"Sprachaufnahme konnte nicht gestartet werden.",
 		"quakeBotIconView.communicationCancelled": "Kommunikation abbrechen",
@@ -275,9 +275,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "Tippen, um den Befehl zu erweitern",
+		"quakeBotIconView.toolCollapseHint": "Tippen zum Zuklappen",
+		"quakeBotIconView.openLinkFailed": "Link konnte nicht geöffnet werden",
 		"quakeBotInputIconView.title": "Befehlseingabe",
 		"quakeBotInputIconView.placeholder":
 			"Klicken Sie, um einen Befehl einzugeben...",
@@ -359,7 +359,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"No se reconoció voz. Acérquese al micrófono e inténtelo de nuevo.",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"El micrófono no estaba listo o no se capturó audio. Mantén pulsado un poco más para hablar e inténtalo de nuevo.",
 		"quakeBotIconView.voiceStartFailed": "No se pudo iniciar la voz.",
 		"quakeBotIconView.communicationCancelled": "Cancelar comunicación",
 		"quakeBotIconView.openClawNotConnected":
@@ -372,9 +372,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "Toca para expandir el comando",
+		"quakeBotIconView.toolCollapseHint": "Toca para contraer",
+		"quakeBotIconView.openLinkFailed": "No se pudo abrir el enlace",
 		"quakeBotInputIconView.title": "Entrada de comandos",
 		"quakeBotInputIconView.placeholder":
 			"Haga clic para introducir un comando...",
@@ -454,7 +454,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"Aucune parole reconnue. Rapprochez-vous du micro et réessayez.",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"Le microphone n’était pas prêt ou aucun son n’a été capturé. Maintenez le bouton un peu plus longtemps pour parler, puis réessayez.",
 		"quakeBotIconView.voiceStartFailed": "Échec du démarrage de la voix.",
 		"quakeBotIconView.communicationCancelled": "Annuler la communication",
 		"quakeBotIconView.openClawNotConnected":
@@ -467,9 +467,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "Touchez pour développer la commande",
+		"quakeBotIconView.toolCollapseHint": "Touchez pour réduire",
+		"quakeBotIconView.openLinkFailed": "Impossible d’ouvrir le lien",
 		"quakeBotInputIconView.title": "Saisie de commande",
 		"quakeBotInputIconView.placeholder": "Cliquez pour saisir une commande...",
 		"quakeBotInputIconView.quickActions.send.label": "Envoyer",
@@ -548,7 +548,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"Nessuna voce riconosciuta. Avvicinati al microfono e riprova.",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"Il microfono non era pronto o non è stato acquisito alcun audio. Tieni premuto un po’ più a lungo per parlare e riprova.",
 		"quakeBotIconView.voiceStartFailed": "Impossibile avviare la voce.",
 		"quakeBotIconView.communicationCancelled": "Annulla comunicazione",
 		"quakeBotIconView.openClawNotConnected":
@@ -561,9 +561,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "Tocca per espandere il comando",
+		"quakeBotIconView.toolCollapseHint": "Tocca per comprimere",
+		"quakeBotIconView.openLinkFailed": "Impossibile aprire il collegamento",
 		"quakeBotInputIconView.title": "Input comando",
 		"quakeBotInputIconView.placeholder": "Clicca per inserire un comando...",
 		"quakeBotInputIconView.quickActions.send.label": "Invia",
@@ -642,7 +642,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"有効な音声が認識されませんでした。マイクに近づいて再度お試しください。",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"マイクの準備ができていないか、音声が録音されませんでした。少し長めに押しながら話して、もう一度お試しください。",
 		"quakeBotIconView.voiceStartFailed": "音声の開始に失敗しました。",
 		"quakeBotIconView.communicationCancelled": "通信をキャンセル",
 		"quakeBotIconView.openClawNotConnected":
@@ -654,9 +654,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "タップしてコマンドを展開",
+		"quakeBotIconView.toolCollapseHint": "タップして折りたたむ",
+		"quakeBotIconView.openLinkFailed": "リンクを開けませんでした",
 		"quakeBotInputIconView.title": "コマンド入力",
 		"quakeBotInputIconView.placeholder": "クリックしてコマンドを入力...",
 		"quakeBotInputIconView.quickActions.send.label": "送信",
@@ -735,7 +735,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.sttErrorInvalidUserInput":
 			"음성이 인식되지 않았습니다. 마이크에 가까이 대고 다시 시도하세요.",
 		"quakeBotIconView.sttErrorNoAudioCapture":
-			"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+			"마이크가 준비되지 않았거나 오디오가 녹음되지 않았습니다. 버튼을 조금 더 길게 누른 상태로 말한 뒤 다시 시도하세요.",
 		"quakeBotIconView.voiceStartFailed": "음성을 시작하지 못했습니다.",
 		"quakeBotIconView.communicationCancelled": "통신 취소",
 		"quakeBotIconView.openClawNotConnected":
@@ -747,9 +747,9 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.toolRunning": "Running",
 		"quakeBotIconView.toolDone": "Done",
 		"quakeBotIconView.toolFailed": "Failed",
-		"quakeBotIconView.toolExpandHint": "Tap to expand command",
-		"quakeBotIconView.toolCollapseHint": "Tap to collapse",
-		"quakeBotIconView.openLinkFailed": "Could not open link",
+		"quakeBotIconView.toolExpandHint": "탭하여 명령 펼치기",
+		"quakeBotIconView.toolCollapseHint": "탭하여 접기",
+		"quakeBotIconView.openLinkFailed": "링크를 열 수 없습니다",
 		"quakeBotInputIconView.title": "명령 입력",
 		"quakeBotInputIconView.placeholder": "클릭하여 명령 입력...",
 		"quakeBotInputIconView.quickActions.send.label": "보내기",

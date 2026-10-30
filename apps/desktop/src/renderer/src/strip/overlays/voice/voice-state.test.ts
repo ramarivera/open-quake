@@ -460,7 +460,7 @@ describe("AI Copilot through the voice store", () => {
 		);
 		expect(markup).toContain("&lt;img src=x onerror=alert(1)&gt;");
 		expect(markup).not.toContain("<img");
-		expect(markup).toContain("AI Copilot Chat");
+		expect(markup).toContain("AI Copilot chat");
 	});
 });
 

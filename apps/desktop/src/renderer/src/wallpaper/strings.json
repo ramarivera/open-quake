@@ -1,7 +1,7 @@
 {
 	"en": {
-		"addMedia": "Add Media…",
-		"removeAll": "Remove All",
+		"addMedia": "Add media…",
+		"removeAll": "Remove all",
 		"media": "Media",
 		"loading": "Loading saved wallpaper…",
 		"customMedia": "Custom media",
@@ -24,7 +24,7 @@
 		"unit": "Interval unit",
 		"seconds": "Seconds",
 		"minutes": "Minutes",
-		"sound": "Video Sound",
+		"sound": "Video sound",
 		"save": "Save",
 		"cancel": "Cancel",
 		"factory": "Restore factory",

@@ -10,8 +10,8 @@ export const soundboardLabels = {
 /** DK-Suite locales: spotify.tabLocal, defaultAppMenu.playStop, clawDashboard.stop. */
 export const localPlayerLabels = {
 	en: {
-		source: "Local Music",
-		toggle: "Play/Stop",
+		source: "Local music",
+		toggle: "Play/stop",
 		stop: "Stop",
 	},
 	de: {

@@ -55,7 +55,7 @@ export async function inputSmoke() {
 			s = inputScale(tile.box.width, tile.box.height);
 		assert.equal(
 			element(".clawbot-input-title").textContent,
-			"Command Input · Weather",
+			"Command input · Weather",
 		);
 		assert(
 			Math.abs(
@@ -75,7 +75,7 @@ export async function inputSmoke() {
 		assert.deepEqual(calls, [{ _tag: "PickFiles" }, { _tag: "PickFiles" }]);
 		passed++;
 		await show({ view: initialVoiceView, surface: "preview" });
-		assert.equal(element(".clawbot-input-title").textContent, "Command Input");
+		assert.equal(element(".clawbot-input-title").textContent, "Command input");
 		for (const button of document.querySelectorAll<HTMLButtonElement>(
 			".clawbot-input-button",
 		))
