@@ -59,12 +59,12 @@ describe("voice stage texts", () => {
 		expect(state.visible).toBe(false);
 	});
 
-	it("says Recording... when speech starts with no partial, not Preparing (DK quirk)", () => {
+	it("says Recording… when speech starts with no partial, not Preparing (DK quirk)", () => {
 		const state = run([
 			knob({ _tag: "recording", status: "listening" }),
 			knob({ _tag: "recording", status: "speaking" }),
 		]);
-		expect(line(state)).toBe("Recording...");
+		expect(line(state)).toBe("Recording…");
 	});
 
 	it("counts an error down 3-2-1 and closes", () => {

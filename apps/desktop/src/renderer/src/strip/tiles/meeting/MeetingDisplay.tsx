@@ -48,7 +48,7 @@ export function MeetingDisplay({
 	const slots = timeline(snapshot?.translations ?? []);
 	const speed =
 		translatedAt && now - translatedAt < 5000
-			? `Update speed : ${((translatedAt - (snapshot?.translations.at(-2)?.at ?? translatedAt)) / 1000).toFixed(2)} S`
+			? `Update speed: ${((translatedAt - (snapshot?.translations.at(-2)?.at ?? translatedAt)) / 1000).toFixed(2)} s`
 			: "Waiting for translation";
 	useEffect(() => {
 		if (tab === "live" && snapshot?.translations.length)

@@ -72,7 +72,7 @@ describe("voice tiles on the strip", () => {
 		);
 		expect(markup.match(/voice-clawbot-dot/g)).toHaveLength(1);
 		expect(markup).toContain('data-alert="invalid"');
-		expect(markup).toContain("Interaction History");
-		expect(markup).toContain("Command Input");
+		expect(markup).toContain("Interaction history");
+		expect(markup).toContain("Command input");
 	});
 });
