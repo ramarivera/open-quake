@@ -13,6 +13,8 @@ async function run() {
 	app.setPath("userData", directory);
 	app.setPath("sessionData", directory);
 	app.disableHardwareAcceleration();
+	// Explicit app.exit below owns the outcome after asynchronous cleanup.
+	app.on("window-all-closed", () => {});
 	if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 	const deadline = setTimeout(() => {
 		process.stderr.write("Conversation smoke timed out\n");

@@ -109,7 +109,7 @@ export async function knobConversationSmoke() {
 			scroll = element(".clawbot-messages").scrollTop;
 		const first = await rotate(1);
 		assert.equal(first.selector.mode, "ring");
-		assert(element(".knob-wheel"));
+		assert(element("[data-testid=function-wheel]"));
 		assert.equal(element(".clawbot").getAttribute("data-wheel"), "true");
 		assert.equal(
 			getComputedStyle(element(".clawbot-input")).backdropFilter,
@@ -129,7 +129,7 @@ export async function knobConversationSmoke() {
 			for (const receive of subscribers) receive(snapshot);
 			await new Promise((resolve) => setTimeout(resolve, 30));
 		});
-		assert.equal(document.querySelector(".knob-wheel"), null);
+		assert.equal(document.querySelector("[data-testid=function-wheel]"), null);
 		assert.equal(element(".clawbot").getAttribute("data-wheel"), null);
 		return 1;
 	} finally {

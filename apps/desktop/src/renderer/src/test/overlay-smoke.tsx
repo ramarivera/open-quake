@@ -17,7 +17,7 @@ import {
 	turnId,
 } from "../strip/render-test-fixtures";
 import { ClawBotTile } from "../strip/tiles/clawBot/ClawBotTile";
-import { delay, locales, stage } from "./smoke-fixtures";
+import { cssColor, delay, locales, stage } from "./smoke-fixtures";
 
 const nativeRequire: NodeJS.Require = globalThis.require;
 const assert: typeof import("node:assert/strict") =
@@ -92,7 +92,7 @@ export async function overlaySmoke() {
 				assert.equal(sheet.clientHeight, 480);
 				assert.equal(
 					getComputedStyle(sheet).backgroundColor,
-					"rgba(11, 12, 13, 0.95)",
+					cssColor("color-mix(in srgb, #080d1a 94%, transparent)"),
 				);
 				assert.equal(
 					element(".voice-subtitle").textContent,
@@ -132,7 +132,7 @@ export async function overlaySmoke() {
 				);
 				assert.equal(
 					getComputedStyle(element(".voice-toast")).backgroundColor,
-					"rgb(30, 33, 36)",
+					cssColor("color-mix(in srgb, #101830 88%, #f2f5ff)"),
 				);
 				assert(
 					parseFloat(getComputedStyle(element(".voice-toast-text")).fontSize) >=
