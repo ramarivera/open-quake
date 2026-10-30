@@ -123,7 +123,7 @@
 				"meta": "Step {current} of {total}"
 			},
 			"orientation": {
-				"title": "Display Orientation Confirmation",
+				"title": "Display orientation confirmation",
 				"portrait": "Portrait (not recommended)",
 				"landscape": "Landscape (recommended)",
 				"recommended": "Recommended",
@@ -240,7 +240,7 @@
 					},
 					"double": {
 						"term": "Press twice",
-						"detail": "Switches to the Colorful Screen profile, if you have one."
+						"detail": "Switches to the Ambient profile, if you have one."
 					},
 					"hold": {
 						"term": "Press and hold",

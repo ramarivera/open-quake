@@ -190,6 +190,7 @@ export const profileLabel = (
 // Installed catalogs keep the English title they had when first saved.
 // Match these exact defaults by lookup key; arbitrary/custom casing isn't an alias.
 const legacyEnglishTitles: Readonly<Record<string, string>> = {
+	"defaultDiscordConfig.deafen": "Defean",
 	"defaultDiscordConfig.navBack": "Nav Back",
 	"defaultDiscordConfig.pushToTalk": "Push To Talk",
 	"defaultDiscordConfig.streamerMode": "Streamer Mode",

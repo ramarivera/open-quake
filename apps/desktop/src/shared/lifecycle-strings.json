@@ -1,8 +1,8 @@
 {
 	"displayMode": {
 		"title": "Display mode",
-		"message": "Switch to Extended Display",
-		"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+		"message": "Switch to extended display",
+		"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 		"switch": "Switch",
 		"disconnect": "Disconnect",
 		"orientationTitle": "Adjust Quake orientation",
@@ -66,8 +66,8 @@
 		"en": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -92,8 +92,8 @@
 		"de": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -144,8 +144,8 @@
 		"es": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -170,8 +170,8 @@
 		"fr": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -196,8 +196,8 @@
 		"ko": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -222,8 +222,8 @@
 		"it": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",
@@ -248,8 +248,8 @@
 		"ja": {
 			"displayMode": {
 				"title": "Display mode",
-				"message": "Switch to Extended Display",
-				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"message": "Switch to extended display",
+				"detail": "Quake is mirrored. Switch to extended display to continue. Declining will disconnect the device.",
 				"switch": "Switch",
 				"disconnect": "Disconnect",
 				"orientationTitle": "Adjust Quake orientation",

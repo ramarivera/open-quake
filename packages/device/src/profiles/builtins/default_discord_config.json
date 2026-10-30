@@ -39,7 +39,7 @@
 		"config": {
 			"type": "hotkey",
 			"title": {
-				"text": "Defean",
+				"text": "Deafen",
 				"pos": "bot",
 				"size": 8,
 				"color": "#FFFFFF",
